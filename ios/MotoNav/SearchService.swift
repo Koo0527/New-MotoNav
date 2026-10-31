@@ -22,6 +22,8 @@ final class SearchService: NSObject, ObservableObject {
     @Published var status = ""
     private var api: AMapSearchAPI?
     private var currentRequest: AMapInputTipsSearchRequest?
+    private var fuelRequest: AMapPOIAroundSearchRequest?
+    private var cache: [String: [Place]] = [:]
 
     override init() {
         super.init()
@@ -35,25 +37,63 @@ final class SearchService: NSObject, ObservableObject {
         api?.delegate = nil
         api = AMapSearchAPI()
         if let d = (self as AnyObject) as? AMapSearchDelegate { api?.delegate = d }
+        cache.removeAll()
         clear()
     }
 
     /// 按了“搜索”时调用（每按一次最多查一次高德）
-    func search(_ text: String) {
+    func search(_ text: String, near: (Double,Double)? = nil) {
+        clear()
         let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        if t.isEmpty { clear(); return }
+        guard !t.isEmpty else { return }
+        let around=near ?? LocationService.shared.location.map { loc -> (Double,Double) in
+            let g=MapGeo.wgsToGcj(loc.coordinate.latitude,loc.coordinate.longitude)
+            return (g.lat,g.lng)
+        }
+        let location=around.map { String(format:"%.6f,%.6f",$0.1,$0.0) } ?? ""
+        let searchKey=t+"|"+location
+        if let cached=cache[searchKey] {
+            results=cached
+            status=results.isEmpty ? "没找到，换个说法试试" : ""
+            return
+        }
         let req = AMapInputTipsSearchRequest()
         req.keywords = t
-        if let loc = LocationService.shared.location {
-            let g = MapGeo.wgsToGcj(loc.coordinate.latitude, loc.coordinate.longitude)   // 高德要高德坐标
-            req.location = String(format: "%.6f,%.6f", g.lng, g.lat)                   // 附近优先
-        }
+        if !location.isEmpty { req.location=location }
         currentRequest = req
-        results = []; status = "搜索中…"
+        status = "搜索中…"
         api?.aMapInputTipsSearch(req)
     }
 
-    func clear() { currentRequest = nil; results = []; status = "" }
+    func clear() { currentRequest=nil; fuelRequest=nil; results=[]; status="" }
+
+    func searchFuel(near:(Double,Double)?=nil) {
+        clear()
+        let center=near ?? LocationService.shared.location.flatMap { fix -> (Double,Double)? in
+            guard fix.horizontalAccuracy>=0,abs(fix.timestamp.timeIntervalSinceNow)<60 else { return nil }
+            let g=MapGeo.wgsToGcj(fix.coordinate.latitude,fix.coordinate.longitude)
+            return (g.lat,g.lng)
+        }
+        guard let center=center,MotorRequest.valid(center.0,center.1) else {
+            status="请等待定位，或先选择规划起点"; return
+        }
+        let request=AMapPOIAroundSearchRequest()
+        request.location=AMapGeoPoint.location(withLatitude:CGFloat(center.0),longitude:CGFloat(center.1))
+        request.keywords="加油站";request.types="010100";request.sortrule=0;request.radius=10000;request.offset=20
+        fuelRequest=request;status="搜索附近加油站…"
+        api?.aMapPOIAroundSearch(request)
+    }
+
+    @objc(onPOISearchDone:response:)
+    func mnFuelDone(_ request:AMapPOISearchBaseRequest?,response:AMapPOISearchResponse?) {
+        guard let request=request,request === fuelRequest else { return }
+        fuelRequest=nil
+        results=(response?.pois ?? []).compactMap { poi -> Place? in
+            guard let point=poi.location,MotorRequest.valid(Double(point.latitude),Double(point.longitude)) else { return nil }
+            return Place(name:poi.name ?? "加油站",address:poi.address ?? "",lat:Double(point.latitude),lng:Double(point.longitude))
+        }
+        status=results.isEmpty ? "附近十公里未找到加油站，可输入名称搜索":"按距离显示附近加油站"
+    }
 
     @objc(onInputTipsSearchDone:response:)
     func mnTipsDone(_ request: AMapInputTipsSearchRequest?, response: AMapInputTipsSearchResponse?) {
@@ -65,13 +105,15 @@ final class SearchService: NSObject, ObservableObject {
             return Place(name: tip.name ?? "", address: (tip.district ?? "") + (tip.address ?? ""),
                          lat: Double(p.latitude), lng: Double(p.longitude))
         }
+        cache[(request.keywords ?? "")+"|"+(request.location ?? "")] = results
         status = results.isEmpty ? "没找到，换个说法试试" : ""
     }
 
     @objc(AMapSearchRequest:didFailWithError:)
     func mnSearchFail(_ request: Any?, error: NSError?) {
-        guard let request = request as? AMapInputTipsSearchRequest, request === currentRequest else { return }
-        currentRequest = nil
+        guard let request=request as? NSObject,
+              request === currentRequest || request === fuelRequest else { return }
+        currentRequest=nil;fuelRequest=nil
         let code = error?.code ?? 0
         let bid = Bundle.main.bundleIdentifier ?? ""
         switch code {

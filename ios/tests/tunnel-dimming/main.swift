@@ -93,6 +93,22 @@ for length in [Double.nan, .infinity, -.infinity, -1] {
     let invalidNext = TunnelRoute(segments: [[Link(metres: 10, isTunnel: false), Link(metres: length, isTunnel: true)]])
     check(invalidNext.evidence(segment: 0, link: 0, metresToEndOfLink: 5) == .unknown, "invalid future length")
 }
+for unknownRoute in [
+    TunnelRoute(segments: [[Link(metres: 10, isTunnel: nil)]]),
+    TunnelRoute(segments: [[Link(metres: 10, isTunnel: false), Link(metres: 10, isTunnel: nil)]])
+] {
+    policy.reset()
+    check(policy.update(.inside, now: 0), "dim before unknown link type")
+    check(policy.update(.outside, now: 1), "pending exit before unknown link type")
+    for time in 2...6 {
+        let evidence = unknownRoute.evidence(segment: 0, link: 0, metresToEndOfLink: 5)
+        check(evidence == .unknown, "unknown current or lookahead type cannot imply outside")
+        check(policy.update(evidence, now: Double(time)), "unknown link holds dim beyond exit delay")
+    }
+    for time in 7...10 {
+        check(policy.update(.outside, now: Double(time)) == (time < 10), "unknown resets pending exit confirmation")
+    }
+}
 let noTunnel = TunnelRoute(segments: [[Link(metres: 10, isTunnel: false)]])
 check(noTunnel.evidence(segment: 0, link: 0, metresToEndOfLink: 0) == .outside, "route ends outside")
 let longRoute = TunnelRoute(segments: [Array(repeating: Link(metres: 0, isTunnel: false), count: 300) + [Link(metres: 1, isTunnel: true)]])

@@ -1,5 +1,5 @@
 from pathlib import Path
-import subprocess,tempfile
+import os,subprocess,tempfile
 root=Path(__file__).resolve().parents[2]
 s=(root/'MotoNav/WebMotor.swift').read_text()
 core=s[s.index('struct MotorPoint'):s.index('enum MotorRoutes')]
@@ -11,6 +11,7 @@ start=nav.index('    static func distM('); end=nav.index('\n    }',start)+6
 core+='enum NaviBridge {\n'+nav[start:end]+'\n}\n'
 core+=(root/'MotoNav/RouteGeometry.swift').read_text()+'\n'
 core+=(root/'MotoNav/MotorRouteTracker.swift').read_text()+'\n'
+bicycle=(root/'MotoNav/BicycleRoutes.swift').read_text()
 core+=(root/'MotoNav/BleHandshakeClock.swift').read_text()+'\n'
 share=(root/'MotoNav/AmapShare.swift').read_text()
 share=share[:share.index('final class ShareGuide')]
@@ -38,8 +39,8 @@ final class AMapStep: NSObject {
     var instruction:String?,road:String?,action:String?,polyline:String?
     var distance=0,duration=0
 }
-final class AMapPath: NSObject { var steps:[AMapStep]?;var duration=0 }
-final class AMapRoute: NSObject { var paths:[AMapPath]? }
+final class AMapPath: NSObject { var steps:[AMapStep]?;var polyline:String?;var duration=0,distance=0 }
+final class AMapRoute: NSObject { var paths:[AMapPath]?;var polyline:String? }
 final class AMapRouteSearchResponse: NSObject { var route:AMapRoute? }
 final class AMapSearchAPI {
     weak var delegate:AMapSearchDelegate?
@@ -117,7 +118,14 @@ case nil:
 print("PASS bicycle SDK request: segment geometry, actions and duration")
 '''
 tests+='\n'+(root/'tests/parity-015/main.swift').read_text()
+core+=(root/'MotoNav/PhoneClockSync.swift').read_text()+'\n'
+core+=(root/'MotoNav/MotorPlanHistory.swift').read_text()+'\n'
+tests+='\n'+(root/'tests/parity-016/main.swift').read_text()
+tests+='\n'+(root/'tests/bicycle-planning/main.swift').read_text()
 folder=Path(tempfile.mkdtemp(prefix='motonav-core-'))
 (folder/'main.swift').write_text('import Foundation\n'+core+tests)
-subprocess.run(['swiftc',str(folder/'main.swift'),'-o',str(folder/'test')],check=True)
+env=dict(os.environ)
+env.setdefault('CLANG_MODULE_CACHE_PATH',str(folder/'clang-cache'))
+env.setdefault('SWIFT_MODULECACHE_PATH',str(folder/'swift-cache'))
+subprocess.run(['swiftc',str(folder/'main.swift'),'-o',str(folder/'test')],check=True,env=env)
 subprocess.run([str(folder/'test')],check=True)

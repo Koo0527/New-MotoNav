@@ -37,7 +37,7 @@ func check(_ value: Bool, _ message: String) {
 }
 // DTOs retain every SDK property read by the production method.
 struct Point { var latitude: Double; var longitude: Double }
-enum LinkType { case normal, underPass }
+enum LinkType: Int { case null = -1, normal = 0, fairway = 1, underPass = 2, bridge = 3, elevatedRd = 4, future = 5 }
 final class SDKLink {
     var length = 100
     var linkType: LinkType = .normal
@@ -65,11 +65,18 @@ final class AMapNaviLocation {
 final class Settings {
     static let shared = Settings()
     var samples: [TunnelEvidence] = []
-    func updateTunnel(_ evidence: TunnelEvidence) { samples.append(evidence) }
+    var policy = TunnelDimmingPolicy()
+    var now = 0.0
+    func updateTunnel(_ evidence: TunnelEvidence) {
+        samples.append(evidence)
+        _ = policy.update(evidence, now: now)
+    }
 }
 ''' + '\nenum MotorRequest {\n' + validation + '\n}\nfinal class BridgeHarness {\n' + state + '\n' + distance + '\n' + adapter + '\n}\n' + r'''
 func fixture(tunnel: Bool = false, nextTunnel: Bool = false) -> (BridgeHarness, AMapNaviLocation, AMapNaviDriveManager, SDKLink) {
     Settings.shared.samples = []
+    Settings.shared.policy.reset()
+    Settings.shared.now = 0
     let link = SDKLink(); link.linkType = tunnel ? .underPass : .normal
     let segment = SDKSegment(); segment.links = [link]
     if nextTunnel { let next = SDKLink(); next.linkType = .underPass; segment.links!.append(next) }
@@ -122,6 +129,41 @@ do {
     let (bridge, fix, manager, _) = fixture()
     bridge.updateTunnel(fix, manager: manager)
     last(.outside, "fresh matched normal link without following tunnel gives outside")
+}
+// SDK invalid types must hold an existing dim state, including unknown lookahead.
+for invalidType in [LinkType.null, .future] {
+    for lookahead in [false, true] {
+        let (bridge, fix, manager, current) = fixture()
+        if lookahead {
+            let next = SDKLink(); next.linkType = invalidType
+            manager.naviRoute!.routeSegments![0].links!.append(next)
+        } else { current.linkType = invalidType }
+        Settings.shared.updateTunnel(.inside)
+        Settings.shared.now = 1
+        Settings.shared.updateTunnel(.outside)
+        for time in 2...6 {
+            Settings.shared.now = Double(time)
+            fix.timestamp = Date().addingTimeInterval(-1 + Double(time) * 0.01)
+            bridge.updateTunnel(fix, manager: manager)
+            last(.unknown, "invalid SDK type remains unknown for current and lookahead")
+            check(Settings.shared.policy.isDimmed, "unknown SDK type cannot confirm exit after three seconds")
+        }
+        manager.naviRoute!.routeSegments![0].links = [SDKLink()]
+        manager.naviRouteID += 1
+        for time in 7...10 {
+            Settings.shared.now = Double(time)
+            fix.timestamp = Date().addingTimeInterval(-1 + Double(time) * 0.01)
+            bridge.updateTunnel(fix, manager: manager)
+            last(.outside, "valid SDK link restores outside evidence")
+            check(Settings.shared.policy.isDimmed == (time < 10), "unknown must cancel the old pending exit timer")
+        }
+    }
+}
+for validType in [LinkType.normal, .fairway, .bridge, .elevatedRd] {
+    let (bridge, fix, manager, current) = fixture()
+    current.linkType = validType
+    bridge.updateTunnel(fix, manager: manager)
+    last(.outside, "documented non-tunnel SDK types remain valid outside evidence")
 }
 let invalidFixes: [(String, (AMapNaviLocation) -> Void)] = [
     ("missing timestamp", { $0.timestamp = nil }),

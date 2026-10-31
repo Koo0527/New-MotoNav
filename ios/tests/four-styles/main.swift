@@ -19,8 +19,27 @@ check(q.palette[Int(q.indices[600*n+600])] == 0xffff,"original keeps white roads
 check(q.indices[100*n+100] != q.indices[300*n+100],"original preserves distinct colors")
 let packet = MapGeo.encodeRaster(frameId:1,x0:-1200,y0:1200,w:n,h:n,mmPerPx:2000,idx:q.indices,pal:q.palette)
 check(RasterPacket.valid(packet),"original palette packet validates")
+check(MapStyleTransfer.command(0)=="#t,0,1","native style switch invalidates the firmware's old recoloured map")
+check(MapStyleTransfer.matches(packet,style:0),"native style accepts its palette data")
+check(!MapStyleTransfer.matches(packet,style:1),"Vice City cannot reuse native palette data")
+let minimalPacket=MapGeo.encodeRaster(frameId:1,x0:-1200,y0:1200,w:n,h:n,mmPerPx:2000,idx:road)
+check(MapStyleTransfer.matches(minimalPacket,style:5),"minimal accepts only its independent road mask")
+check(!MapStyleTransfer.matches(minimalPacket,style:0),"native style cannot display a recoloured old mask")
+var wrongMinimal=road;wrongMinimal[0]=2
+let wrongPacket=MapGeo.encodeRaster(frameId:1,x0:-1200,y0:1200,w:n,h:n,mmPerPx:2000,idx:wrongMinimal)
+check(!MapStyleTransfer.matches(wrongPacket,style:5),"minimal must not reuse a cached park/building texture")
 check(RasterPacket.decode(packet) == q.indices,"original palette packet roundtrip")
 check(!RasterPacket.valid(Data(packet.dropLast())),"truncated palette packet is rejected")
 var corrupt = packet; corrupt[10] = 0
 check(!RasterPacket.valid(corrupt),"invalid dimensions rejected")
 print("PASS four independent style pipeline checks")
+
+for style in [1,2,3,4,6,7,8,9] {
+    check(MapStyleTransfer.matches(minimalPacket,style:style),"classified map remains compatible with legacy firmware style \(style)")
+    check(!MapStyleTransfer.matches(packet,style:style),"classified styles must reject native palette data")
+    check(MapStyleTransfer.command(style)=="#t,\(style),1","switching style invalidates old receiver data")
+}
+check(!MapStyleTransfer.matches(minimalPacket,style:10),"satellite does not consume classified raster packets")
+check(!MapStyleTransfer.matches(minimalPacket,style:11),"Dragon radar does not consume base maps")
+check(!MapStyleTransfer.matches(minimalPacket,style:-1) && !MapStyleTransfer.matches(minimalPacket,style:12),"unknown styles are rejected")
+print("PASS restored legacy style material/palette isolation")

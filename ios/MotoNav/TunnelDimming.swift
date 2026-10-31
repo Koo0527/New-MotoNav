@@ -71,7 +71,7 @@ struct TunnelDimmingPolicy {
 struct TunnelRoute {
     struct Link {
         let metres: Double
-        let isTunnel: Bool
+        let isTunnel: Bool?
     }
 
     private let segments: [[Link]]
@@ -81,8 +81,8 @@ struct TunnelRoute {
     func evidence(segment: Int, link: Int, metresToEndOfLink: Double?) -> TunnelEvidence {
         guard segments.indices.contains(segment), segments[segment].indices.contains(link) else { return .unknown }
         let current = segments[segment][link]
-        guard current.metres.isFinite, current.metres >= 0 else { return .unknown }
-        if current.isTunnel { return .inside }
+        guard current.metres.isFinite, current.metres >= 0, let isTunnel = current.isTunnel else { return .unknown }
+        if isTunnel { return .inside }
         guard let remaining = metresToEndOfLink, remaining.isFinite,
               remaining >= 0, remaining <= current.metres else { return .unknown }
 
@@ -99,8 +99,8 @@ struct TunnelRoute {
                 continue
             }
             let next = segments[segmentIndex][linkIndex]
-            guard next.metres.isFinite, next.metres >= 0 else { return .unknown }
-            if next.isTunnel { return .approaching }
+            guard next.metres.isFinite, next.metres >= 0, let isTunnel = next.isTunnel else { return .unknown }
+            if isTunnel { return .approaching }
             distance += next.metres
             linkIndex += 1
         }

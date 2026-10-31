@@ -66,7 +66,7 @@ struct NavigationOverlay<Extra: View>: View {
                     Text("已到达目的地").font(.title.bold())
                     Button("返回首页", action: onEnd).frame(minHeight: 44)
                 }
-                .padding(30).background(RoundedRectangle(cornerRadius: 22).fill(ContentView.bg))
+                .padding(30).background(RoundedRectangle(cornerRadius: 22).fill(AppTheme.hudCard))
             } else {
                 VStack(spacing: 12) {
                     HStack(spacing: 18) {
@@ -76,11 +76,11 @@ struct NavigationOverlay<Extra: View>: View {
                             Text(readout.turnMetres >= 0 ? NaviBridge.distText(readout.turnMetres) : "—")
                                 .font(.system(size: 30, weight: .heavy))
                             Text(readout.instruction.isEmpty ? "沿路线前进" : readout.instruction).font(.headline).lineLimit(2)
-                            Text(readout.status).font(.caption).foregroundColor(ContentView.sub)
+                            Text(ContentView.userMessage(readout.status)).font(.caption).foregroundColor(AppTheme.hudSub)
                         }
                         Spacer(minLength: 0)
                     }
-                    .padding(18).background(RoundedRectangle(cornerRadius: 22).fill(ContentView.bg.opacity(0.94)))
+                    .padding(18).background(RoundedRectangle(cornerRadius: 22).fill(AppTheme.hudCard))
                     .background(GeometryReader { geometry in
                         Color.clear.preference(key: NavigationPanelHeightKey.self,
                                                value: NavigationPanelHeights(top: geometry.size.height))
@@ -117,7 +117,7 @@ struct NavigationOverlay<Extra: View>: View {
                         }
                         endButton
                     }
-                    .padding(18).background(RoundedRectangle(cornerRadius: 22).fill(ContentView.bg.opacity(0.94)))
+                    .padding(18).background(RoundedRectangle(cornerRadius: 22).fill(AppTheme.hudCard))
                     .background(GeometryReader { geometry in
                         Color.clear.preference(key: NavigationPanelHeightKey.self,
                                                value: NavigationPanelHeights(bottom: geometry.size.height))
@@ -136,9 +136,10 @@ struct NavigationOverlay<Extra: View>: View {
 
     private var endButton: some View {
         ZStack(alignment: .leading) {
-            Capsule().fill(Color(red: 0.45, green: 0.14, blue: 0.32))
+            Capsule().fill(AppTheme.secondaryFill.opacity(0.92))
+                .liquidGlass(Capsule(), tint: nil, interactive: true)
             GeometryReader { geometry in
-                Capsule().fill(ContentView.pink).frame(width: holding ? geometry.size.width : 0)
+                Capsule().fill(AppTheme.red.opacity(0.55)).frame(width: holding ? geometry.size.width : 0)
                     .animation(holding ? .linear(duration: 0.6) : .easeOut(duration: 0.15), value: holding)
             }
             Text(holdHint ? "要长按才能结束" : (holding ? "松手取消" : "长按结束导航"))
@@ -199,6 +200,9 @@ struct AMapDriveViewRep: UIViewRepresentable {
         let v = AMapNaviDriveView(frame: .zero)
         v.delegate = controller.asDelegate
         v.mapViewModeType = night ? .night : .day
+        // 整合版：高德自带 UI（顶卡/底栏/logo/主页按钮/光柱）全部隐藏，改由 NaviScreen 自绘
+        v.showUIElements = false
+        v.screenAnchor = CGPoint(x: 0.5, y: 0.72)       // 仅 showUIElements=NO 时有效：车标偏下，前方视野更大
         controller.view = v
         updateUIView(v, context: context)
         v.showTrafficLightView = true
@@ -265,7 +269,7 @@ struct NaviScreen: View {
                     Button { showNativeUI = false } label: {
                         Label("返回 App 风格", systemImage: "arrow.uturn.backward")
                             .font(.subheadline.bold()).foregroundColor(ContentView.pink).padding(14)
-                            .background(Capsule().fill(ContentView.bg.opacity(0.94)))
+                            .background(Capsule().fill(AppTheme.hudCard))
                     }.padding(16).padding(.bottom, 88)
                 }
             }

@@ -32,14 +32,26 @@ func check(_ condition: Bool, _ message: String) {
 }
 // Only the external SDK/network boundary is replaced; search behavior is production code.
 @objc protocol AMapSearchDelegate {}
-final class AMapGeoPoint: NSObject { var latitude=31.0; var longitude=121.0 }
+final class AMapGeoPoint: NSObject {
+    var latitude=31.0; var longitude=121.0
+    static func location(withLatitude lat:CGFloat,longitude lng:CGFloat)->AMapGeoPoint { let p=AMapGeoPoint();p.latitude=Double(lat);p.longitude=Double(lng);return p }
+}
+class AMapPOISearchBaseRequest: NSObject {}
+final class AMapPOIAroundSearchRequest: AMapPOISearchBaseRequest {
+    var location:AMapGeoPoint?;var keywords="";var types="";var sortrule=0;var radius=0;var offset=0
+}
+final class AMapPOI: NSObject { var name:String?;var address:String?;var location:AMapGeoPoint? }
+final class AMapPOISearchResponse: NSObject { var pois:[AMapPOI]? }
+enum MotorRequest { static func valid(_ lat:Double,_ lng:Double)->Bool { lat.isFinite && lng.isFinite && (-90...90).contains(lat) && (-180...180).contains(lng) } }
 final class AMapTip: NSObject { var name:String?; var district:String?; var address:String?; var location:AMapGeoPoint? }
 final class AMapInputTipsSearchRequest: NSObject { var keywords:String?; var location:String? }
 final class AMapInputTipsSearchResponse: NSObject { var tips:[AMapTip]? }
 final class AMapSearchAPI: NSObject {
     static var requests:[AMapInputTipsSearchRequest]=[]
+    static var fuelRequests:[AMapPOIAroundSearchRequest]=[]
     var delegate:AMapSearchDelegate?
     func aMapInputTipsSearch(_ request:AMapInputTipsSearchRequest) { Self.requests.append(request) }
+    func aMapPOIAroundSearch(_ request:AMapPOIAroundSearchRequest) { Self.fuelRequests.append(request) }
 }
 final class LocationService { static let shared=LocationService(); var location:CLLocation? }
 enum MapGeo { static func wgsToGcj(_ lat:Double,_ lng:Double)->(lat:Double,lng:Double) { (lat,lng) } }
@@ -72,7 +84,43 @@ search.mnSearchFail(original,error:NSError(domain:"test",code:1002))
 check(search.status=="搜索中…","a stale failure must not interrupt a newer search")
 search.mnSearchFail(pending,error:NSError(domain:"test",code:1002))
 check(search.status.contains("1002"),"current SDK errors must still reach the user")
-print("PASS search: moved position, stale results, cancellation and current errors")
+// Repeated same-text requests must be distinguished by object identity too.
+search.search("同名地点",near:(32,122))
+let oldSame=AMapSearchAPI.requests.last!
+search.search("同名地点",near:(32,122))
+let newSame=AMapSearchAPI.requests.last!
+search.mnTipsDone(oldSame,response:response("同词迟到结果"))
+check(search.results.isEmpty && search.status=="搜索中…","same keyword/location is insufficient to accept an old result")
+search.mnSearchFail(oldSame,error:NSError(domain:"test",code:1002))
+check(search.status=="搜索中…","same-keyword stale errors must be ignored")
+search.mnTipsDone(newSame,response:response("最新同名地点"))
+let count=AMapSearchAPI.requests.count
+search.search("同名地点",near:(32,122))
+check(AMapSearchAPI.requests.count==count && search.results.first?.name=="最新同名地点","only accepted results populate the location cache")
+search.search("同名地点",near:(33,123))
+check(AMapSearchAPI.requests.count==count+1,"cache entries must be location sensitive")
+search.searchFuel(near:(32,122))
+let oldFuel=AMapSearchAPI.fuelRequests.last!
+search.searchFuel(near:(33,123))
+let fuel=AMapSearchAPI.fuelRequests.last!
+check(fuel.location?.latitude==33 && fuel.location?.longitude==123,"fuel search uses explicit route origin")
+let poi=AMapPOI();poi.name="当前加油站";poi.location=AMapGeoPoint()
+let stations=AMapPOISearchResponse();stations.pois=[poi]
+search.mnFuelDone(oldFuel,response:stations)
+search.mnSearchFail(oldFuel,error:NSError(domain:"test",code:1002))
+check(search.results.isEmpty && search.status=="搜索附近加油站…","stale fuel success and failure are ignored")
+search.mnFuelDone(fuel,response:stations)
+check(search.results.first?.name=="当前加油站","current fuel results appear")
+search.search("新目的地")
+search.mnFuelDone(fuel,response:stations)
+check(search.results.isEmpty && search.status=="搜索中…","fuel results cannot replace a newer tip search")
+search.searchFuel(near:(32,122))
+search.mnSearchFail(AMapSearchAPI.fuelRequests.last!,error:NSError(domain:"test",code:1002))
+check(search.status.contains("1002"),"current fuel errors remain actionable")
+search.searchFuel(near:(Double.nan,122))
+search.mnTipsDone(AMapSearchAPI.requests.last!,response:response("旧提示"))
+check(search.results.isEmpty && search.status.contains("等待定位"),"invalid fuel origins cancel older requests")
+print("PASS search: moved origin, location cache, same-keyword identity, cancellation, fuel results and current errors")
 ''')
 
 rides = (root / "MotoNav/RideTools.swift").read_text()

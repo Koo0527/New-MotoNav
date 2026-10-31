@@ -8,7 +8,7 @@ final class Settings: ObservableObject {
     private let ud = UserDefaults.standard
 
     /// 风格编号（和固件一样）；列表顺序
-    static let themeOrder = [1, 0, 5, 11]
+    static let themeOrder = [1, 0, 5, 11, 2, 3, 4, 6, 7, 8, 9, 10]
     static func themeName(_ t: Int) -> String {
         switch t {
         case 11: return "龙珠雷达"
@@ -51,9 +51,12 @@ final class Settings: ObservableObject {
     @Published var theme: Int {
         didSet {
             ud.set(theme, forKey: "map_theme")
-            BleLink.shared.send("#t,\(theme)")
+            BleLink.shared.send(MapStyleTransfer.command(theme))
             // 卫星图和普通地图的数据不一样：切换时重新下载
-            if oldValue != theme { MapFeeder.shared.resetChunk() }
+            if oldValue != theme {
+                MapSampleReport.shared.failIfWaiting("风格已切换，请重新生成对照图。")
+                MapFeeder.shared.resetChunk()
+            }
         }
     }
     // iOS v0.2 小地图
@@ -202,7 +205,7 @@ final class Settings: ObservableObject {
 
     private init() {
         amapKey = ud.string(forKey: "key_amap") ?? ""
-        theme = [1, 0, 5, 11].contains(ud.integer(forKey: "map_theme")) && ud.object(forKey: "map_theme") != nil ? ud.integer(forKey: "map_theme") : 1
+        theme = Self.themeOrder.contains(ud.integer(forKey: "map_theme")) && ud.object(forKey: "map_theme") != nil ? ud.integer(forKey: "map_theme") : 1
         rotationDeg = ud.object(forKey: "screen_rot_deg") as? Int
             ?? ((ud.object(forKey: "screen_rot") as? Int ?? 0) & 3) * 90   // 老版本只存了 0~3 档
         brightness = ud.object(forKey: "bright") as? Double ?? 200
@@ -267,13 +270,17 @@ final class Settings: ObservableObject {
     }
 
     /// 连上圆屏时把所有设置发一遍
+    func syncBuildingContinuity() {
+        BleLink.shared.send(theme==1 && buildings && mapOn && mapSource==MapFeeder.SRC_AMAP ? "#BC,1":"#BC,0")
+    }
     func pushAll() {
         let b = BleLink.shared
         syncBootBrand()
         MusicBridge.shared.syncMode()
         MusicBridge.shared.refresh(force: true)
         applyDayNight(force: true)                      // 亮度、夜间配色
-        b.send("#t,\(theme)")
+        b.send(MapStyleTransfer.command(theme))
+        syncBuildingContinuity()
         b.send(rotationMsg)
         b.send(curve ? "#Q,1" : "#Q,0")
         b.send(mapOn ? "#m,1" : "#m,0")

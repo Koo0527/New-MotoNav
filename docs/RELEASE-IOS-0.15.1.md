@@ -9,7 +9,7 @@
 - 时间：圆屏认证连接后发送当前时间与时区，每分钟校准；时间跳变、时区变化和重新连接时重新同步。时间包不作为旧状态重放，旧固件可忽略不认识的命令。
 - 构建：iOS 主应用、分享扩展及发布版本统一为 0.15.1；iOS 发布流程独立构建 iOS，不再附带构建或发布 ESP32 固件。
 
-电脑端回归测试：`python3 ios/tests/ios-fixes/check.py`；路线回归：`python3 ios/tests/webmotor/check.py`；校时测试：`swiftc ios/MotoNav/BleHandshakeClock.swift ios/tests/phone-clock/main.swift -o /tmp/motonav-clock && /tmp/motonav-clock`。本地完整构建入口为 `bash scripts/build-ios-local.sh`，生成未签名 IPA，需使用本人的 Apple 账号签名安装。
+电脑端回归测试：`python3 ios/tests/ios-fixes/check.py`；路线回归：`python3 ios/tests/webmotor/check.py`；校时测试：`swiftc ios/MotoNav/PhoneClockSync.swift ios/tests/phone-clock/main.swift -o /tmp/motonav-clock && /tmp/motonav-clock`。本地完整构建入口为 `bash scripts/build-ios-local.sh`，生成未签名 IPA，需使用本人的 Apple 账号签名安装。
 
 构建号 3 已通过 iPhone arm64 Release 编译、新增三组回归和原有逻辑回归，并校验主应用及分享扩展版本、IPA 内容和 SHA256。包含自行车修复、统一导航界面及读秒诊断的临时构建号 6 已通过路线、界面切换和到达回归、iPhone arm64 Debug 编译和签名校验，并安装、启动于 iPhone 15 Pro。自行车规划已由用户确认恢复；统一界面及原生高级提示的道路效果仍待真机验证。保留本地已有的工程配置，最低要求 iOS 17.0。
 

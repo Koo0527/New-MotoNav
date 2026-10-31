@@ -6,7 +6,7 @@ import tempfile
 
 root = Path(__file__).resolve().parents[2]
 source = (root / 'MotoNav/IndependentRouteView.swift').read_text()
-model = source[source.index('enum TravelMode:'):source.index('struct PlacePickerView:')]
+model = source[source.index('enum TravelMode:'):source.index('struct MotorLoginView:')]
 stubs = r'''
 import Foundation
 import Combine
@@ -23,6 +23,12 @@ enum MotorRoutes {
         return try await withCheckedThrowingContinuation { pending.append($0) }
     }
     static func fromShare(_ r:AmapShare.Route)->MotorRoute { MotorRoute(request:MotorRequest(start:MotorPoint(lat:r.startLat,lng:r.startLng),end:MotorPoint(lat:r.endLat,lng:r.endLng),vias:[],bicycle:true)) }
+}
+struct SavedMotorPlan { let valid:Bool; let request:MotorRequest }
+final class MotorPlanHistory {
+    static let shared=MotorPlanHistory()
+    var saved:[MotorRoute]=[]
+    func save(_ route:MotorRoute){saved.append(route)}
 }
 final class Settings { static let shared=Settings(); var keysMissing=false }
 final class WebMotorSession { static let shared=WebMotorSession(); var running=false }
@@ -59,6 +65,10 @@ tests = r'''
         p.end=MotorPoint(lat:33,lng:123,name:"second")
         MotorRoutes.pending.removeFirst().resume(returning:[MotorRoute(request:old)])
         await settle();assert(p.routes.isEmpty,"destination changes discard stale results")
+        let restored=SavedMotorPlan(valid:true,request:MotorRequest(start:MotorPoint(lat:31,lng:121,name:"history origin"),end:MotorPoint(lat:32,lng:122,name:"history end"),vias:[MotorPoint(lat:31.5,lng:121.5,name:"fuel")],bicycle:false))
+        p.load(restored)
+        assert(p.mode == .motorcycle && p.start?.name == "history origin" && p.vias.count==1 && p.routes.isEmpty && !p.busy,"history restores inputs and invalidates geometry")
+        p.vias=[]
         p.mode = .driving;NaviBridge.shared.cruising=true;p.plan()
         assert(!NaviBridge.shared.cruising,"planning replaces cruise deliberately")
         assert(p.drivingPlanned && NaviBridge.shared.plans==1)
@@ -71,6 +81,7 @@ tests = r'''
         let current=MotorRoutes.requests.last!
         MotorRoutes.pending.removeLast().resume(returning:[MotorRoute(request:current)])
         await settle();assert(p.routes.count==1)
+        assert(!MotorPlanHistory.shared.saved.isEmpty,"successful plans are saved to history")
         MotorRoutes.pending.removeFirst().resume(throwing:NSError(domain:"old",code:1))
         await settle();assert(p.routes.count==1 && p.message.contains("已找到"),"old errors cannot replace a current result")
         let share=AmapShare.Route(kind:"摩托车",startLat:31,startLng:121,startName:"shared origin",endLat:32,endLng:122,endName:"shared end")

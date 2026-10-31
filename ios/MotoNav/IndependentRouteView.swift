@@ -40,6 +40,13 @@ final class RoutePlanner: ObservableObject {
             routes=[MotorRoutes.fromShare(route)];selected=0;message="已载入分享的自行车路线"
         } else { plan() }
     }
+    func load(_ entry:SavedMotorPlan) {
+        guard entry.valid else{return}
+        // History stores independent planning inputs, never an old route geometry.
+        mode=entry.request.bicycle ? .bicycle:.motorcycle
+        start=entry.request.start;end=entry.request.end;vias=entry.request.vias
+        message="已恢复起终点和途经点，点击规划获取最新路线"
+    }
     func plan() {
         guard !WebMotorSession.shared.running,!NaviBridge.shared.navigating else { message="请先结束当前导航或巡航";return }
         if NaviBridge.shared.cruising {NaviBridge.shared.stopCruise()}
@@ -64,62 +71,32 @@ final class RoutePlanner: ObservableObject {
         let request=MotorRequest(start:origin,end:end,vias:vias,bicycle:mode == .bicycle)
         busy=true;message="正在规划\(mode.rawValue)路线…"
         task=Task { @MainActor [weak self] in
-            do {
+            do{
                 let result=try await MotorRoutes.load(request)
-                guard let self=self,self.generation==token,!Task.isCancelled else { return }
+                guard let self=self,self.generation==token,!Task.isCancelled else{return}
                 self.routes=result;self.selected=0;self.busy=false
                 self.message="已找到 \(result.count) 条路线，请选择方案"
-            } catch {
-                guard let self=self,self.generation==token,!Task.isCancelled else { return }
+                if let first=result.first{MotorPlanHistory.shared.save(first)}
+            }catch{
+                guard let self=self,self.generation==token,!Task.isCancelled else{return}
                 self.busy=false;self.message=error.localizedDescription
             }
         }
     }
 }
 
-struct PlacePickerView: View {
-    let title: String
-    let choose: (MotorPoint)->Void
-    @StateObject private var search=SearchService()
-    @State private var query=""
-    @Environment(\.dismiss) private var dismiss
-    var body: some View {
-        NavigationView {
-            List {
-                HStack {
-                    TextField("搜索地点或地址",text:$query).submitLabel(.search).onSubmit{search.search(query)}
-                    Button("搜索"){search.search(query)}
-                }
-                if !search.status.isEmpty { Text(search.status).font(.caption) }
-                ForEach(search.results) { p in
-                    Button {
-                        choose(MotorPoint(lat:p.lat,lng:p.lng,name:p.name));dismiss()
-                    } label: {
-                        VStack(alignment:.leading,spacing:4){Text(p.name);Text(p.address).font(.caption).foregroundColor(.secondary)}
-                    }
-                }
-                if search.results.isEmpty && query.isEmpty {
-                    ForEach(History.shared.places) { p in
-                        Button(p.name){choose(MotorPoint(lat:p.lat,lng:p.lng,name:p.name));dismiss()}
-                    }
-                }
-            }.navigationTitle(title).toolbar{ToolbarItem(placement:.cancellationAction){Button("取消"){dismiss()}}}
-        }.preferredColorScheme(.dark)
-    }
-}
-
-struct MotorLoginView: View {
+struct MotorLoginView:View {
     @StateObject private var browser=MotorBrowser()
-    let page: URL?
+    let page:URL?
     @Environment(\.dismiss) private var dismiss
-    var body: some View {
-        NavigationView {
-            VStack {
+    var body:some View {
+        NavigationView{
+            VStack{
                 Text("仅在登录或验证时打开网页。登录保存在本机，正常规划可直接在 App 完成。").font(.caption).padding()
                 MotorBrowserView(browser:browser)
-                Text(browser.status).font(.caption)
+                Text(ContentView.userMessage(browser.status)).font(.caption)
             }.navigationTitle("高德登录／验证").toolbar{ToolbarItem(placement:.confirmationAction){Button("完成"){dismiss()}}}
-        }.onAppear{if let page=page {browser.web.load(URLRequest(url:page))}}
+        }.onAppear{if let page=page{browser.web.load(URLRequest(url:page))}}
     }
 }
 
@@ -128,8 +105,11 @@ struct RoutePlannerView: View {
     @ObservedObject var navi=NaviBridge.shared
     @ObservedObject var guide=WebMotorSession.shared
     @ObservedObject var settings=Settings.shared
-    @State private var pick: Int? // 0 origin, 1 destination, 2 via
+    @State private var pick: Int? // 0 origin, 1 destination
     @State private var login=false
+    @State private var waypoints=false
+    @State private var showHistory=false
+    @State private var simulationSpeed=60
     @Environment(\.dismiss) private var dismiss
     var body: some View {
         NavigationView {
@@ -142,19 +122,23 @@ struct RoutePlannerView: View {
                         Divider()
                         Button{pick=1}label:{Label(model.end?.name.isEmpty == false ? model.end!.name : "输入目的地",systemImage:"mappin.and.ellipse")}
                         if let end=model.end { Button("收藏目的地"){Favorites.shared.add(SearchService.Place(name:end.name,address:"",lat:end.lat,lng:end.lng))}.font(.caption) }
-                        ForEach(model.vias.indices,id:\.self){i in HStack{Text("途经 \(i+1)：\(model.vias[i].name)");Spacer();Button("移除"){model.vias.remove(at:i)}}}
-                        if model.vias.count<3 {Button("添加途经点"){pick=2}}
+                        if model.mode != .bicycle || !model.vias.isEmpty {
+                            Button {waypoints=true} label: {
+                                Label(model.vias.isEmpty ? "添加途经点（最多三个）":"途经："+model.vias.map{$0.name}.joined(separator:" → "),systemImage:"point.topleft.down.curvedto.point.bottomright.up")
+                            }
+                        }
                         if model.mode == .bicycle && !model.vias.isEmpty {Text("自行车暂不支持途经点，请移除后规划，或切换方式。").font(.caption).foregroundColor(.orange)}
                         if model.usesDriving {
                             Toggle("不走高速",isOn:$settings.avoidHighway).onChange(of:settings.avoidHighway){_ in model.inputsChanged()}
                         }
                         PillButton(title:model.busy || navi.calculating ? "正在规划…" : "规划\(model.mode.rawValue)路线",color:ContentView.pink,enabled:!model.busy && !navi.calculating && model.end != nil){model.plan()}
                     }
-                    if !model.message.isEmpty {Text(model.message).font(.footnote).foregroundColor(ContentView.sub)}
+                    if model.mode != .driving {Button("路线历史"){showHistory=true}.foregroundColor(ContentView.cyan)}
+                    if !model.message.isEmpty {Text(ContentView.userMessage(model.message)).font(.footnote).foregroundColor(ContentView.sub)}
                     if model.share != nil {Text("已载入高德分享路线；更改输入或方式将重新规划。").font(.caption).foregroundColor(.orange)}
                     if model.mode == .motorcycle && !model.usesDriving {Button("高德登录／验证"){login=true}.font(.footnote).foregroundColor(ContentView.cyan)}
                     if model.usesDriving && model.drivingPlanned {
-                        Text(navi.info).font(.footnote).foregroundColor(ContentView.sub)
+                        Text(ContentView.userMessage(navi.info)).font(.footnote).foregroundColor(ContentView.sub)
                         if !navi.shareMatch.isEmpty {Text(navi.shareMatch).font(.caption).foregroundColor(ContentView.sub)}
                         if !navi.routeOptions.isEmpty {
                             RouteMapView(routes:navi.routeOptions,selected:navi.selectedRouteID,
@@ -165,6 +149,7 @@ struct RoutePlannerView: View {
                         }
                     } else if let route=selectedRoute {
                         MotorMap(route:route,position:nil,overview:true).frame(height:260).clipShape(RoundedRectangle(cornerRadius:18))
+                        if !route.detailedGuidance {Text("已取得路线轨迹，暂无分段转向指引，请按地图路线行进。").font(.footnote).foregroundColor(ContentView.sub)}
                         ForEach(Array(model.routes.enumerated()),id:\.offset){i,r in
                             Button{model.selected=i}label:{
                                 HStack{
@@ -175,9 +160,10 @@ struct RoutePlannerView: View {
                             }
                         }
                     }
+                    Picker("模拟速度",selection:$simulationSpeed){ForEach(NavigationSpeed.values,id:\.self){Text("\($0) km/h").tag($0)}}.pickerStyle(.segmented)
                     HStack {
                         PillButton(title:"开始导航",color:ContentView.pink,enabled:ready){begin(false)}
-                        PillButton(title:"模拟导航",color:.purple,enabled:ready){begin(true)}
+                        PillButton(title:"模拟导航",color:AppTheme.accent,enabled:ready){begin(true)}
                     }
                     Text(model.usesDriving ? (model.share == nil ? "驾车路线支持路况、车道和完整导航提示。" : "参考高德分享的路线，沿用驾车策略导航。") : model.mode == .motorcycle ? "按摩托车方案规划，需要时可完成高德登录或验证。" : "按自行车路线规划，暂不支持途经点。")
                         .font(.caption).foregroundColor(ContentView.sub)
@@ -188,14 +174,17 @@ struct RoutePlannerView: View {
                 }.padding(16)
             }.background(ContentView.bg).navigationTitle("路线规划")
                 .toolbar{ToolbarItem(placement:.cancellationAction){Button("返回首页"){dismiss()}}}
-        }.foregroundColor(.white).tint(ContentView.pink)
+        }.foregroundColor(AppTheme.text).tint(ContentView.pink)
         .sheet(isPresented:Binding(get:{pick != nil},set:{if !$0{pick=nil}})){
-            PlacePickerView(title:pick==0 ? "选择起点" : pick==2 ? "选择途经点" : "选择目的地"){point in
-                if pick==0{model.start=point}else if pick==2{if model.vias.count<3{model.vias.append(point)}}else{model.end=point}
+            RoutePointPicker(title:pick==0 ? "选择起点" : "选择目的地",near:model.start){point in
+                if pick==0{model.start=point}else{model.end=point}
                 pick=nil
             }
         }
+        .sheet(isPresented:$waypoints){RouteWaypointEditor(points:model.vias,near:model.start){points in model.vias=points}}
+        .sheet(isPresented:$showHistory){MotorHistoryView(bicycle:model.mode == .bicycle){entry in model.load(entry)}}
         .sheet(isPresented:$login){MotorLoginView(page:nil)}
+        .onAppear {LocationService.shared.start()}
 
     }
     private var selectedRoute: MotorRoute? {model.routes.indices.contains(model.selected) ? model.routes[model.selected] : nil}
@@ -204,7 +193,8 @@ struct RoutePlannerView: View {
         guard ready else{model.message="请先结束当前导航或规划当前路线";return}
         if let end=model.end {History.shared.add(SearchService.Place(name:end.name,address:"",lat:end.lat,lng:end.lng))}
         if navi.cruising {navi.stopCruise()}
-        if model.usesDriving {navi.start(emulate:simulate)} else if let route=selectedRoute {guide.start(route,simulate:simulate)}
+        if model.usesDriving {navi.preferredSimulationSpeed=simulationSpeed;navi.start(emulate:simulate)}
+        else if let route=selectedRoute {MotorPlanHistory.shared.save(route);guide.start(route,simulate:simulate,simulationSpeed:simulationSpeed)}
     }
 }
 
@@ -228,10 +218,10 @@ struct IndependentNavigationView: View {
                                   onOverview: { guide.overview.toggle() }, onMute: toggleMute,
                                   onSettings: { dismiss() }, onEnd: exitNavi,
                                   onPause: { guide.paused.toggle() },
-                                  onCycleSpeed: { guide.speed = guide.speed == 60 ? 120 : guide.speed == 120 ? 180 : 60 },
+                                  onCycleSpeed: { guide.speed = NavigationSpeed.next(guide.speed) },
                                   onLayout: { panelHeights = $0 }) {
                     if !metadata.status.isEmpty {
-                        Text(metadata.status).font(.caption2).foregroundColor(ContentView.sub)
+                        Text(ContentView.userMessage(metadata.status)).font(.caption2).foregroundColor(ContentView.sub)
                     }
                 }
             }
@@ -246,9 +236,17 @@ struct IndependentNavigationView: View {
 
     private var readout: NavigationReadout {
         NavigationReadout(direction: guide.turnDirection, turnMetres: guide.turnMetres, instruction: guide.instruction,
-                          status: guide.status, speed: guide.speed, remaining: guide.remaining,
+                          status: navigationNotice, speed: guide.speed, remaining: guide.remaining,
                           remainingSeconds: guide.remainingSeconds, simulation: guide.simulation, paused: guide.paused,
                           simulationSpeed: guide.speed, arrived: guide.arrived)
+    }
+    private var navigationNotice:String {
+        if guide.status.contains("重算失败") {return "重新规划暂未完成，将保留当前路线"}
+        if guide.status.contains("正在重新规划") {return "偏离路线，正在重新规划…"}
+        if guide.status.contains("已偏离路线") {return "已偏离路线"}
+        if guide.status.contains("GPS") {return "定位信号较弱"}
+        if guide.route?.detailedGuidance == false {return "按路线行进 · 暂无分段转向指引"}
+        return guide.simulation ? "模拟导航":"导航中"
     }
     private func toggleMute() {
         settings.voiceMuted.toggle()

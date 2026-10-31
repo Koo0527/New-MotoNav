@@ -25,7 +25,9 @@ final class BleLink {
     func send(_ text: String) { commands.append((text, Date())) }
     var brightness: [Int] { commands.compactMap { $0.0.hasPrefix("#b,") ? Int($0.0.dropFirst(3)) : nil } }
 }
-final class MapFeeder { static let shared=MapFeeder(); func resetChunk() {}; func resendAll() {} }
+final class MapFeeder { static let SRC_AMAP=3; static let shared=MapFeeder(); func resetChunk() {}; func resendAll() {} }
+enum MapStyleTransfer { static func command(_ style:Int)->String { "#t,\(style),1" } }
+final class MapSampleReport { static let shared=MapSampleReport(); func failIfWaiting(_ text:String) {} }
 enum MapDefaults { static func buildings()->Bool { false }; static func source(_ ud:UserDefaults)->Int { 0 } }
 final class MusicBridge { static let shared=MusicBridge(); func syncMode() {}; func syncLyrics(force:Bool) {}; func refresh(force:Bool) {} }
 final class AMapServices { static let instance=AMapServices(); static func shared()->AMapServices { instance }; var apiKey="" }
@@ -35,7 +37,17 @@ final class LocationService { static let shared=LocationService(); var location:
 enum SunTimes { static var day=true; static func isDaytime(lat:Double?,lng:Double?)->(day:Bool,desc:String) { (day,"test sun") } }
 ''' + policy + settings + r'''
 defer { testDefaults.removePersistentDomain(forName: suite) }
+if CommandLine.arguments.count>1 { testDefaults.set(Int(CommandLine.arguments[1])!,forKey:"map_theme") }
 let s=Settings.shared, b=BleLink.shared
+if CommandLine.arguments.count>1 {
+    let saved=Int(CommandLine.arguments[1])!
+    check(s.theme==saved,"saved style remains selected after launch")
+    check(Settings.themeOrder.count==12 && Set(Settings.themeOrder)==Set(0..<12),"all twelve firmware styles are selectable once")
+    s.theme=saved
+    check(b.commands.last?.0=="#t,\(saved),1","each style invalidates prior firmware map data")
+    testDefaults.removePersistentDomain(forName:suite)
+    exit(0)
+}
 check(s.tunnelAuto && !s.tunnelDimmed,"fresh install enables automatic detection without dimming")
 s.brightAuto=false; s.brightness=230; s.brightNight=60; s.nightMode=1
 wait(0.2); s.applyDayNight(force:true); b.commands=[]
@@ -127,3 +139,6 @@ with tempfile.TemporaryDirectory(prefix='motonav-tunnel-settings-') as directory
     env['CLANG_MODULE_CACHE_PATH'] = str(folder / 'clang-cache')
     subprocess.run(['swiftc', '-O', str(source), '-o', str(folder / 'test')], check=True, env=env)
     subprocess.run([str(folder / 'test')], check=True, env=env)
+    for style in range(12):
+        subprocess.run([str(folder / 'test'), str(style)], check=True, env=env)
+    print('PASS all twelve style selections survive relaunch and emit isolated map commands')
