@@ -15,8 +15,12 @@ import ObjectiveC
 /// - 沿用现有语音服务（Speech）并关闭 SDK 内置播报（isUseInternalTTS = false），
 ///   静音、音乐压低和耳机输出由 Speech / Settings 原有逻辑负责。
 /// - 算路失败明确区分权限、网络和实现错误（RidePlanFailure），不做兼容模式静默降级。
-/// - Task 1 范围：算路 → 选路 → 模拟导航；真实导航入参已就绪但由界面控制暂不开放（Task 2），
-///   圆屏 BLE、轨迹、后台处理不在本层实现。
+/// - Task 2：真实 / 模拟导航全链路 —— SDK 回调转换为现有导航读数和圆屏 BLE 消息
+///   （转向、距离、道路文字、车速、剩余里程、ETA、GPS 状态、到达事件，协议与驾车/独立引擎一致，
+///   不改 ESP32 通信协议）；路线变化更新沿线地图（MapFeeder）；真实导航记录轨迹
+///   （RideRecorder，模拟不记录），结束后立即恢复真实定位来源；后台/锁屏沿用驾车做法
+///   （allowsBackgroundLocationUpdates + 沿线缓存策略）；定位活动类型由 LocationService 按骑行设为 .fitness。
+/// - 历史只保存规划输入（起终点），恢复时重新算路；不保存或伪造可长期复用的 SDK 路线 ID。
 final class RideBridge: NSObject, ObservableObject {
     static let shared = RideBridge()
 
@@ -30,7 +34,7 @@ final class RideBridge: NSObject, ObservableObject {
     @Published private(set) var failure: RidePlanFailure?   // 失败分类：权限 / 网络 / 实现
     @Published var routeOptions: [NaviBridge.RouteOption] = []   // 复用驾车路线卡片类型（时间/距离/坐标）
     @Published var selectedRouteID = -1
-    // 导航信息（手机界面；圆屏 BLE 属 Task 2）
+    // 导航信息（手机界面）
     @Published var uiDir = ""
     @Published var uiDist = -1
     @Published var uiRoad = ""
@@ -57,7 +61,16 @@ final class RideBridge: NSObject, ObservableObject {
     private var routeGroup: AMapNaviRouteGroup?   // 预览、选路和开始导航共用的同一组结果
     private var destLat = Double.nan, destLng = Double.nan
     private var planOrigin: (lat: Double, lng: Double)?
+    private var endName = ""                      // 规划输入的一部分（历史记录用）
+    private var historyEligible = true            // 分享路线的官方重划不进历史（沿用分享不记历史）
     private var arriveSeq = 0
+    // 圆屏与沿线地图（消息格式与驾车/独立引擎一致，不改 ESP32 协议）
+    private let screen = RideScreenFeed()         // 圆屏消息去重状态
+    private var lastRouteKey = ""                 // 已发给小地图的路线（新规划/偏航重算时重发）
+    private var tripStarted = Date(), tripMeters = 0.0, tripMaxKmh = 0
+    private var tripPosition: (lat: Double, lng: Double)?
+    private var rerouting = false                 // 圆屏“重新规划中”提示（#y）
+    private var gpsWeakSent = false               // GPS 信号弱提示（#x）只在变化时发
 
     // MARK: - 引擎与会话
 
@@ -95,6 +108,8 @@ final class RideBridge: NSObject, ObservableObject {
         arrival.preparePlan()
         installCallbacks()
         m.isUseInternalTTS = false                // 关闭 SDK 内置播报，文字交给现有语音服务
+        m.allowsBackgroundLocationUpdates = true  // 锁屏继续定位（沿用驾车做法）
+        m.pausesLocationUpdatesAutomatically = false
         return true
     }
 
@@ -110,6 +125,8 @@ final class RideBridge: NSObject, ObservableObject {
         emulating = false
         emuPaused = false
         rerouteFailed = false
+        rerouting = false
+        screen.reset()
         if let m = manager { m.stopNavi() }
     }
 
@@ -124,15 +141,20 @@ final class RideBridge: NSObject, ObservableObject {
         calculating = false; routeReady = false; planFailed = false; failure = nil
         routeOptions = []; selectedRouteID = -1; routeSummary = ""
         routeGroup = nil
-        destLat = .nan; destLng = .nan; planOrigin = nil
+        destLat = .nan; destLng = .nan; planOrigin = nil; endName = ""; historyEligible = true
         uiDir = ""; uiDist = -1; uiRoad = ""; uiRemainM = 0; uiRemainS = 0
+        lastRouteKey = ""; screen.reset()
+        MapFeeder.shared.onNaviEnd()               // 选路时预下载的沿线地图一并停掉（和驾车一致）
         info = "（还没开始骑行导航）"
     }
 
     // MARK: - 规划（无途经点独立算路）
 
     /// 规划去 (lat, lng)（高德坐标）的骑行路线。origin 为 nil 时由 SDK 用当前位置作起点。
-    func plan(toLat lat: Double, lng: Double, origin: MotorPoint? = nil) {
+    /// endName / historyEligible 属于规划输入的元信息：普通自行车规划成功后进历史（只存起终点），
+    /// 分享路线的官方重划不进历史（和分享导入不记历史一致）。
+    func plan(toLat lat: Double, lng: Double, origin: MotorPoint? = nil,
+              endName: String = "", historyEligible: Bool = true) {
         guard !navigating, !NavigationCoordinator.shared.navigationActive else { return }
         guard MotorRequest.valid(lat, lng),
               origin.map({ MotorRequest.valid($0.lat, $0.lng) }) ?? true else {
@@ -150,6 +172,8 @@ final class RideBridge: NSObject, ObservableObject {
         }
         destLat = lat; destLng = lng
         planOrigin = origin.map { ($0.lat, $0.lng) }
+        self.endName = endName
+        self.historyEligible = historyEligible
         replan()
     }
 
@@ -249,6 +273,7 @@ final class RideBridge: NSObject, ObservableObject {
         buildOptions(from: group)
         info = routeOptions.count > 1 ? "规划好了 \(routeOptions.count) 条骑行路线，点卡片选一条" : "骑行路线规划好了"
         if let f = routeOptions.first { select(routeID: f.id) }
+        if let f = routeOptions.first { recordHistory(f) }
     }
 
     /// 从同一组结果里取出所有路线做对比卡片；接受 SDK 实际返回的数量，不强求多条。
@@ -272,7 +297,27 @@ final class RideBridge: NSObject, ObservableObject {
         _ = routeGroup?.selectNaviRoute(withRouteID: routeID)
         if let o = routeOptions.first(where: { $0.id == routeID }) {
             routeSummary = "\(NaviBridge.distText(o.length))，约 \(NaviBridge.durText(o.timeS))"
+            // 选路后预下载沿线地图（锁屏用缓存，和驾车一致）
+            MapFeeder.shared.prepareRoute(key: "ride-\(routeID)", coords: o.coords.map { (lat: $0.latitude, lng: $0.longitude) })
         }
+    }
+
+    /// 历史只保存规划输入（起终点），恢复时重新算路；不保存 SDK 路线 ID 或路线几何。
+    /// 起点没手选时用当前定位（和网页规划记“我的位置”一致）；连定位都没有就不记这次。
+    private func recordHistory(_ option: NaviBridge.RouteOption) {
+        guard historyEligible else { return }
+        let start: MotorPoint
+        if let o = planOrigin { start = MotorPoint(lat: o.lat, lng: o.lng, name: "所选起点") }
+        else if let l = LocationService.shared.location, l.horizontalAccuracy >= 0, l.horizontalAccuracy <= 100,
+                abs(l.timestamp.timeIntervalSinceNow) < 15,
+                MotorRequest.valid(l.coordinate.latitude, l.coordinate.longitude) {
+            let g = MapGeo.wgsToGcj(l.coordinate.latitude, l.coordinate.longitude)
+            start = MotorPoint(lat: g.lat, lng: g.lng, name: "我的位置")
+        } else { return }
+        MotorPlanHistory.shared.save(request: MotorRequest(start: start,
+                                                          end: MotorPoint(lat: destLat, lng: destLng, name: endName),
+                                                          vias: [], bicycle: true),
+                                    distance: option.length, seconds: option.timeS)
     }
 
     /// 不去这个目的地了（换目的地）
@@ -285,10 +330,12 @@ final class RideBridge: NSObject, ObservableObject {
         showArrived = false
         planSeq += 1
         planSettled = true
-        destLat = .nan; destLng = .nan; planOrigin = nil
+        destLat = .nan; destLng = .nan; planOrigin = nil; endName = ""; historyEligible = true
         calculating = false; routeReady = false; planFailed = false; failure = nil
         routeOptions = []; selectedRouteID = -1
         routeSummary = ""; routeGroup = nil
+        lastRouteKey = ""; screen.reset()
+        MapFeeder.shared.onNaviEnd()
         info = "（还没开始骑行导航）"
     }
 
@@ -323,7 +370,11 @@ final class RideBridge: NSObject, ObservableObject {
         }
         let ok = emulate ? m.startEmulatorNavi(group) : m.startGPSNavi(group)
         if ok && arrival.acceptsGuidance(token) {
-            if !emulate { LocationService.shared.setPrecise(true) }   // 真实导航用精确定位（Task 1 界面只开放模拟）
+            // 真实导航用手机精确定位（活动类型 .fitness 由 LocationService 决定）并记录轨迹；模拟不记录
+            if !emulate { RideRecorder.shared.start("骑行导航"); LocationService.shared.setPrecise(true) }
+            screen.reset()
+            BleLink.shared.send("C")               // 圆屏先回待机，再接收本次导航的读数
+            MapFeeder.shared.onNaviStart()
             info = emulate ? "模拟骑行导航中" : "骑行导航中"
         } else if !ok && arrival.acceptsGuidance(token) {
             finish("导航没能开始", arrived: false, event: nil)
@@ -368,14 +419,22 @@ final class RideBridge: NSObject, ObservableObject {
         }
         emulating = false
         emuPaused = false
-        LocationService.shared.setPrecise(false)
+        RideRecorder.shared.finish()                       // 真实导航结束轨迹（没在记录时是空操作）
+        LocationService.shared.setPrecise(false)           // 模拟结束立即恢复真实定位来源
+        MapFeeder.shared.onNaviEnd()
         arriveSeq += 1
         showArrived = arrived                              // 先设这个再设 navigating：界面据此决定等 4 秒
         navigating = false
         info = text
         uiDir = ""; uiDist = -1
         rerouteFailed = false
+        rerouting = false
+        screen.reset()
         if arrived {
+            // 和驾车一致：先报行程统计，圆屏显示“已到达”4 秒后清屏回待机
+            let minutes = max(1, Int(Date().timeIntervalSince(tripStarted) / 60))
+            BleLink.shared.send("#O\(Int(tripMeters))/\(minutes)/\(tripMaxKmh)")
+            BleLink.shared.send("A,0")
             let seq = arriveSeq
             DispatchQueue.main.asyncAfter(deadline: .now() + 4) { [weak self] in
                 guard let self = self, seq == self.arriveSeq, self.arrival.canClearArrival(token),
@@ -384,13 +443,19 @@ final class RideBridge: NSObject, ObservableObject {
                 NavigationCoordinator.shared.rideManagerIfActive()?.stopNavi()
                 self.resetState()
                 self.showArrived = false
+                BleLink.shared.send("C")
             }
+        } else {
+            BleLink.shared.send("C")                       // 手动退出：圆屏直接回待机
         }
     }
 
     private func resetState() {
         uiDir = ""; uiDist = -1; uiRoad = ""; uiSpeed = 0; uiRemainM = 0; uiRemainS = 0
         rerouteFailed = false
+        lastRouteKey = ""; tripMeters = 0; tripMaxKmh = 0; tripStarted = Date(); tripPosition = nil
+        rerouting = false; gpsWeakSent = false
+        screen.reset()
     }
 
     // MARK: - SDK 回调（由带会话代次的代理转发，见文末 RideSessionCallbacks）
@@ -410,6 +475,7 @@ final class RideBridge: NSObject, ObservableObject {
     fileprivate func onRouteCalculated() {
         if navigating {                                    // 导航中偏航重算成功
             rerouteFailed = false
+            setRerouting(false)
             return
         }
         // 规划结果以独立算路回调块为准；这里的成功回调忽略，避免同一结果处理两次
@@ -418,6 +484,7 @@ final class RideBridge: NSObject, ObservableObject {
     fileprivate func onRouteCalculateFailure(_ error: NSError?) {
         if navigating {
             rerouteFailed = true
+            setRerouting(false)                            // “重新规划中”收起，改为提示保留当前路线
             info = "重新规划失败：已保留当前路线，可点重试"
             return
         }
@@ -439,7 +506,64 @@ final class RideBridge: NSObject, ObservableObject {
 
     fileprivate func onYaw() {
         guard navigating else { return }
-        info = "偏离路线，正在重新规划…"                    // SDK 自动重算；不叠加旧引擎的偏航计数
+        setRerouting(true)                                 // 圆屏显示“重新规划中”（SDK 自动重算，不叠加旧引擎的偏航计数）
+        info = "偏离路线，正在重新规划…"
+    }
+
+    // MARK: - 圆屏读数与沿线地图（协议与驾车/独立引擎一致）
+
+    /// 圆屏上显示 / 收起 “重新规划中”（只在导航进行中；与驾车同格式 #y）
+    func setRerouting(_ on: Bool) {
+        if on && !navigating { return }
+        if on == rerouting { return }
+        rerouting = on
+        BleLink.shared.send(on ? "#y,1" : "#y,0")
+    }
+
+    /// GPS 信号强弱：2 = 弱（与驾车同格式 #x），只在变化时发
+    fileprivate func onGps(_ strength: Int) {
+        let weak = strength == 2
+        guard weak != gpsWeakSent else { return }
+        gpsWeakSent = weak
+        BleLink.shared.send(weak ? "#x,1" : "#x,0")
+    }
+
+    private func roundDist(_ d: Int) -> Int { d >= 1000 ? (d + 50) / 100 * 100 : d }
+
+    /// 转向消息 “方向,米”：与驾车/独立引擎同格式；A 方向转成 S 发往圆屏，A,0 只留给真正的到达回调
+    private func pushTurn(_ dir: String, _ dist: Int) {
+        let msg = "\(ArrivalPolicy.wireDirection(dir)),\(roundDist(dist))"
+        guard msg != screen.lastTurn else { return }
+        screen.lastTurn = msg
+        BleLink.shared.send(msg)
+    }
+
+    /// 道路文字、底部“剩余里程 · 到达时间”和 #e（剩余里程/ETA）：与驾车 updateTexts 同格式
+    private func pushTexts(road: String, remainM: Int, remainS: Int) {
+        if road != screen.lastRoad {
+            screen.lastRoad = road
+            TextImage.send(slot: 0, road, maxW: 290, size: 26, minSize: 18)
+        }
+        let km = remainM >= 1000 ? String(format: "%.1fkm", Double(remainM) / 1000) : "\(remainM)m"
+        let eta = Calendar.current.date(byAdding: .second, value: remainS, to: Date()) ?? Date()
+        let hh = Calendar.current.component(.hour, from: eta), mm = Calendar.current.component(.minute, from: eta)
+        let bottom = String(format: "%@ · %02d:%02d到达", km, hh, mm)
+        if bottom != screen.lastBottom {
+            screen.lastBottom = bottom
+            TextImage.send(slot: 1, bottom, maxW: 240, size: 19, minSize: 15)
+        }
+        let rm = remainM >= 1000 ? (remainM + 50) / 100 * 100 : remainM
+        let trip = "#e,\(rm),\(hh * 100 + mm),0"
+        if trip != screen.lastTrip { screen.lastTrip = trip; BleLink.shared.send(trip) }
+    }
+
+    /// 路线变化（新规划 / 偏航重算）时把整条路线发给小地图（与驾车 mnNaviInfo 同做法）
+    private func pushRouteMap() {
+        guard let r = manager?.naviRoute else { return }
+        let rk = "\(r.routeUID):\(r.routeLength)"
+        guard rk != lastRouteKey else { return }
+        let coords = r.routeCoordinates.map { (lat: Double($0.latitude), lng: Double($0.longitude)) }
+        if MapFeeder.shared.onRoute(key: rk, coords: coords, lights: []) { lastRouteKey = rk }
     }
 
     fileprivate func onNaviInfo(_ n: AMapNaviInfo?) {
@@ -454,13 +578,34 @@ final class RideBridge: NSObject, ObservableObject {
         else if dir == "S", let cur = n.currentRoadName, !cur.isEmpty { uiRoad = "沿 \(cur) 直行" }
         else if let next = n.nextRoadName, !next.isEmpty { uiRoad = "进入 \(next)" }
         else { uiRoad = "" }
+        pushRouteMap()
+        pushTurn(dir, n.segmentRemainDistance)
+        pushTexts(road: uiRoad, remainM: n.routeRemainDistance, remainS: n.routeRemainTime)
+        setRerouting(false)                                // 有新的导航信息 = 重新规划好了
         if rerouteFailed { rerouteFailed = false; info = emulating ? "模拟骑行导航中" : "骑行导航中" }
     }
 
     fileprivate func onLocation(_ l: AMapNaviLocation?) {
         guard arrival.acceptsGuidance(arrival.generation), let l = l else { return }
-        uiSpeed = max(0, l.speed)
+        let kmh = max(0, l.speed)
+        uiSpeed = kmh
+        if let c = l.coordinate {
+            // SDK 匹配位置用于导航（小地图、行程统计）；轨迹记录走手机定位（RideRecorder）
+            let lat = Double(c.latitude), lng = Double(c.longitude)
+            if let p = tripPosition { let d = NaviBridge.distM(p.lat, p.lng, lat, lng); if d < 300 { tripMeters += d } }
+            tripPosition = (lat, lng)
+            tripMaxKmh = max(tripMaxKmh, kmh)
+            MapFeeder.shared.onLocation(lat: lat, lng: lng, bearing: l.heading, kmh: kmh)
+        }
+        let msg = "#v,\(kmh)"
+        if msg != screen.lastSpeed { screen.lastSpeed = msg; BleLink.shared.send(msg) }
     }
+}
+
+/// 圆屏消息的去重状态（消息格式见 RideBridge；这里只记录上一次发送的内容）
+private final class RideScreenFeed {
+    var lastTurn = "", lastRoad = "", lastBottom = "", lastTrip = "", lastSpeed = ""
+    func reset() { lastTurn = ""; lastRoad = ""; lastBottom = ""; lastTrip = ""; lastSpeed = "" }
 }
 
 // MARK: - 失败分类
@@ -565,7 +710,7 @@ final class RideSessionCallbacks: NSObject {
 
     @objc(rideManager:updateGPSSignalStrength:)
     func mnGps(_ m: AMapNaviRideManager, strength: Int) {
-        // 圆屏 BLE 与 GPS 提示属 Task 2，这里不处理
+        deliver { bridge in bridge.onGps(strength) }
     }
 
     @objc(rideManager:updateNaviInfo:)

@@ -181,11 +181,14 @@ final class LocationService: NSObject, ObservableObject, CLLocationManagerDelega
         lm.startUpdatingLocation()
     }
 
-    /// 巡航时打开：高精度、后台也继续
+    /// 巡航/真实导航时打开：高精度、后台也继续。
+    /// 骑行（官方骑行真实导航或网页自行车导航）活动类型用 .fitness，其余按驾车导航。
     func setPrecise(_ on: Bool) {
         lm.desiredAccuracy = on ? kCLLocationAccuracyBestForNavigation : kCLLocationAccuracyHundredMeters
         lm.distanceFilter = kCLDistanceFilterNone
-        lm.activityType = on ? (WebMotorSession.shared.running && WebMotorSession.shared.route?.request.bicycle == true ? .fitness : .automotiveNavigation) : .other
+        let bicycleTrip = (WebMotorSession.shared.running && WebMotorSession.shared.route?.request.bicycle == true)
+            || (RideBridge.shared.navigating && !RideBridge.shared.emulating)
+        lm.activityType = on ? (bicycleTrip ? .fitness : .automotiveNavigation) : .other
         lm.pausesLocationUpdatesAutomatically = !on
         lm.allowsBackgroundLocationUpdates = on
         lm.startUpdatingLocation()

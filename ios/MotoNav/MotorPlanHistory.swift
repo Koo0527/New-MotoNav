@@ -43,6 +43,12 @@ final class MotorPlanHistory: ObservableObject {
         plans=MotorHistoryPolicy.inserting(SavedMotorPlan(date:Date(),request:route.request,distance:route.totalMeters,seconds:route.seconds),into:plans)
         persist()
     }
+    /// Official-ride plans: only the user-selected planning inputs are stored (start/end);
+    /// restoring replans fresh. No SDK route IDs or geometry are persisted.
+    func save(request: MotorRequest, distance: Int, seconds: Int) {
+        plans=MotorHistoryPolicy.inserting(SavedMotorPlan(date:Date(),request:request,distance:distance,seconds:seconds),into:plans)
+        persist()
+    }
     func remove(_ id: UUID) {plans.removeAll{$0.id==id};persist()}
     func clear(bicycle: Bool) {plans.removeAll{$0.request.bicycle==bicycle};persist()}
     private func persist() {if let bytes=try? JSONEncoder().encode(plans){defaults.set(bytes,forKey:key)}}

@@ -7,17 +7,22 @@ import tempfile
 root = Path(__file__).resolve().parents[2]
 bridge = (root / 'MotoNav/RideBridge.swift').read_text()
 arrival = (root / 'MotoNav/ArrivalPolicy.swift').read_text()
+history = (root / 'MotoNav/MotorPlanHistory.swift').read_text()
 
 stubs = r'''
 import Foundation
 import CoreLocation
+import Combine
 import ObjectiveC
 func check(_ condition: Bool, _ message: String) {
     if !condition { print("FAIL: \(message)"); exit(1) }
 }
 func wait(_ seconds: Double) { RunLoop.current.run(until: Date().addingTimeInterval(seconds)) }
-struct MotorPoint { let lat: Double; let lng: Double; var name = "" }
-enum MotorRequest { static func valid(_ lat: Double, _ lng: Double) -> Bool { lat.isFinite && lng.isFinite && abs(lat) <= 90 && abs(lng) <= 180 } }
+struct MotorPoint: Codable { let lat: Double; let lng: Double; var name = "" }
+struct MotorRequest: Codable {
+    var start: MotorPoint; let end: MotorPoint; var vias: [MotorPoint] = []; var bicycle = false
+    static func valid(_ lat: Double, _ lng: Double) -> Bool { lat.isFinite && lng.isFinite && abs(lat) <= 90 && abs(lng) <= 180 }
+}
 enum NavigationSpeed {
     static let values = [60, 100, 120]
     static func next(_ value: Int) -> Int { guard let i = values.firstIndex(of: value) else { return values[0] }; return values[(i + 1) % values.count] }
@@ -30,8 +35,45 @@ final class Speech {
 final class LocationService {
     static let shared = LocationService()
     var preciseCalls: [Bool] = []
+    var location: CLLocation?
     func setPrecise(_ on: Bool) { preciseCalls.append(on) }
 }
+// ---- 圆屏 / 沿线地图 / 轨迹边界（记录调用，供圆屏输出断言） ----
+final class BleLink {
+    static let shared = BleLink()
+    var sent: [String] = []
+    func send(_ msg: String) { sent.append(msg) }
+}
+final class MapFeeder {
+    static let shared = MapFeeder()
+    var naviStarts = 0, naviEnds = 0
+    var preparedRoutes: [String] = []
+    var routeKeys: [String] = []
+    var locations: [(lat: Double, lng: Double, bearing: Double, kmh: Int)] = []
+    func onNaviStart() { naviStarts += 1 }
+    func onNaviEnd() { naviEnds += 1 }
+    func prepareRoute(key: String, coords: [(lat: Double, lng: Double)]) { preparedRoutes.append(key) }
+    func onRoute(key: String, coords: [(lat: Double, lng: Double)], lights: [(lat: Double, lng: Double)]) -> Bool {
+        guard coords.count >= 2 else { return false }
+        routeKeys.append(key); return true
+    }
+    func onLocation(lat: Double, lng: Double, bearing: Double, kmh: Int) { locations.append((lat, lng, bearing, kmh)) }
+}
+final class RideRecorder {
+    static let shared = RideRecorder()
+    var started: [String] = [], finished = 0
+    func start(_ mode: String) { started.append(mode) }
+    func finish() { finished += 1 }
+}
+final class TextImage {
+    static let shared = TextImage()
+    var slots: [Int: [String]] = [:]
+    static func send(slot: Int, _ text: String, maxW: Int, size: CGFloat, minSize: CGFloat) {
+        TextImage.shared.slots[slot, default: []].append(text)
+    }
+}
+enum MapGeo { static func wgsToGcj(_ lat: Double, _ lng: Double) -> (lat: Double, lng: Double) { (lat, lng) } }
+struct MotorRoute { let request: MotorRequest; let totalMeters: Int; let seconds: Int }
 final class NaviBridge {
     static let shared = NaviBridge()
     var navigating = false
@@ -52,6 +94,12 @@ final class NaviBridge {
     }
     static func distText(_ m: Int) -> String { "\(m)" }
     static func durText(_ s: Int) -> String { "\(s)" }
+    static func distM(_ lat1: Double, _ lng1: Double, _ lat2: Double, _ lng2: Double) -> Double {
+        let k = Double.pi / 180
+        let x = (lng2 - lng1) * k * cos((lat1 + lat2) / 2 * k)
+        let y = (lat2 - lat1) * k
+        return (x * x + y * y).squareRoot() * 6_371_000.0
+    }
 }
 final class WebMotorSession { static let shared = WebMotorSession(); var running = false }
 // Coordinator stub: the coordinator's own order is covered by tests/nav-coordinator.
@@ -83,7 +131,7 @@ final class AMapNaviPoint: NSObject {
 final class AMapNaviPOIInfo: NSObject { var mid: String?; var locPoint: AMapNaviPoint? }
 final class AMapNaviRouteLabel: NSObject { var content: String = "" }
 final class AMapNaviRoute: NSObject {
-    var routeTime = 0, routeLength = 0
+    var routeTime = 0, routeLength = 0, routeUID = 0
     var routeLabels: [AMapNaviRouteLabel]? = []
     var routeCoordinates: [AMapNaviPoint] = []
 }
@@ -95,17 +143,24 @@ final class AMapNaviRouteGroup: NSObject {
     var selections: [Int] = []
     func selectNaviRoute(withRouteID id: Int) -> Bool { selections.append(id); return true }
 }
-enum AMapNaviIconType: Int { case left = 2, straight = 9 }
+enum AMapNaviIconType: Int { case left = 2, straight = 9, destination = 15 }
 final class AMapNaviInfo: NSObject {
     var iconType: AMapNaviIconType = .straight
     var segmentRemainDistance = 0, routeRemainDistance = 0, routeRemainTime = 0
     var currentRoadName: String?, nextRoadName: String?
 }
-final class AMapNaviLocation: NSObject { var speed: Int = 0 }
+final class AMapNaviLocation: NSObject {
+    var speed: Int = 0
+    var heading: Double = 0
+    var coordinate: AMapNaviPoint?
+}
 final class AMapNaviRideManager: NSObject {
     weak var delegate: AMapNaviRideManagerDelegate?
     var representatives: [AMapNaviRideDataRepresentable] = []
     var isUseInternalTTS: Bool?
+    var allowsBackgroundLocationUpdates: Bool?
+    var pausesLocationUpdatesAutomatically: Bool?
+    var naviRoute: AMapNaviRoute?
     var calcStartPOI: AMapNaviPOIInfo?
     var calcEndPOI: AMapNaviPOIInfo?
     var calcStrategy: AMapNaviTravelStrategy?
@@ -312,7 +367,118 @@ tests = r'''
         RideBridge.shared.start(emulate: true)
         check(!RideBridge.shared.navigating, "navigation cannot start without a ready route")
 
-        print("PASS ride bridge: planning, generations, timeout, error classes, selection, simulation, reroute, arrival and teardown")
+        // ---- Task 2：真实导航 + 圆屏读数 + 沿线地图 + 轨迹 + 历史 ----
+        UserDefaults.standard.removeObject(forKey: "motor_plan_history_v1")
+        MotorPlanHistory.shared.clear(bicycle: true)
+        let ble = BleLink.shared, feeder = MapFeeder.shared, recorder = RideRecorder.shared
+        LocationService.shared.location = CLLocation(coordinate: CLLocationCoordinate2D(latitude: 31.0, longitude: 121.0),
+                                                     altitude: 0, horizontalAccuracy: 20, verticalAccuracy: 0,
+                                                     course: 0, speed: 0, timestamp: Date())
+        check(recorder.started.isEmpty, "plans and simulated navigation never record tracks")
+        // 后台定位沿用驾车做法（锁屏继续、不自动暂停）
+        check(coordinator.rideManager.allowsBackgroundLocationUpdates == true, "ride engine keeps location alive in the background")
+        check(coordinator.rideManager.pausesLocationUpdatesAutomatically == false, "ride engine does not auto-pause location")
+
+        // 历史只存规划输入：目的地 + 起点（没手选就记“我的位置”），不带 SDK 路线 ID
+        bridge.plan(toLat: 31.7, lng: 122.0, endName: "公园")
+        coordinator.rideManager.calcCallback?(makeGroup(), nil)
+        check(MotorPlanHistory.shared.plans.count == 1, "a successful official ride plan stores its planning inputs")
+        let savedPlan = MotorPlanHistory.shared.plans.first!
+        check(savedPlan.request.bicycle && savedPlan.request.end.lat == 31.7 && savedPlan.request.end.name == "公园",
+              "history keeps the destination input")
+        check(savedPlan.request.start.name == "我的位置", "an unspecified origin is recorded as the current position")
+        check(feeder.preparedRoutes.last == "ride-1", "selecting a route prepares the along-route map")
+
+        // 真实导航：圆屏回待机、沿线地图会话启动、轨迹开始、手机精确定位
+        ble.sent.removeAll(); feeder.naviStarts = 0; recorder.finished = 0
+        bridge.start(emulate: false)
+        check(bridge.navigating && !bridge.emulating, "real navigation is armed")
+        check(coordinator.rideManager.startedGPSGroups.count == 1, "real navigation starts with the saved route group")
+        check(ble.sent.last == "C", "the round screen is reset when navigation starts")
+        check(feeder.naviStarts == 1, "the along-route map session starts")
+        check(recorder.started == ["骑行导航"], "real ride navigation records a track")
+        check(recorder.finished == 0, "the track stays open while navigating")
+        check(LocationService.shared.preciseCalls.last == true, "real navigation requests precise phone location")
+
+        // 圆屏读数：转向、道路文字、剩余里程 / ETA（与驾车/独立引擎同格式）
+        ble.sent.removeAll(); TextImage.shared.slots.removeAll()
+        let info2 = AMapNaviInfo()
+        info2.iconType = .left; info2.segmentRemainDistance = 120; info2.routeRemainDistance = 1500
+        info2.routeRemainTime = 600; info2.currentRoadName = "测试路"; info2.nextRoadName = "林荫道"
+        bridge.testNaviInfo(info2)
+        check(ble.sent.contains("L,120"), "turn guidance follows the existing wire format")
+        check(ble.sent.contains { $0.hasPrefix("#e,1500,") }, "remaining distance and ETA follow the #e format")
+        check((TextImage.shared.slots[0] ?? []).last == "进入 林荫道", "road text goes to round-screen slot 0")
+        check((TextImage.shared.slots[1] ?? []).last?.contains("到达") == true, "the ETA footer goes to round-screen slot 1")
+        bridge.testNaviInfo(info2)
+        check(ble.sent.filter { $0 == "L,120" }.count == 1, "identical guidance is not re-sent")
+
+        // 到达方向 A 转成 S 发往圆屏（A,0 只留给真正的到达回调）
+        let infoA = AMapNaviInfo()
+        infoA.iconType = .destination; infoA.segmentRemainDistance = 30; infoA.routeRemainDistance = 30
+        infoA.routeRemainTime = 60; infoA.currentRoadName = "终点路"
+        ble.sent.removeAll()
+        bridge.testNaviInfo(infoA)
+        check(ble.sent.contains("S,30"), "destination-ahead direction is wired as S")
+
+        // 位置与车速 → 圆屏车速、小地图位置
+        let loc1 = AMapNaviLocation(); loc1.speed = 18; loc1.heading = 90
+        loc1.coordinate = AMapNaviPoint.location(withLatitude: 31.71, longitude: 121.99)
+        let loc2 = AMapNaviLocation(); loc2.speed = 20; loc2.heading = 95
+        loc2.coordinate = AMapNaviPoint.location(withLatitude: 31.72, longitude: 121.995)
+        ble.sent.removeAll()
+        bridge.testNaviLocation(loc1)
+        bridge.testNaviLocation(loc2)
+        check(ble.sent.contains("#v,18") && ble.sent.contains("#v,20"), "speed follows the #v format")
+        check(feeder.locations.last?.kmh == 20 && feeder.locations.last?.bearing == 95, "the matched position feeds the along-route map")
+
+        // GPS 信号弱只在变化时发
+        ble.sent.removeAll()
+        bridge.testGps(2); bridge.testGps(2); bridge.testGps(0)
+        check(ble.sent == ["#x,1", "#x,0"], "gps state changes follow the #x format without repeats")
+
+        // 偏航 → 圆屏“重新规划中”；重算失败收起提示并保留导航；新导航信息清除提示
+        ble.sent.removeAll()
+        bridge.testYaw()
+        check(ble.sent.last == "#y,1", "yaw shows the reroute flag")
+        bridge.testRouteCalculateFailure(NSError(domain: "AMapNavi", code: 2))
+        check(ble.sent.last == "#y,0", "recalc failure clears the reroute flag")
+        check(bridge.rerouteFailed && bridge.navigating, "recalc failure keeps the current navigation")
+        bridge.testYaw()
+        bridge.testNaviInfo(info2)
+        check(ble.sent.last == "#y,0" && !bridge.rerouteFailed, "fresh guidance clears the reroute flag")
+
+        // 到达：行程统计 + A,0 + 4 秒后 C；轨迹结束、沿线地图结束、恢复真实定位来源
+        ble.sent.removeAll(); feeder.naviEnds = 0
+        bridge.testArrived()
+        check(ble.sent.contains { $0.hasPrefix("#O") }, "arrival reports the trip summary")
+        check(ble.sent.contains("A,0"), "arrival is announced on the wire")
+        check(recorder.finished == 1, "the track is closed on arrival")
+        check(feeder.naviEnds == 1, "the along-route map session ends")
+        check(LocationService.shared.preciseCalls.last == false, "arrival restores the real location source immediately")
+        wait(4.3)
+        check(ble.sent.last == "C", "the round screen returns to idle four seconds after arrival")
+
+        // 分享重划（historyEligible=false）不进历史；同起终点的重复规划也不产生重复条目
+        let historyBefore = MotorPlanHistory.shared.plans.count
+        bridge.plan(toLat: 31.75, lng: 122.05, endName: "分享终点", historyEligible: false)
+        coordinator.rideManager.calcCallback?(makeGroup(), nil)
+        check(MotorPlanHistory.shared.plans.count == historyBefore, "official re-plans of a share never enter history")
+        bridge.plan(toLat: 31.7, lng: 122.0, endName: "公园")
+        coordinator.rideManager.calcCallback?(makeGroup(), nil)
+        check(MotorPlanHistory.shared.plans.count == historyBefore, "re-planning the same inputs does not duplicate history")
+
+        // 手动退出：圆屏回待机、轨迹收尾
+        ble.sent.removeAll(); feeder.naviEnds = 0
+        bridge.start(emulate: false)
+        bridge.testNaviInfo(info2)
+        bridge.stop()
+        check(ble.sent.last == "C", "manual exit returns the round screen to idle")
+        check(recorder.finished == 2, "manual exit closes the track")
+        check(feeder.naviEnds == 1, "manual exit ends the along-route map session")
+        UserDefaults.standard.removeObject(forKey: "motor_plan_history_v1")
+
+        print("PASS ride bridge: planning, generations, timeout, error classes, selection, navigation, round screen, reroute, arrival, history and teardown")
     }
 }
 '''
@@ -323,10 +489,13 @@ bridge = bridge.replace('    fileprivate func onSound(', '    func testSound(_ t
 bridge = bridge.replace('    fileprivate func onArrived()', '    func testArrived() { onArrived() }\n    fileprivate func onArrived()')
 bridge = bridge.replace('    fileprivate func onEmulatorEnd()', '    func testEmulatorEnd() { onEmulatorEnd() }\n    fileprivate func onEmulatorEnd()')
 bridge = bridge.replace('    fileprivate func onNaviInfo(', '    func testNaviInfo(_ n: AMapNaviInfo?) { onNaviInfo(n) }\n    fileprivate func onNaviInfo(')
+bridge = bridge.replace('    fileprivate func onLocation(', '    func testNaviLocation(_ l: AMapNaviLocation?) { onLocation(l) }\n    fileprivate func onLocation(')
+bridge = bridge.replace('    fileprivate func onGps(', '    func testGps(_ strength: Int) { onGps(strength) }\n    fileprivate func onGps(')
+bridge = bridge.replace('    fileprivate func onYaw()', '    func testYaw() { onYaw() }\n    fileprivate func onYaw()')
 
 with tempfile.TemporaryDirectory(prefix='motonav-ride-bridge-') as tmp:
     swift = Path(tmp) / 'main.swift'
-    swift.write_text(stubs + arrival + bridge + tests)
+    swift.write_text(stubs + arrival + history + bridge + tests)
     env = dict(os.environ, CLANG_MODULE_CACHE_PATH=str(Path(tmp) / 'cache'), SWIFT_MODULE_CACHE_PATH=str(Path(tmp) / 'cache'))
     subprocess.run(['swiftc', '-parse-as-library', str(swift), '-o', str(Path(tmp) / 'check')], check=True, env=env)
     subprocess.run([str(Path(tmp) / 'check')], check=True, env=env)
