@@ -130,7 +130,8 @@ final class NaviBridge: NSObject, ObservableObject {
     private var rerouting = false
     private var myLat = Double.nan, myLng = Double.nan
     var lastLocation: CLLocation? {
-        myLat.isNaN ? nil : CLLocation(latitude: myLat, longitude: myLng)
+        guard (navigating && !emulating) || cruising, myLat.isFinite, myLng.isFinite else { return nil }
+        return CLLocation(latitude: myLat, longitude: myLng)
     }
     // 红绿灯
     private var lightBase = -1                       // 最近一次算出的前方红绿灯距离（米，-1 = 没有）
@@ -218,9 +219,9 @@ final class NaviBridge: NSObject, ObservableObject {
 
     // MARK: - 路线和导航
 
-    /// 现在的位置（高德坐标）：导航定位优先，其次手机定位
+    /// 现在的位置（高德坐标）：真实导航定位优先；模拟进度不作为手机当前位置。
     func myPosition() -> (lat: Double, lng: Double)? {
-        if !myLat.isNaN { return (myLat, myLng) }
+        if let l = lastLocation { return (l.coordinate.latitude, l.coordinate.longitude) }
         guard let l = LocationService.shared.location else { return nil }
         let g = MapGeo.wgsToGcj(l.coordinate.latitude, l.coordinate.longitude)
         return (g.lat, g.lng)
@@ -441,6 +442,8 @@ final class NaviBridge: NSObject, ObservableObject {
         if arrived {
             guard let event = event, arrival.complete(token, event: event) else { return }
         } else { arrival.cancel(token) }
+        myLat = .nan; myLng = .nan
+        emulating = false; emuPaused = false
         RideRecorder.shared.finish()
         LocationService.shared.setPrecise(false)
         MapFeeder.shared.onNaviEnd()
@@ -474,6 +477,7 @@ final class NaviBridge: NSObject, ObservableObject {
     }
 
     private func resetState() {
+        myLat = .nan; myLng = .nan
         tunnelRouteKey = ""; tunnelPath = nil; lastTunnelFix = .distantPast
         Settings.shared.resetTunnel()
         tripMeters = 0; tripMaxKmh = 0; tripStarted = Date(); tripPosition = nil

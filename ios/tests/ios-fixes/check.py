@@ -274,3 +274,130 @@ AMapDriveViewRep.dismantleUIView(view,coordinator:())
 check(AMapNaviDriveManager.shared.representatives.isEmpty,"dismissal must detach the map")
 print("PASS navigation UI: shared display, native hints, map padding, turn accessibility and SDK map lifecycle")
 ''')
+
+# A finished simulator must never remain the origin of the next real route.
+bridge = (root / "MotoNav/NaviBridge.swift").read_text()
+
+
+def bridge_method(signature):
+    start = bridge.index(signature)
+    opening = bridge.index("{", start)
+    depth, end = 1, opening + 1
+    while depth:
+        depth += (bridge[end] == "{") - (bridge[end] == "}")
+        end += 1
+    return bridge[start:end].replace("private func", "func", 1)
+
+
+run("navigation-position", r'''
+import Foundation
+import CoreLocation
+func check(_ value: Bool, _ message: String) {
+    if !value { print("FAIL: \(message)"); exit(1) }
+}
+// Replace device/SDK side effects; the position getters, lifecycle and callback gate are real.
+final class LocationService {
+    static let shared=LocationService()
+    var location:CLLocation?
+    func setPrecise(_ on:Bool) {}
+}
+final class RideRecorder { static let shared=RideRecorder(); func finish() {} }
+final class MapFeeder {
+    static let shared=MapFeeder()
+    func onNaviEnd() {}
+    func onLocation(lat:Double,lng:Double,bearing:Double,kmh:Int) {}
+}
+final class ShareGuide {
+    static let shared=ShareGuide()
+    func stop() {}
+    func onLocation(_ lat:Double,_ lng:Double) {}
+}
+final class Settings { static let shared=Settings(); func resetTunnel() {} }
+final class BleLink { static let shared=BleLink(); func send(_ text:String) {} }
+final class AMapNaviDriveManager { var onStop:(()->Void)?; func stopNavi() { onStop?() } }
+final class AMapNaviLocation {
+    let coordinate:CLLocationCoordinate2D?
+    let speed=60,heading=90.0
+    init(_ lat:Double,_ lng:Double) { coordinate=CLLocationCoordinate2D(latitude:lat,longitude:lng) }
+}
+''' + (root / "MotoNav/ArrivalPolicy.swift").read_text() + '''
+enum MapGeo {
+''' + (root / "MotoNav/MapGeo.swift").read_text().split("enum MapGeo {", 1)[1].split("    // MARK: - 平面坐标", 1)[0] + '''
+}
+final class NaviBridge {
+    let arrival=ArrivalPolicy(),manager=AMapNaviDriveManager()
+    var navigating=false,cruising=false,emulating=false,emuPaused=false,showArrived=false
+    var myLat=Double.nan,myLng=Double.nan
+    var arriveSeq=0,info="",shownDir="",shownDist = -1,lastSent=""
+    var tick:Timer?,suggestTimer:Timer?
+    var tunnelRouteKey="",tunnelPath:Int?,lastTunnelFix=Date.distantPast
+    var tripMeters=0.0,tripMaxKmh=0,tripStarted=Date(),tripPosition:(lat:Double,lng:Double)?
+    var curDir="",curAngle:Int?,angleKey="",lastRouteKey="",baseDist=0,speedMps=0.0,speedKmhNow=0
+    var lastRoadText="",lastBottomText="",lastTrip="",lastSpeedMsg="",rerouting=false
+    var lightBase = -1,lastLightMsg="",lastCamMsg="",lastCamAt=Date.distantPast,camLimit=0,camMinDist=Int.max,lastCamMapMsg=""
+    var camPts:[Int]=[],cruiseCamPts:[Int]=[],facPts:[String:Int]=[:],navFacPts:[Int]=[],routeFacKey="",uiRemainM=0,uiRemainS=0
+    var lastLaneMsg="",lastTrafficMsg="",lastTrafficAt=Date.distantPast,gpsWeakSent=false
+    var suggestRoute:Int?,uiSuggestMin=0,uiDir="",uiDist = -1,uiRoad="",extraInfo="",uiSpeed=0
+    func clearSuggest() {}
+    func send(_ text:String) { lastSent=text }
+    func updateTunnel(_ fix:AMapNaviLocation,manager:AMapNaviDriveManager) {}
+''' + '\n'.join(bridge_method(signature) for signature in [
+    "var lastLocation: CLLocation?", "func myPosition()", "func stop()",
+    "private func finish(", "private func resetState()", "func mnEmuEnd(",
+    "func mnLocation(", "static func distM(",
+]) + r'''
+}
+func phone(_ lat:Double=51.5,_ lng:Double = -0.12) {
+    LocationService.shared.location=CLLocation(latitude:lat,longitude:lng)
+}
+func expectPhone(_ bridge:NaviBridge,_ message:String,lat:Double=51.5,lng:Double = -0.12) {
+    let point=bridge.myPosition()
+    check(point?.lat==lat && point?.lng==lng,message)
+}
+func begin(_ bridge:NaviBridge,simulate:Bool) {
+    bridge.resetState()
+    bridge.arrival.begin(simulation:simulate)
+    bridge.navigating=true;bridge.emulating=simulate
+}
+phone()
+let simulator=NaviBridge()
+begin(simulator,simulate:true)
+simulator.mnLocation(simulator.manager,location:AMapNaviLocation(32,118))
+simulator.mnEmuEnd(simulator.manager)
+expectPhone(simulator,"natural simulation end restores actual phone position")
+check(simulator.lastLocation==nil,"ended simulator is not a real navigation location")
+check(!simulator.emulating && !simulator.emuPaused,"completed simulation clears its active flags")
+phone(51.51,-0.11)
+expectPhone(simulator,"subsequent physical movement updates current position",lat:51.51,lng:-0.11)
+simulator.mnLocation(simulator.manager,location:AMapNaviLocation(33,119))
+expectPhone(simulator,"late simulator fixes cannot replace real position",lat:51.51,lng:-0.11)
+
+phone()
+let cancelled=NaviBridge()
+begin(cancelled,simulate:true)
+cancelled.mnLocation(cancelled.manager,location:AMapNaviLocation(32,118))
+cancelled.emuPaused=true
+cancelled.manager.onStop={cancelled.mnEmuEnd(cancelled.manager)}
+cancelled.stop()
+expectPhone(cancelled,"manual simulation exit restores phone position despite synchronous end callback")
+check(!cancelled.emulating && !cancelled.emuPaused,"manual exit clears simulation flags")
+check(cancelled.lastLocation==nil,"manual exit clears cached simulation location")
+
+begin(cancelled,simulate:false)
+expectPhone(cancelled,"a new GPS trip must not reuse the previous simulator position")
+cancelled.mnLocation(cancelled.manager,location:AMapNaviLocation(31.23,121.47))
+check(cancelled.myPosition()?.lat==31.23 && cancelled.myPosition()?.lng==121.47,"active GPS navigation keeps its matched SDK coordinates without double conversion")
+check(cancelled.lastLocation?.coordinate.latitude==31.23,"real guidance still exposes its navigation location")
+cancelled.stop()
+expectPhone(cancelled,"ending GPS guidance also returns to live phone position")
+
+begin(cancelled,simulate:true)
+cancelled.mnLocation(cancelled.manager,location:AMapNaviLocation(32,118))
+check(cancelled.lastLocation==nil,"simulation must not act as the physical location for day/night settings")
+expectPhone(cancelled,"current physical position stays separate from simulator progress")
+LocationService.shared.location=nil
+cancelled.stop()
+check(cancelled.myPosition()==nil,"without a real fix report unavailable instead of the simulated destination")
+check(cancelled.lastLocation==nil,"unknown real position stays unknown")
+print("PASS navigation position: simulator completion/cancel, stale callbacks, live movement, next GPS trip and no-fix fallback")
+''')
