@@ -6,7 +6,7 @@ import CoreLocation
 ///
 /// 目的地搜索：高德“输入提示”接口，优先显示附近的地方。
 /// iOS v0.2.1 起只在按“搜索”时才查（原来边打字边查，拼音输入时每个字母都查一次，太费高德额度）；
-/// 同样的关键词这次打开 App 查过就直接用上次的结果，不再查。
+/// 每次主动搜索使用当前位置；取消或被替换的请求不再更新界面。
 final class SearchService: NSObject, ObservableObject {
     static let shared = SearchService()
 
@@ -21,7 +21,7 @@ final class SearchService: NSObject, ObservableObject {
     @Published var results: [Place] = []
     @Published var status = ""
     private var api: AMapSearchAPI?
-    private var cache: [String: [Place]] = [:]         // 关键词 → 结果（只存在内存里）
+    private var currentRequest: AMapInputTipsSearchRequest?
 
     override init() {
         super.init()
@@ -35,44 +35,43 @@ final class SearchService: NSObject, ObservableObject {
         api?.delegate = nil
         api = AMapSearchAPI()
         if let d = (self as AnyObject) as? AMapSearchDelegate { api?.delegate = d }
-        cache = [:]
+        clear()
     }
 
     /// 按了“搜索”时调用（每按一次最多查一次高德）
     func search(_ text: String) {
         let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
         if t.isEmpty { clear(); return }
-        if let r = cache[t] {                           // 查过的不再花额度
-            results = r
-            status = r.isEmpty ? "没找到，换个说法试试" : ""
-            return
-        }
         let req = AMapInputTipsSearchRequest()
         req.keywords = t
         if let loc = LocationService.shared.location {
             let g = MapGeo.wgsToGcj(loc.coordinate.latitude, loc.coordinate.longitude)   // 高德要高德坐标
             req.location = String(format: "%.6f,%.6f", g.lng, g.lat)                   // 附近优先
         }
-        status = "搜索中…"
+        currentRequest = req
+        results = []; status = "搜索中…"
         api?.aMapInputTipsSearch(req)
     }
 
-    func clear() { results = []; status = "" }
+    func clear() { currentRequest = nil; results = []; status = "" }
 
     @objc(onInputTipsSearchDone:response:)
     func mnTipsDone(_ request: AMapInputTipsSearchRequest?, response: AMapInputTipsSearchResponse?) {
+        guard let request = request, request === currentRequest else { return }
+        currentRequest = nil
         let tips = response?.tips ?? []
         results = tips.compactMap { (tip: AMapTip) -> Place? in
             guard let p = tip.location else { return nil }          // 没有坐标的是“搜索建议词”，跳过
             return Place(name: tip.name ?? "", address: (tip.district ?? "") + (tip.address ?? ""),
                          lat: Double(p.latitude), lng: Double(p.longitude))
         }
-        if let k = request?.keywords { cache[k] = results }
         status = results.isEmpty ? "没找到，换个说法试试" : ""
     }
 
     @objc(AMapSearchRequest:didFailWithError:)
     func mnSearchFail(_ request: Any?, error: NSError?) {
+        guard let request = request as? AMapInputTipsSearchRequest, request === currentRequest else { return }
+        currentRequest = nil
         let code = error?.code ?? 0
         let bid = Bundle.main.bundleIdentifier ?? ""
         switch code {

@@ -222,6 +222,7 @@ final class WebMotorSession: ObservableObject {
     func stop(sendCancel:Bool=true) {
         token = UUID(); timer?.invalidate(); timer = nil
         watchdog?.invalidate();watchdog=nil;WebRouteMetadata.shared.stop()
+        if running { Settings.shared.resetTunnel() }
         if running { Speech.shared.stopNow(); RideRecorder.shared.finish(); MapFeeder.shared.onNaviEnd(); if sendCancel {BleLink.shared.send("C")}; LocationService.shared.setPrecise(false) }
         running = false; rerouting = false; UIApplication.shared.isIdleTimerDisabled = false
     }
@@ -354,17 +355,18 @@ struct MotorBrowserView: UIViewRepresentable {
 }
 struct MotorMap: UIViewRepresentable {
     let route: MotorRoute; let position: MotorPoint?; let overview: Bool
+    var edgePadding = UIEdgeInsets(top: 40, left: 30, bottom: 40, right: 30)
     func makeCoordinator() -> RouteMapDelegate { RouteMapDelegate() }
     func makeUIView(context: Context) -> MAMapView {
         let map = MAMapView(frame: .zero); map.mapType=Settings.shared.paletteNight ? .standardNight : .standard; map.delegate = context.coordinator.asDelegate; map.showsCompass = false; return map
     }
     func updateUIView(_ map: MAMapView, context: Context) {
         map.mapType=Settings.shared.paletteNight ? .standardNight : .standard
-        let key = route.id.uuidString + "-\(overview)"
+        let key = "\(route.id)-\(overview)-\(edgePadding.top)-\(edgePadding.bottom)-\(edgePadding.left)-\(edgePadding.right)"
         if context.coordinator.key != key {
             context.coordinator.key = key; map.removeOverlays(map.overlays)
             var coords = route.points.map { CLLocationCoordinate2D(latitude: $0.lat,longitude: $0.lng) }
-            if let line = MAPolyline(coordinates: &coords,count: UInt(coords.count)) { line.title = "sel"; map.addOverlays([line]); if overview { map.showOverlays([line],edgePadding: .init(top: 40,left: 30,bottom: 40,right: 30),animated: false) } }
+            if let line = MAPolyline(coordinates: &coords,count: UInt(coords.count)) { line.title = "sel"; map.addOverlays([line]); if overview { map.showOverlays([line],edgePadding: edgePadding,animated: false) } }
         }
         if let p = position, !overview { map.setCenter(CLLocationCoordinate2D(latitude: p.lat,longitude: p.lng),animated: false); map.setZoomLevel(17,animated: false) }
         map.removeAnnotations(map.annotations.filter { !($0 is MAUserLocation) })
@@ -373,11 +375,18 @@ struct MotorMap: UIViewRepresentable {
 }
 struct WebMotorView: View {
     @ObservedObject var guide=WebMotorSession.shared
-    var mode: IndependentMode = .motorcycle
+    @ObservedObject var navi=NaviBridge.shared
+    @ObservedObject var model: RoutePlanner
+    @Environment(\.dismiss) private var dismiss
     var body: some View {
         Group {
             if guide.running || guide.arrived { IndependentNavigationView() }
-            else { IndependentPlannerView(mode:mode) }
+            else if navi.navigating || navi.showArrived { NaviScreen() }
+            else { RoutePlannerView(model:model) }
         }.preferredColorScheme(.dark)
+        .onChange(of:navi.navigating){active in if !active && !navi.showArrived {dismiss()}}
+        .onChange(of:navi.showArrived){arrived in if !arrived && !navi.navigating {dismiss()}}
+        .onChange(of:guide.running){active in if !active && !guide.arrived {dismiss()}}
+        .onChange(of:guide.arrived){arrived in if !arrived && !guide.running {dismiss()}}
     }
 }

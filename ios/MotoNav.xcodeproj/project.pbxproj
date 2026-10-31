@@ -7,25 +7,14 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		3B8784BF43A12D42870A243A /* MotorRouteTracker.swift in Sources */ = {isa = PBXBuildFile; fileRef = F9154BD7E2FA8E8CAF5D39F2; };
-		38D21F5077445F183E9FE1B2 /* BleHandshakeClock.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7DC453D7088A6379C98DCD3B; };
-		6858BB9A033F1A212B9C5A4B /* WebRouteMetadata.swift in Sources */ = {isa = PBXBuildFile; fileRef = 39875FF77DBF047AA1EBA757; };
-		094AC14B9BE91BA0103EED39 /* IndependentRouteView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3F15BA9922292159C9E3A453; };
-		6B90C21D4B66F0C12248FD31 /* BicycleRoutes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C24EC3EE8F89E19A49E95D0; };
-		DF1DA6D4D4292EF2D1700130 /* RouteGeometry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F2E96A5A6C7C3BD314CB887; };
-		637279724CB8969F644B3AC5 /* WebMotor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 971EA77C65E2C989914BC80A; };
-		0A1AD8E8441189C00F2C93DC /* MapStyles.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5CD06CCAE5FBBFC390CE8A18; };
-		17D9D9E3946788217A8DA318 /* RideTools.swift in Sources */ = {isa = PBXBuildFile; fileRef = DCE8FFA5884B79BE4E0AB803; };
-		562A8BDFD5FE84EC55914B53 /* NaviSessionCallbacks.swift in Sources */ = {isa = PBXBuildFile; fileRef = FEA0D76EEBF01653D1E587E8 /* NaviSessionCallbacks.swift */; };
-		96EEC660FCE57B693CF21764 /* ArrivalPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 43332154B324B9A7004CB3C3 /* ArrivalPolicy.swift */; };
-		B36EAB2701614C6B8182A8F4 /* BleBulkWriteQueue.swift in Sources */ = {isa = PBXBuildFile; fileRef = C36EAB2701614C6B8182A8F4 /* BleBulkWriteQueue.swift */; };
-		B25DEB2701614C6B8182A8F4 /* BleWritePacer.swift in Sources */ = {isa = PBXBuildFile; fileRef = C25DEB2701614C6B8182A8F4 /* BleWritePacer.swift */; };
-		A498DFFBC648AD34CB8F3920 /* BleCapabilityProbe.swift in Sources */ = {isa = PBXBuildFile; fileRef = C509D74F9ABCA7DCA7EE9293 /* BleCapabilityProbe.swift */; };
+		094AC14B9BE91BA0103EED39 /* IndependentRouteView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3F15BA9922292159C9E3A453 /* IndependentRouteView.swift */; };
+		0A1AD8E8441189C00F2C93DC /* MapStyles.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5CD06CCAE5FBBFC390CE8A18 /* MapStyles.swift */; };
 		0CD7650FFA5EE49636033B0A /* SatelliteRaster.swift in Sources */ = {isa = PBXBuildFile; fileRef = 99A30D9B90438DDBEA274681 /* SatelliteRaster.swift */; };
 		0D06CFF3371208C39B97DF71 /* AMSMetadata.swift in Sources */ = {isa = PBXBuildFile; fileRef = B87D4C1E645243F8238975E5 /* AMSMetadata.swift */; };
 		10EFB4D9DE7D69DC0E92AA58 /* RouteMap.swift in Sources */ = {isa = PBXBuildFile; fileRef = 929DE07BFB6EF4EEB08632D5 /* RouteMap.swift */; };
 		143D535F63BB6270D3237145 /* MotoNavShare.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = BE8BFC5322DB12B3BB7FC96D /* MotoNavShare.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		14AA7B39753D27BFFB7221E6 /* MapDefaults.swift in Sources */ = {isa = PBXBuildFile; fileRef = 844A8F6DBE900D970FEE8BAB /* MapDefaults.swift */; };
+		17D9D9E3946788217A8DA318 /* RideTools.swift in Sources */ = {isa = PBXBuildFile; fileRef = DCE8FFA5884B79BE4E0AB803 /* RideTools.swift */; };
 		1EE1C28B1ACDB2FAE5128B61 /* BleLink.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B19155EFFA88D054B70DF67 /* BleLink.swift */; };
 		20C19A3E34FEE42B5331ACD1 /* AmapCaptureHost.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB643DCAF97E834DC966F034 /* AmapCaptureHost.swift */; };
 		2BE708CDA17F126F0E27F811 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = B4B241FAB7374DB0A879A3A8 /* Assets.xcassets */; };
@@ -35,27 +24,39 @@
 		368AB74EB99CA2BEB7ACF4A1 /* RotationDial.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2EE462D653E9ED026BF21072 /* RotationDial.swift */; };
 		38242652AD12C550E54A304C /* SearchService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 96F5ED6C1E4E9786347736A8 /* SearchService.swift */; };
 		387326BD95EF1EF91C32F766 /* LyricsBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9021D065B9396E883C8FFEEF /* LyricsBridge.swift */; };
+		38D21F5077445F183E9FE1B2 /* BleHandshakeClock.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7DC453D7088A6379C98DCD3B /* BleHandshakeClock.swift */; };
+		3B8784BF43A12D42870A243A /* MotorRouteTracker.swift in Sources */ = {isa = PBXBuildFile; fileRef = F9154BD7E2FA8E8CAF5D39F2 /* MotorRouteTracker.swift */; };
 		49ABA841CBD5F506DEB37276 /* AmapShare.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04C63477564D9DE7E1066725 /* AmapShare.swift */; };
 		49E30BDF56C0C1D9012D2243 /* AmapSdkRaster.swift in Sources */ = {isa = PBXBuildFile; fileRef = 35D965AF0075EA3FF4DB0C0E /* AmapSdkRaster.swift */; };
+		562A8BDFD5FE84EC55914B53 /* NaviSessionCallbacks.swift in Sources */ = {isa = PBXBuildFile; fileRef = FEA0D76EEBF01653D1E587E8 /* NaviSessionCallbacks.swift */; };
 		5990C5F0E5EAB70145D9379E /* NaviBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E30F4D8B800F5F593B76481 /* NaviBridge.swift */; };
+		637279724CB8969F644B3AC5 /* WebMotor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 971EA77C65E2C989914BC80A /* WebMotor.swift */; };
+		6858BB9A033F1A212B9C5A4B /* WebRouteMetadata.swift in Sources */ = {isa = PBXBuildFile; fileRef = 39875FF77DBF047AA1EBA757 /* WebRouteMetadata.swift */; };
+		6B90C21D4B66F0C12248FD31 /* BicycleRoutes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C24EC3EE8F89E19A49E95D0 /* BicycleRoutes.swift */; };
 		7C627FEBAFA30B9D5554D7D1 /* MapGeo.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE83DF5965FF431C442A62DE /* MapGeo.swift */; };
 		7D8A1BBC40E1FB08C2AD4F99 /* MotoNavApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3BED76761292DB24DAE9E681 /* MotoNavApp.swift */; };
 		81119A4FFC8F26DB7B91A4E3 /* LyricsTimeline.swift in Sources */ = {isa = PBXBuildFile; fileRef = 81CC79C3CE39CD25B49AA08D /* LyricsTimeline.swift */; };
 		85BAD995920011487F9F6FE0 /* NaviScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE7AAFBACF833389CA4D8ABF /* NaviScreen.swift */; };
 		89D55146FF2C3FA8C7C816CF /* QWeatherForecast.swift in Sources */ = {isa = PBXBuildFile; fileRef = 211D5AFE2827C16BD84BE315 /* QWeatherForecast.swift */; };
 		93F93CE5B2CC43A69DF729E9 /* RouteOfflineMaps.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1D98E37A20EBA144DF72115 /* RouteOfflineMaps.swift */; };
+		96EEC660FCE57B693CF21764 /* ArrivalPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 43332154B324B9A7004CB3C3 /* ArrivalPolicy.swift */; };
 		A36EBAC953FBBE2653758C38 /* LyricsDisplaySync.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDA756375F325C135F891386 /* LyricsDisplaySync.swift */; };
+		A498DFFBC648AD34CB8F3920 /* BleCapabilityProbe.swift in Sources */ = {isa = PBXBuildFile; fileRef = C509D74F9ABCA7DCA7EE9293 /* BleCapabilityProbe.swift */; };
 		A93FDE22658E0919705E45E0 /* Pods_MotoNav.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 549E1C7C5679592C50C0EDD3 /* Pods_MotoNav.framework */; };
 		ABBCC4AD2877914978EB58E7 /* Settings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66C3696F54839CD45813F948 /* Settings.swift */; };
 		AE251B726FE056E18C8D9EEB /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 897E512FD4DCDA4C4D4FBDB4 /* ContentView.swift */; };
 		B2101005A64EDC38F1C64324 /* Weather.swift in Sources */ = {isa = PBXBuildFile; fileRef = AFA95E37764E4683EFF26E57 /* Weather.swift */; };
+		B25DEB2701614C6B8182A8F4 /* BleWritePacer.swift in Sources */ = {isa = PBXBuildFile; fileRef = C25DEB2701614C6B8182A8F4 /* BleWritePacer.swift */; };
+		B36EAB2701614C6B8182A8F4 /* BleBulkWriteQueue.swift in Sources */ = {isa = PBXBuildFile; fileRef = C36EAB2701614C6B8182A8F4 /* BleBulkWriteQueue.swift */; };
 		B88940BFDB14C57288B4528D /* Speech.swift in Sources */ = {isa = PBXBuildFile; fileRef = B06991A4E6681422A044C310 /* Speech.swift */; };
 		C71CA48A91926BFC9B43FDCF /* RouteMapPlan.swift in Sources */ = {isa = PBXBuildFile; fileRef = 99CFF68B635D8A95A2698DD4 /* RouteMapPlan.swift */; };
 		CE38FAAF34CBBFAD84451088 /* Config.swift in Sources */ = {isa = PBXBuildFile; fileRef = 78E8A2064569BFBA9955CD8C /* Config.swift */; };
 		D5BE622C01F486F6A26CC504 /* MusicBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = C671E80BBEA3EB1E9311EB12 /* MusicBridge.swift */; };
 		DB621FCC696122DC6BCCCDCA /* ShareViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6560E51B1DBC15500A124007 /* ShareViewController.swift */; };
+		DF1DA6D4D4292EF2D1700130 /* RouteGeometry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F2E96A5A6C7C3BD314CB887 /* RouteGeometry.swift */; };
 		F336897359EC15D9BD17B152 /* CruiseIdleTimer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 88F6F7FEE25CC563EEC49A1F /* CruiseIdleTimer.swift */; };
 		FB6E59E7B7F70EACF4129EE5 /* RasterProcessing.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE47CC0D351EABDC9EEE6D04 /* RasterProcessing.swift */; };
+		CEB3490B929A45FCBF81E6AA /* TunnelDimming.swift in Sources */ = {isa = PBXBuildFile; fileRef = ADF8298B61D148439EE5CA29 /* TunnelDimming.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -83,32 +84,25 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
-		F9154BD7E2FA8E8CAF5D39F2 /* MotorRouteTracker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MotorRouteTracker.swift; sourceTree = "<group>"; };
-		7DC453D7088A6379C98DCD3B /* BleHandshakeClock.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BleHandshakeClock.swift; sourceTree = "<group>"; };
-		39875FF77DBF047AA1EBA757 /* WebRouteMetadata.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebRouteMetadata.swift; sourceTree = "<group>"; };
-		3F15BA9922292159C9E3A453 /* IndependentRouteView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IndependentRouteView.swift; sourceTree = "<group>"; };
-		6C24EC3EE8F89E19A49E95D0 /* BicycleRoutes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BicycleRoutes.swift; sourceTree = "<group>"; };
-		2F2E96A5A6C7C3BD314CB887 /* RouteGeometry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RouteGeometry.swift; sourceTree = "<group>"; };
-		971EA77C65E2C989914BC80A /* WebMotor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebMotor.swift; sourceTree = "<group>"; };
-		5CD06CCAE5FBBFC390CE8A18 /* MapStyles.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MapStyles.swift; sourceTree = "<group>"; };
-		DCE8FFA5884B79BE4E0AB803 /* RideTools.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RideTools.swift; sourceTree = "<group>"; };
-		FEA0D76EEBF01653D1E587E8 /* NaviSessionCallbacks.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NaviSessionCallbacks.swift; sourceTree = "<group>"; };
-		43332154B324B9A7004CB3C3 /* ArrivalPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArrivalPolicy.swift; sourceTree = "<group>"; };
-		C36EAB2701614C6B8182A8F4 /* BleBulkWriteQueue.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BleBulkWriteQueue.swift; sourceTree = "<group>"; };
-		C25DEB2701614C6B8182A8F4 /* BleWritePacer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BleWritePacer.swift; sourceTree = "<group>"; };
-		C509D74F9ABCA7DCA7EE9293 /* BleCapabilityProbe.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BleCapabilityProbe.swift; sourceTree = "<group>"; };
 		04C63477564D9DE7E1066725 /* AmapShare.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AmapShare.swift; sourceTree = "<group>"; };
 		0E513753F4C1CA0A1F4CB5D2 /* MapFeeder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MapFeeder.swift; sourceTree = "<group>"; };
 		19E629763663B2222DB6D9A3 /* MotoNav.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = MotoNav.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		211D5AFE2827C16BD84BE315 /* QWeatherForecast.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = QWeatherForecast.swift; sourceTree = "<group>"; };
 		2EE462D653E9ED026BF21072 /* RotationDial.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RotationDial.swift; sourceTree = "<group>"; };
+		2F2E96A5A6C7C3BD314CB887 /* RouteGeometry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RouteGeometry.swift; sourceTree = "<group>"; };
 		35D965AF0075EA3FF4DB0C0E /* AmapSdkRaster.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AmapSdkRaster.swift; sourceTree = "<group>"; };
+		39875FF77DBF047AA1EBA757 /* WebRouteMetadata.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebRouteMetadata.swift; sourceTree = "<group>"; };
 		3BED76761292DB24DAE9E681 /* MotoNavApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MotoNavApp.swift; sourceTree = "<group>"; };
+		3F15BA9922292159C9E3A453 /* IndependentRouteView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IndependentRouteView.swift; sourceTree = "<group>"; };
+		43332154B324B9A7004CB3C3 /* ArrivalPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArrivalPolicy.swift; sourceTree = "<group>"; };
 		549E1C7C5679592C50C0EDD3 /* Pods_MotoNav.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_MotoNav.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		5CD06CCAE5FBBFC390CE8A18 /* MapStyles.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MapStyles.swift; sourceTree = "<group>"; };
 		5D6EE3F5D91C4F03F5B44814 /* MotoNav-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "MotoNav-Bridging-Header.h"; sourceTree = "<group>"; };
 		6560E51B1DBC15500A124007 /* ShareViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareViewController.swift; sourceTree = "<group>"; };
 		66C3696F54839CD45813F948 /* Settings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Settings.swift; sourceTree = "<group>"; };
+		6C24EC3EE8F89E19A49E95D0 /* BicycleRoutes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BicycleRoutes.swift; sourceTree = "<group>"; };
 		78E8A2064569BFBA9955CD8C /* Config.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Config.swift; sourceTree = "<group>"; };
+		7DC453D7088A6379C98DCD3B /* BleHandshakeClock.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BleHandshakeClock.swift; sourceTree = "<group>"; };
 		7E30F4D8B800F5F593B76481 /* NaviBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NaviBridge.swift; sourceTree = "<group>"; };
 		81CC79C3CE39CD25B49AA08D /* LyricsTimeline.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = LyricsTimeline.swift; sourceTree = "<group>"; };
 		844A8F6DBE900D970FEE8BAB /* MapDefaults.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MapDefaults.swift; sourceTree = "<group>"; };
@@ -119,6 +113,7 @@
 		929DE07BFB6EF4EEB08632D5 /* RouteMap.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RouteMap.swift; sourceTree = "<group>"; };
 		94EAEA7E605362A5E2E5F220 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		96F5ED6C1E4E9786347736A8 /* SearchService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchService.swift; sourceTree = "<group>"; };
+		971EA77C65E2C989914BC80A /* WebMotor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebMotor.swift; sourceTree = "<group>"; };
 		99A30D9B90438DDBEA274681 /* SatelliteRaster.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SatelliteRaster.swift; sourceTree = "<group>"; };
 		99CFF68B635D8A95A2698DD4 /* RouteMapPlan.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RouteMapPlan.swift; sourceTree = "<group>"; };
 		A40A9BADB71E11A51F582DB7 /* TextImage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextImage.swift; sourceTree = "<group>"; };
@@ -132,12 +127,19 @@
 		B87D4C1E645243F8238975E5 /* AMSMetadata.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AMSMetadata.swift; sourceTree = "<group>"; };
 		BE8BFC5322DB12B3BB7FC96D /* MotoNavShare.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = MotoNavShare.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		C0E349E7F68131A4C2DAEEAF /* Pods-MotoNav.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-MotoNav.debug.xcconfig"; path = "Target Support Files/Pods-MotoNav/Pods-MotoNav.debug.xcconfig"; sourceTree = "<group>"; };
+		C25DEB2701614C6B8182A8F4 /* BleWritePacer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BleWritePacer.swift; sourceTree = "<group>"; };
+		C36EAB2701614C6B8182A8F4 /* BleBulkWriteQueue.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BleBulkWriteQueue.swift; sourceTree = "<group>"; };
+		C509D74F9ABCA7DCA7EE9293 /* BleCapabilityProbe.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BleCapabilityProbe.swift; sourceTree = "<group>"; };
 		C671E80BBEA3EB1E9311EB12 /* MusicBridge.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MusicBridge.swift; sourceTree = "<group>"; };
 		CE47CC0D351EABDC9EEE6D04 /* RasterProcessing.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RasterProcessing.swift; sourceTree = "<group>"; };
+		DCE8FFA5884B79BE4E0AB803 /* RideTools.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RideTools.swift; sourceTree = "<group>"; };
 		DDA756375F325C135F891386 /* LyricsDisplaySync.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = LyricsDisplaySync.swift; sourceTree = "<group>"; };
 		DE44A165E6289D60C1AAA464 /* KeySetupView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeySetupView.swift; sourceTree = "<group>"; };
 		EE31CD52BB437EC6897ED9AD /* Pods-MotoNav.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-MotoNav.release.xcconfig"; path = "Target Support Files/Pods-MotoNav/Pods-MotoNav.release.xcconfig"; sourceTree = "<group>"; };
+		F9154BD7E2FA8E8CAF5D39F2 /* MotorRouteTracker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MotorRouteTracker.swift; sourceTree = "<group>"; };
 		FB643DCAF97E834DC966F034 /* AmapCaptureHost.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AmapCaptureHost.swift; sourceTree = "<group>"; };
+		FEA0D76EEBF01653D1E587E8 /* NaviSessionCallbacks.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NaviSessionCallbacks.swift; sourceTree = "<group>"; };
+		ADF8298B61D148439EE5CA29 /* TunnelDimming.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TunnelDimming.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -214,6 +216,7 @@
 				C36EAB2701614C6B8182A8F4 /* BleBulkWriteQueue.swift */,
 				8B19155EFFA88D054B70DF67 /* BleLink.swift */,
 				A40A9BADB71E11A51F582DB7 /* TextImage.swift */,
+				ADF8298B61D148439EE5CA29 /* TunnelDimming.swift */,
 				66C3696F54839CD45813F948 /* Settings.swift */,
 				B06991A4E6681422A044C310 /* Speech.swift */,
 				7E30F4D8B800F5F593B76481 /* NaviBridge.swift */,
@@ -309,7 +312,7 @@
 			attributes = {
 				BuildIndependentTargetsInParallel = 1;
 				LastSwiftUpdateCheck = 1500;
-				LastUpgradeCheck = 1500;
+				LastUpgradeCheck = 2720;
 				TargetAttributes = {
 					48CDAE03088E501F74B74EFE = {
 						CreatedOnToolsVersion = 15.0;
@@ -431,6 +434,7 @@
 				B36EAB2701614C6B8182A8F4 /* BleBulkWriteQueue.swift in Sources */,
 				1EE1C28B1ACDB2FAE5128B61 /* BleLink.swift in Sources */,
 				2E32750F8C17EB28CFB67AAC /* TextImage.swift in Sources */,
+				CEB3490B929A45FCBF81E6AA /* TunnelDimming.swift in Sources */,
 				ABBCC4AD2877914978EB58E7 /* Settings.swift in Sources */,
 				B88940BFDB14C57288B4528D /* Speech.swift in Sources */,
 				5990C5F0E5EAB70145D9379E /* NaviBridge.swift in Sources */,
@@ -482,19 +486,19 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 2;
+				CURRENT_PROJECT_VERSION = 3;
 				DEVELOPMENT_TEAM = "";
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				"EXCLUDED_ARCHS[sdk=iphonesimulator*]" = arm64;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = MotoNav/Info.plist;
-				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				IPHONEOS_DEPLOYMENT_TARGET = "$(RECOMMENDED_IPHONEOS_DEPLOYMENT_TARGET)";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 0.15.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.example.motonav;
+				MARKETING_VERSION = 0.15.1;
+				PRODUCT_BUNDLE_IDENTIFIER = com.u238zyc.motonav;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_OBJC_BRIDGING_HEADER = "MotoNav/MotoNav-Bridging-Header.h";
@@ -507,11 +511,30 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_LOCALIZABILITY_NONLOCALIZED = YES;
 				CLANG_ANALYZER_NONNULL = YES;
 				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
 				CLANG_ENABLE_MODULES = YES;
 				CLANG_ENABLE_OBJC_ARC = YES;
 				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
@@ -525,11 +548,18 @@
 					"DEBUG=1",
 					"$(inherited)",
 				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
 				SDKROOT = iphoneos;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 			};
@@ -539,11 +569,30 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_LOCALIZABILITY_NONLOCALIZED = YES;
 				CLANG_ANALYZER_NONNULL = YES;
 				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
 				CLANG_ENABLE_MODULES = YES;
 				CLANG_ENABLE_OBJC_ARC = YES;
 				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				ENABLE_NS_ASSERTIONS = NO;
@@ -551,10 +600,17 @@
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GCC_C_LANGUAGE_STANDARD = gnu17;
 				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				SDKROOT = iphoneos;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_COMPILATION_MODE = wholemodule;
 				SWIFT_OPTIMIZATION_LEVEL = "-O";
 				VALIDATE_PRODUCT = YES;
@@ -566,18 +622,18 @@
 			buildSettings = {
 				APPLICATION_EXTENSION_API_ONLY = YES;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 2;
+				CURRENT_PROJECT_VERSION = 3;
 				DEVELOPMENT_TEAM = "";
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = MotoNavShare/Info.plist;
-				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				IPHONEOS_DEPLOYMENT_TARGET = "$(RECOMMENDED_IPHONEOS_DEPLOYMENT_TARGET)";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 0.15.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.example.motonav.share;
+				MARKETING_VERSION = 0.15.1;
+				PRODUCT_BUNDLE_IDENTIFIER = com.u238zyc.motonav.share;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -591,18 +647,18 @@
 			buildSettings = {
 				APPLICATION_EXTENSION_API_ONLY = YES;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 2;
+				CURRENT_PROJECT_VERSION = 3;
 				DEVELOPMENT_TEAM = "";
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = MotoNavShare/Info.plist;
-				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				IPHONEOS_DEPLOYMENT_TARGET = "$(RECOMMENDED_IPHONEOS_DEPLOYMENT_TARGET)";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 0.15.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.example.motonav.share;
+				MARKETING_VERSION = 0.15.1;
+				PRODUCT_BUNDLE_IDENTIFIER = com.u238zyc.motonav.share;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -618,19 +674,19 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 2;
+				CURRENT_PROJECT_VERSION = 3;
 				DEVELOPMENT_TEAM = "";
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				"EXCLUDED_ARCHS[sdk=iphonesimulator*]" = arm64;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = MotoNav/Info.plist;
-				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				IPHONEOS_DEPLOYMENT_TARGET = "$(RECOMMENDED_IPHONEOS_DEPLOYMENT_TARGET)";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 0.15.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.example.motonav;
+				MARKETING_VERSION = 0.15.1;
+				PRODUCT_BUNDLE_IDENTIFIER = com.u238zyc.motonav;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_OBJC_BRIDGING_HEADER = "MotoNav/MotoNav-Bridging-Header.h";

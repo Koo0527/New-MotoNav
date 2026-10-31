@@ -66,6 +66,7 @@ final class NaviBridge: NSObject, ObservableObject {
     @Published private(set) var vias: [Via] = []     // iOS v0.4 途经点（分享的路线自带途经点，不用这个）
     var destCoord: CLLocationCoordinate2D? { destLat.isNaN ? nil : CLLocationCoordinate2D(latitude: destLat, longitude: destLng) }
     private var destLat = Double.nan, destLng = Double.nan
+    private var planOrigin: (lat: Double, lng: Double)?
     private var planSeq = 0
     private var lastRouteDoneAt = Date.distantPast
     // iOS v0.3 巡航
@@ -160,6 +161,9 @@ final class NaviBridge: NSObject, ObservableObject {
     private var gpsWeakSent = false
     private weak var suggestRoute: AMapNaviRoute?
     private var suggestTimer: Timer?
+    private var tunnelRouteKey = ""
+    private var tunnelPath: TunnelRoute?
+    private var lastTunnelFix = Date.distantPast
 
     /// 测速提前提醒：按车速留出约 20 秒反应时间，最少 500 米，最多 1000 米
     private var cameraRange: Int { min(1000, max(500, Int(Double(speedKmhNow) / 3.6 * 20))) }
@@ -223,12 +227,22 @@ final class NaviBridge: NSObject, ObservableObject {
 
     /// 规划去 (lat, lng)（高德坐标）的路线。share 不为 nil 时按导入的高德分享路线走（沿路挑途经点，只要一条）；
     /// 否则一次规划最多 3 条（躲避拥堵），“不走高速”看设置。
-    func plan(toLat lat: Double, lng: Double, share: AmapShare.Route? = nil) {
+    func plan(toLat lat: Double, lng: Double, share: AmapShare.Route? = nil,
+              origin: MotorPoint? = nil, viaPoints: [Via] = []) {
         guard !navigating,!WebMotorSession.shared.running else { return }
+        guard MotorRequest.valid(lat, lng), viaPoints.count <= 3,
+              origin.map({ MotorRequest.valid($0.lat, $0.lng) }) ?? true,
+              viaPoints.allSatisfy({ MotorRequest.valid($0.lat, $0.lng) }),
+              share == nil || viaPoints.isEmpty else {
+            if !cruising { clearPlan() }
+            info = "起终点或途经点无效，请重新选择"; planFailed = true
+            return
+        }
         attach()
         destLat = lat; destLng = lng
+        planOrigin = origin.map { ($0.lat, $0.lng) }
         shareRoute = share
-        vias = []                                    // 新目的地：途经点清空
+        vias = viaPoints
         replan()
     }
 
@@ -255,6 +269,7 @@ final class NaviBridge: NSObject, ObservableObject {
         MapFeeder.shared.onNaviEnd()
         planSeq += 1
         destLat = .nan; destLng = .nan
+        planOrigin = nil
         shareRoute = nil; vias = []
         calculating = false; routeReady = false; planFailed = false
         routeOptions = []; selectedRouteID = -1; shareMatch = ""; routeSummary = ""
@@ -279,7 +294,7 @@ final class NaviBridge: NSObject, ObservableObject {
         routeReady = false
         routeOptions = []; selectedRouteID = -1; shareMatch = ""
         let avoid = Settings.shared.avoidHighway
-        let me = myPosition()
+        let me = planOrigin ?? myPosition()
         var wps: [AMapNaviPoint] = []
         let strategy: AMapNaviDrivingStrategy
         if let sr = shareRoute {
@@ -422,6 +437,7 @@ final class NaviBridge: NSObject, ObservableObject {
         LocationService.shared.setPrecise(false)
         MapFeeder.shared.onNaviEnd()
         ShareGuide.shared.stop()
+        Settings.shared.resetTunnel()
         tick?.invalidate(); tick = nil
         arriveSeq += 1
         showArrived = arrived                       // 先设这个再设 navigating：导航画面据此决定马上关还是等 4 秒
@@ -450,6 +466,8 @@ final class NaviBridge: NSObject, ObservableObject {
     }
 
     private func resetState() {
+        tunnelRouteKey = ""; tunnelPath = nil; lastTunnelFix = .distantPast
+        Settings.shared.resetTunnel()
         tripMeters = 0; tripMaxKmh = 0; tripStarted = Date(); tripPosition = nil
         curDir = ""; curAngle = nil; angleKey = ""; lastRouteKey = ""
         baseDist = 0; speedMps = 0
@@ -1091,6 +1109,7 @@ extension NaviBridge {
     @objc(driveManager:updateNaviLocation:)
     func mnLocation(_ m: AMapNaviDriveManager, location l: AMapNaviLocation?) {
         guard arrival.acceptsGuidance(arrival.generation), let l = l, !cruising else { return }     // 巡航时用手机定位（onCruiseLocation）
+        updateTunnel(l, manager: m)
         let kmh = max(0, l.speed)
         speedKmhNow = kmh
         speedMps = emuPaused ? 0 : Double(kmh) / 3.6
@@ -1104,6 +1123,56 @@ extension NaviBridge {
         }
         let msg = "#v,\(kmh)"
         if msg != lastSpeedMsg { lastSpeedMsg = msg; BleLink.shared.send(msg) }
+    }
+
+    private func updateTunnel(_ location: AMapNaviLocation, manager: AMapNaviDriveManager) {
+        let settings = Settings.shared
+        guard location.isMatchNaviPath, location.accuracy.isFinite,
+              location.accuracy >= 0, location.accuracy <= 50,
+              let date = location.timestamp, abs(date.timeIntervalSinceNow) <= 5,
+              let coordinate = location.coordinate,
+              MotorRequest.valid(Double(coordinate.latitude), Double(coordinate.longitude)),
+              let route = manager.naviRoute else {
+            settings.updateTunnel(.unknown)
+            return
+        }
+        // Repeated SDK fixes must not count as fresh entry/exit confirmations.
+        guard date > lastTunnelFix else { return }
+        lastTunnelFix = date
+        let segments = route.routeSegments ?? []
+        let segmentIndex = Int(location.currentSegmentIndex), linkIndex = Int(location.currentLinkIndex)
+        guard segments.indices.contains(segmentIndex) else { settings.updateTunnel(.unknown); return }
+        let links = segments[segmentIndex].links ?? []
+        guard links.indices.contains(linkIndex) else { settings.updateTunnel(.unknown); return }
+        let key = "\(manager.naviRouteID):\(route.routeUID):\(route.routeLength)"
+        if key != tunnelRouteKey {
+            tunnelRouteKey = key
+            tunnelPath = TunnelRoute(segments: segments.map { segment in
+                (segment.links ?? []).map { TunnelRoute.Link(metres: Double($0.length), isTunnel: $0.linkType == .underPass) }
+            })
+            settings.updateTunnel(.unknown)
+        }
+        let link = links[linkIndex]
+        let coordinates = link.coordinates ?? []
+        let pointIndex = Int(location.currentPointIndex)
+        var remaining: Double?
+        if coordinates.indices.contains(pointIndex), coordinates[pointIndex...].allSatisfy({
+            MotorRequest.valid(Double($0.latitude), Double($0.longitude))
+        }) {
+            let nextIndex = min(pointIndex + 1, coordinates.count - 1)
+            let next = coordinates[nextIndex]
+            var distance = Self.distM(Double(coordinate.latitude), Double(coordinate.longitude), Double(next.latitude), Double(next.longitude))
+            for i in nextIndex..<(coordinates.count - 1) {
+                let a = coordinates[i], b = coordinates[i + 1]
+                distance += Self.distM(Double(a.latitude), Double(a.longitude), Double(b.latitude), Double(b.longitude))
+            }
+            // Geometry and the SDK's integer link length have different rounding.
+            if distance.isFinite, distance <= Double(link.length) + max(5, location.accuracy) {
+                remaining = min(Double(link.length), distance)
+            }
+        }
+        let evidence = tunnelPath?.evidence(segment: segmentIndex, link: linkIndex, metresToEndOfLink: remaining) ?? .unknown
+        settings.updateTunnel(evidence)
     }
 
     // 电子眼：测速牌取按车速提前范围内最近的一个有限速的；前方 1 公里内的都画在小地图上

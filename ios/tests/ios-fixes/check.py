@@ -1,0 +1,228 @@
+"""Run iOS search/storage regressions on macOS without network or user data."""
+from pathlib import Path
+import os
+import subprocess
+import tempfile
+
+root = Path(__file__).resolve().parents[2]
+output = Path(tempfile.mkdtemp(prefix="motonav-ios-fixes-"))
+env = dict(os.environ)
+env.setdefault("SWIFT_MODULECACHE_PATH", str(output / "swift-cache"))
+env.setdefault("CLANG_MODULE_CACHE_PATH", str(output / "clang-cache"))
+
+
+def run(name, code):
+    folder = output / name
+    folder.mkdir()
+    source = folder / "main.swift"
+    source.write_text(code)
+    subprocess.run(["swiftc", "-O", str(source), "-o", str(folder / "test")], check=True, env=env)
+    subprocess.run([str(folder / "test")], check=True, env=env)
+
+
+search = (root / "MotoNav/SearchService.swift").read_text()
+search = search[search.index("final class SearchService:"):search.index("/// iOS v0.4 最近去过")]
+run("search", r'''
+import Foundation
+import ObjectiveC
+import CoreLocation
+import Combine
+func check(_ condition: Bool, _ message: String) {
+    if !condition { print("FAIL: \(message)"); exit(1) }
+}
+// Only the external SDK/network boundary is replaced; search behavior is production code.
+@objc protocol AMapSearchDelegate {}
+final class AMapGeoPoint: NSObject { var latitude=31.0; var longitude=121.0 }
+final class AMapTip: NSObject { var name:String?; var district:String?; var address:String?; var location:AMapGeoPoint? }
+final class AMapInputTipsSearchRequest: NSObject { var keywords:String?; var location:String? }
+final class AMapInputTipsSearchResponse: NSObject { var tips:[AMapTip]? }
+final class AMapSearchAPI: NSObject {
+    static var requests:[AMapInputTipsSearchRequest]=[]
+    var delegate:AMapSearchDelegate?
+    func aMapInputTipsSearch(_ request:AMapInputTipsSearchRequest) { Self.requests.append(request) }
+}
+final class LocationService { static let shared=LocationService(); var location:CLLocation? }
+enum MapGeo { static func wgsToGcj(_ lat:Double,_ lng:Double)->(lat:Double,lng:Double) { (lat,lng) } }
+''' + search + r'''
+func response(_ name:String)->AMapInputTipsSearchResponse {
+    let tip=AMapTip(); tip.name=name; tip.location=AMapGeoPoint()
+    let response=AMapInputTipsSearchResponse(); response.tips=[tip]; return response
+}
+let search=SearchService()
+LocationService.shared.location=CLLocation(latitude:31.23,longitude:121.47)
+search.search("加油站")
+let original=AMapSearchAPI.requests.last!
+search.mnTipsDone(original,response:response("旧地区"))
+LocationService.shared.location=CLLocation(latitude:30.27,longitude:120.15)
+search.clear(); search.search("加油站")
+check(AMapSearchAPI.requests.count==2,"searching after movement must request the new location")
+let current=AMapSearchAPI.requests.last!
+check(current.location=="120.150000,30.270000","the new request must use the new position")
+search.mnTipsDone(current,response:response("新地区"))
+check(search.results.first?.name=="新地区","show the current result")
+search.mnTipsDone(original,response:response("迟到旧结果"))
+check(search.results.first?.name=="新地区","old callbacks must not replace current results")
+search.search("医院")
+let cleared=AMapSearchAPI.requests.last!
+search.clear(); search.mnTipsDone(cleared,response:response("已取消"))
+check(search.results.isEmpty,"cleared search must remain cleared after a late callback")
+search.search("停车场")
+let pending=AMapSearchAPI.requests.last!
+search.mnSearchFail(original,error:NSError(domain:"test",code:1002))
+check(search.status=="搜索中…","a stale failure must not interrupt a newer search")
+search.mnSearchFail(pending,error:NSError(domain:"test",code:1002))
+check(search.status.contains("1002"),"current SDK errors must still reach the user")
+print("PASS search: moved position, stale results, cancellation and current errors")
+''')
+
+rides = (root / "MotoNav/RideTools.swift").read_text()
+rides = rides[rides.index("final class RideRecorder:"):rides.index("struct RideHistoryView:")]
+# Redirect the legacy implementation's private initializer to temporary storage too.
+if "private init() {" in rides:
+    start = rides.index("    private let root =")
+    end = rides.index("\n", start)
+    rides = rides[:start] + "    private let root: URL" + rides[end:]
+    rides = rides.replace("private init() {", "init(directory: URL) {\n        root = directory")
+    rides = rides.replace("static let shared = RideRecorder()", "static let shared = RideRecorder(directory: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString))")
+run("rides", r'''
+import Foundation
+import CoreLocation
+import Combine
+func check(_ condition: Bool, _ message: String) {
+    if !condition { print("FAIL: \(message)"); exit(1) }
+}
+func wait(_ message:String,_ condition:()->Bool) {
+    let deadline=Date().addingTimeInterval(5)
+    while !condition() && Date()<deadline { RunLoop.current.run(until:Date().addingTimeInterval(0.01)) }
+    check(condition(),message)
+}
+''' + rides + r'''
+let fm=FileManager.default
+let root=fm.temporaryDirectory.appendingPathComponent("rides-\(UUID().uuidString)")
+try fm.createDirectory(at:root,withIntermediateDirectories:true)
+defer { try? fm.removeItem(at:root) }
+let legacy="""
+{"id":"11111111-1111-1111-1111-111111111111","started":0,"ended":1,"mode":"旧记录","fixes":[{"lat":31,"lng":121,"time":0,"speed":2}],"meters":0}
+"""
+try Data(legacy.utf8).write(to:root.appendingPathComponent("11111111-1111-1111-1111-111111111111.json"))
+let recorder=RideRecorder(directory:root)
+wait("legacy JSON records must remain readable") { recorder.rides.count==1 }
+recorder.start("巡航")
+let id=recorder.active!.id
+let metadata=root.appendingPathComponent(id.uuidString+".json")
+let journal=root.appendingPathComponent(id.uuidString+".jsonl")
+wait("new ride metadata must reach disk") { fm.fileExists(atPath:metadata.path) }
+let stamp=Date().addingTimeInterval(-10)
+for i in 0..<90 {
+    let fix=CLLocation(coordinate:.init(latitude:31+Double(i)*0.00005,longitude:121),altitude:0,horizontalAccuracy:5,verticalAccuracy:5,course:0,speed:10,timestamp:stamp.addingTimeInterval(Double(i)*0.1))
+    recorder.fix(fix)
+}
+check(recorder.active?.fixes.count==90,"accepted WGS84 points must remain available")
+wait("points must be appended to a journal rather than rewriting the full ride") {
+    ((try? String(contentsOf:journal,encoding:.utf8)) ?? "").split(separator:"\n").count==90
+}
+let summary=try JSONDecoder().decode(RideRecorder.Ride.self,from:Data(contentsOf:metadata))
+check(summary.fixes.isEmpty,"per-point writes must not rewrite the full JSON snapshot")
+let recoveryRoot=fm.temporaryDirectory.appendingPathComponent("recovery-\(UUID().uuidString)")
+try fm.createDirectory(at:recoveryRoot,withIntermediateDirectories:true)
+defer { try? fm.removeItem(at:recoveryRoot) }
+try fm.copyItem(at:metadata,to:recoveryRoot.appendingPathComponent(metadata.lastPathComponent))
+var interrupted=try Data(contentsOf:journal);interrupted.append(Data("{\"partial\":".utf8))
+try interrupted.write(to:recoveryRoot.appendingPathComponent(journal.lastPathComponent))
+let recovered=RideRecorder(directory:recoveryRoot)
+wait("interrupted journal must recover every complete point") { recovered.rides.first?.fixes.count==90 }
+check(recovered.rides.first?.ended==stamp.addingTimeInterval(8.9),"recovery ends at the last accepted fix")
+check((recovered.rides.first?.meters ?? 0)>400,"recovery must preserve recorded distance")
+let gpx=try recovered.export(recovered.rides[0]);defer {try? fm.removeItem(at:gpx)}
+check(try String(contentsOf:gpx,encoding:.utf8).components(separatedBy:"<trkpt ").count-1==90,"GPX must preserve every recovered point")
+recorder.finish()
+wait("finish must archive the complete ride") { recorder.rides.contains{$0.id==id} }
+check(!fm.fileExists(atPath:journal.path),"journal is removed only after successful archive")
+check(recorder.rides.first?.fixes.count==90,"archive must contain every accepted point")
+for mode in ["导航一","导航二"] { recorder.start(mode); recorder.finish() }
+wait("rapid stop/start must keep separate sessions") { recorder.rides.count==4 }
+check(Set(recorder.rides.map{$0.id}).count==4,"session IDs must not be mixed by asynchronous writes")
+let old=recorder.rides.first{$0.mode=="旧记录"}!
+recorder.remove(old)
+wait("deletion must update disk and history") { !recorder.rides.contains{$0.id==old.id} && !fm.fileExists(atPath:root.appendingPathComponent(old.id.uuidString+".json").path) }
+print("PASS rides: append-only storage, legacy files, interrupted tail recovery, GPX and session ordering")
+''')
+
+navigation = (root / "MotoNav/NaviScreen.swift").read_text()
+readout = navigation[navigation.index("struct NavigationReadout"):navigation.index("struct NavigationPanelHeights")]
+navigation = navigation[navigation.index("final class DriveViewController:"):navigation.index("struct NaviScreen:")]
+# UIKit's edge-inset return type is replaced only at the macOS test boundary.
+navigation = navigation.replace("@objc(driveViewEdgePadding:)", "")
+run("navigation-ui", r'''
+import Foundation
+import CoreGraphics
+import ObjectiveC
+import Combine
+func check(_ condition:Bool,_ message:String) {
+    if !condition { print("FAIL: \(message)");exit(1) }
+}
+protocol UIViewRepresentable { typealias Context = Void }
+struct UIEdgeInsets: Equatable {
+    var top:CGFloat,left:CGFloat,bottom:CGFloat,right:CGFloat
+    static let zero=Self(top:0,left:0,bottom:0,right:0)
+}
+@objc protocol AMapNaviDriveViewDelegate {}
+enum AMapNaviViewMapModeType { case day,night }
+enum AMapNaviDriveViewShowMode { case overview,carPositionLocked }
+final class AMapNaviDriveView: NSObject {
+    var delegate:AMapNaviDriveViewDelegate?
+    var mapViewModeType=AMapNaviViewMapModeType.day
+    var showMode=AMapNaviDriveViewShowMode.carPositionLocked
+    var mapShowTraffic=true,showUIElements=true,showCrossImage=true,showTrafficLightView=false
+    var screenAnchor=CGPoint(x:0.5,y:0.5)
+    var bounds=CGRect(x:0,y:0,width:393,height:852)
+    var overviewUpdates=0
+    init(frame:CGRect) { super.init() }
+    func updateRoutePolylineInTheVisualRangeWhenTheShowModeIsOverview() { overviewUpdates+=1 }
+}
+final class AMapNaviDriveManager {
+    static let shared=AMapNaviDriveManager()
+    static func sharedInstance()->AMapNaviDriveManager { shared }
+    var representatives:[AMapNaviDriveView]=[]
+    func addDataRepresentative(_ view:AMapNaviDriveView) { representatives.append(view) }
+    func removeDataRepresentative(_ view:AMapNaviDriveView) { representatives.removeAll{$0 === view} }
+}
+''' + readout + navigation + r'''
+let drive=DriveViewController()
+let renderer=AMapDriveViewRep(controller:drive,night:true)
+let view=renderer.makeUIView(context:())
+check(!view.showUIElements,"default navigation must leave room for the shared App interface")
+check(view.mapViewModeType == .night,"keep the selected map palette")
+check(AMapNaviDriveManager.shared.representatives.count==1,"the SDK map must remain attached to navigation data")
+renderer.updateUIView(view,context:())
+check(AMapNaviDriveManager.shared.representatives.count==1,"display updates must not attach another map")
+check(view.showTrafficLightView,"keep the SDK traffic-light display enabled")
+var full=renderer
+full.showNativeUI=true
+full.updateUIView(view,context:())
+check(view.showUIElements && view.showCrossImage,"full navigation must restore the SDK interface and junction images")
+check(drive.mapPadding(view) == .zero,"the SDK interface controls its own visible map area")
+var custom=renderer
+custom.edgePadding=UIEdgeInsets(top:180,left:16,bottom:280,right:16)
+view.showMode = .overview
+custom.updateUIView(view,context:())
+check(!view.showUIElements && !view.showCrossImage,"return to the shared App interface")
+check(drive.mapPadding(view)==custom.edgePadding,"route overview must avoid the measured panels")
+check(view.overviewUpdates==1,"update overview when visible map bounds change")
+custom.updateUIView(view,context:())
+check(view.overviewUpdates==1,"unchanged display updates must not reset route overview")
+check(view.screenAnchor.y>0 && view.screenAnchor.y<1,"the vehicle anchor must remain inside the map")
+check(AMapNaviDriveManager.shared.representatives.count==1 && drive.view === view,"switching styles keeps the same navigation map")
+var readout=NavigationReadout(direction:"S",turnMetres:100,instruction:"",status:"",speed:0,remaining:1000,
+                              remainingSeconds:120,simulation:false,paused:false,simulationSpeed:60,arrived:false)
+for (direction,symbol,label) in [("L","arrow.turn.up.left","左转"),("R","arrow.turn.up.right","右转"),
+                                ("SL","arrow.up.left","左前方"),("SR","arrow.up.right","右前方"),
+                                ("U","arrow.uturn.down","掉头"),("A","mappin.and.ellipse","前方目的地"),
+                                ("S","arrow.up","直行"),("","arrow.up","直行")] {
+    readout.direction=direction
+    check(readout.turn.symbol==symbol && readout.turn.label==label,"both engines need the same visible and spoken turn direction")
+}
+AMapDriveViewRep.dismantleUIView(view,coordinator:())
+check(AMapNaviDriveManager.shared.representatives.isEmpty,"dismissal must detach the map")
+print("PASS navigation UI: shared display, native hints, map padding, turn accessibility and SDK map lifecycle")
+''')

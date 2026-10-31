@@ -1,4 +1,4 @@
-name: Build and publish iOS and universal firmware
+name: Build and publish iOS
 on:
   push:
     branches: [main]
@@ -19,16 +19,16 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Detect firmware source changes
-        id: firmware
-        shell: bash
+      - name: Verify iOS search, ride persistence and phone clock
         run: |
-          PREVIOUS=$(git describe --tags --match 'ios-v*' --abbrev=0 HEAD 2>/dev/null || true)
-          if [[ -n "$PREVIOUS" ]] && git diff --quiet "$PREVIOUS" HEAD -- firmware; then
-            echo "changed=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "changed=true" >> "$GITHUB_OUTPUT"
-          fi
+          python3 ios/tests/ios-fixes/check.py
+          python3 ios/tests/unified-planner/check.py
+          python3 ios/tests/tunnel-settings/check.py
+          python3 ios/tests/tunnel-sdk/check.py
+          swiftc ios/MotoNav/TunnelDimming.swift ios/tests/tunnel-dimming/main.swift -o /tmp/tunnel-dimming
+          /tmp/tunnel-dimming
+          swiftc ios/MotoNav/BleHandshakeClock.swift ios/tests/phone-clock/main.swift -o /tmp/phone-clock
+          /tmp/phone-clock
       - name: Verify arrival lifecycle and callback sessions
         run: |
           swiftc ios/MotoNav/ArrivalPolicy.swift ios/tests/arrival/main.swift -o /tmp/arrival
@@ -44,35 +44,20 @@ jobs:
         run: ./scripts/build-ios-ipa.sh
       - name: Verify iOS data and BLE behavior
         run: |
+          python3 ios/tests/webmotor/check.py
           swiftc -O ios/MotoNav/MapGeo.swift ios/MotoNav/RasterProcessing.swift ios/MotoNav/RouteMapPlan.swift ios/tests/maps/main.swift -o /tmp/maps
           /tmp/maps
           swiftc ios/MotoNav/BleBulkWriteQueue.swift ios/MotoNav/BleWritePacer.swift ios/tests/ble-bulk/main.swift -o /tmp/bulk
           /tmp/bulk
           swiftc ios/MotoNav/BleWritePacer.swift ios/tests/ble-pacing/main.swift -o /tmp/pacing
           /tmp/pacing
-          python3 -m unittest discover -s firmware/tests -p 'test_*.py'
-      - name: Install ESP32 build tools
-        if: steps.firmware.outputs.changed == 'true'
-        run: |
-          brew install arduino-cli
-          arduino-cli config init
-          arduino-cli config add board_manager.additional_urls https://espressif.github.io/arduino-esp32/package_esp32_index.json
-          arduino-cli core update-index
-          arduino-cli core install esp32:esp32@3.3.10
-      - name: Build universal round-screen firmware
-        if: steps.firmware.outputs.changed == 'true'
-        run: python3 firmware/build.py
-      - name: Package source, firmware and instructions
+      - name: Package iOS source and instructions
         shell: bash
         run: |
           VERSION=$(cat RELEASE_VERSION)
           test -f "output/ios/MotoNav-${VERSION}-unsigned.ipa"
           git archive --format=zip --prefix=MotoNav/ HEAD > "output/ios/MotoNav-${VERSION}-source.zip"
-          if [[ -d firmware/dist/175/panel0 ]]; then
-            zip -qr "output/ios/MotoNav-universal-firmware-7.12.0.zip" firmware/dist/175/panel0
-          fi
           cp docs/INSTALL-IOS.md output/ios/INSTALL-IOS.md
-          cp firmware/README.md output/ios/FIRMWARE.md
           cp "docs/RELEASE-IOS-${VERSION}.md" output/ios/RELEASE-NOTES.md
           cd output/ios
           shasum -a 256 *.ipa *.zip *.md > SHA256SUMS.txt
@@ -88,6 +73,6 @@ jobs:
         run: |
           VERSION=$(cat RELEASE_VERSION)
           TAG="ios-v${VERSION}"
-          gh release create "$TAG" --target "$GITHUB_SHA" --title "MotoNav iOS ${VERSION} · 通用圆屏 7.12.0" --notes-file "docs/RELEASE-IOS-${VERSION}.md" --draft
+          gh release create "$TAG" --target "$GITHUB_SHA" --title "MotoNav iOS ${VERSION}" --notes-file "docs/RELEASE-IOS-${VERSION}.md" --draft
           gh release upload "$TAG" output/ios/*.ipa output/ios/*.zip output/ios/*.md output/ios/SHA256SUMS.txt
           gh release edit "$TAG" --draft=false

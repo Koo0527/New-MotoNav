@@ -18,22 +18,20 @@ struct ContentView: View {
     @ObservedObject var favorites = Favorites.shared
     @State private var page = 0
     @State private var showWebMotor = false
-    @State private var independentMode: IndependentMode = .motorcycle
+    @StateObject private var planner = RoutePlanner()
     @State private var showRides = false
     @AppStorage("voice_rate") private var voiceRate = Double(AVSpeechUtteranceDefaultSpeechRate)
     @AppStorage("voice_pitch") private var voicePitch = 1.0
     @AppStorage("voice_id") private var voiceID = ""
 
     @State private var query = ""
-    @State private var dest: SearchService.Place?
-    @State private var showNavi = false
     @State private var showDebug = false
     @State private var showKeys = false                 // iOS v0.7 填写地图 Key 页面
     private static var keyPrompted = false              // 这次打开 App 已经提醒过填 key 了
+    @State private var shareGeneration = UUID()
     @State private var shareBusy = false
     @State private var shareStatus = ""
     @State private var cruiseNote = ""
-    @State private var addingVia = false               // 正在搜途经点
 
     static let bg = Color(red: 0.055, green: 0.04, blue: 0.08)
     static let card = Color(red: 0.10, green: 0.08, blue: 0.14)
@@ -53,11 +51,6 @@ struct ContentView: View {
                             if index == 0 {
                                 cruiseCard
                                 statusCard
-                                HStack {
-                                    Button("摩托车路线规划") { if !independent.running {independent.arrived=false}; independentMode = .motorcycle; showWebMotor = true }.foregroundColor(Self.pink)
-                                    Spacer()
-                                    Button("自行车路线规划") { if !independent.running {independent.arrived=false}; independentMode = .bicycle; showWebMotor = true }.foregroundColor(Self.cyan)
-                                }
                                 destCard
                                 favoritesCard
                                 Button("骑行轨迹") { showRides = true }.foregroundColor(Self.cyan)
@@ -81,9 +74,8 @@ struct ContentView: View {
             }.background(Self.card)
         }
         .background(ContentView.bg.ignoresSafeArea())
-        .fullScreenCover(isPresented: $showWebMotor) { WebMotorView(mode:independentMode) }
+        .fullScreenCover(isPresented: $showWebMotor) { WebMotorView(model:planner) }
         .sheet(isPresented: $showRides) { NavigationView { RideHistoryView() } }
-        .fullScreenCover(isPresented: $showNavi) { NaviScreen() }
         .sheet(isPresented: $showKeys) { KeySetupView() }
         .onAppear {                                    // iOS v0.7 打开 App 时，高德或高德 key 没填就提醒一次
             if !ContentView.keyPrompted && settings.keysMissing {
@@ -110,7 +102,7 @@ struct ContentView: View {
                     }
                     Spacer()
                     Button("回到导航") {
-                        if independent.running { showWebMotor=true } else { showNavi=true }
+                        showWebMotor=true
                     }.foregroundColor(Self.pink)
                 }.padding(12).background(Self.card).foregroundColor(.white)
             }
@@ -150,7 +142,7 @@ struct ContentView: View {
                     Text("剩余 \(NaviBridge.distText(navi.uiRemainM)) · 约 \(NaviBridge.durText(navi.uiRemainS)) · \(ContentView.etaText(navi.uiRemainS)) 到达")
                         .font(.footnote).foregroundColor(.white)
                 }
-                Button("回到导航画面") { showNavi = true }.foregroundColor(ContentView.pink)
+                Button("回到导航画面") { showWebMotor = true }.foregroundColor(ContentView.pink)
             }
             Text("小地图：\(map.shortStatus) · 高德 · \(Settings.themeName(settings.theme))")
                 .font(.caption).foregroundColor(ContentView.sub)
@@ -163,7 +155,7 @@ struct ContentView: View {
             Text("去哪儿").foregroundColor(.white).bold()
             HStack(spacing: 10) {
                 // 只在按键盘上的“搜索”或右边按钮时才查高德（边打字边查太费额度）
-                TextField(addingVia ? "搜索途经点（比如加油站）" : "搜索地点、地址", text: $query)
+                TextField("搜索地点、地址", text: $query)
                     .textFieldStyle(.plain)
                     .padding(12)
                     .background(RoundedRectangle(cornerRadius: 12).fill(ContentView.bg))
@@ -178,7 +170,6 @@ struct ContentView: View {
                     .background(RoundedRectangle(cornerRadius: 12).fill(ContentView.pink))
             }
             // iOS v0.3 导入高德 App 分享的路线（比如高德里规划好的摩托车路线）
-            if !addingVia {
             Button { pasteShare() } label: {
                 HStack(spacing: 6) {
                     Image(systemName: "doc.on.clipboard")
@@ -188,7 +179,6 @@ struct ContentView: View {
             }
             .disabled(shareBusy)
             Text("在高德里规划好路线 → 分享 → 选 MotoNav；或者复制链接后点上面这行").font(.caption2).foregroundColor(ContentView.sub)
-            }
             if !shareStatus.isEmpty { Text(shareStatus).font(.footnote).foregroundColor(ContentView.sub) }
             if !search.status.isEmpty { Text(search.status).font(.footnote).foregroundColor(ContentView.sub) }
             ForEach(search.results.prefix(8)) { p in
@@ -206,9 +196,9 @@ struct ContentView: View {
                 }
                 Divider().background(ContentView.stroke)
             }
-            // iOS v0.4 最近去过（还没选目的地、或者正在选途经点时显示）
-            if search.results.isEmpty && (dest == nil || addingVia) && !history.places.isEmpty {
-                Text(addingVia ? "从最近去过里选途经点" : "最近去过").font(.caption).foregroundColor(ContentView.sub).padding(.top, 4)
+            // 最近目的地也进入统一规划页
+            if search.results.isEmpty && !history.places.isEmpty {
+                Text("最近去过").font(.caption).foregroundColor(ContentView.sub).padding(.top, 4)
                 ForEach(history.places.prefix(8)) { p in
                     Button { choose(p) } label: {
                         HStack(alignment: .center, spacing: 8) {
@@ -226,81 +216,7 @@ struct ContentView: View {
                 }
                 Button("清除记录") { history.clear() }.font(.caption).foregroundColor(ContentView.sub)
             }
-            if let d = dest {
-                HStack {
-                    Text("目的地：\(d.name)").font(.footnote).foregroundColor(.white)
-                    Button("收藏") { favorites.add(d) }.foregroundColor(Self.cyan)
-                    Spacer()
-                    if !navi.navigating {
-                        Button("换目的地") {
-                            dest = nil; query = ""; addingVia = false; shareStatus = ""
-                            search.clear()
-                            navi.clearPlan()
-                        }
-                        .font(.caption).foregroundColor(ContentView.cyan)
-                    }
-                }
-                if let sr = navi.shareRoute {
-                    Text("按高德分享的\(sr.kind)路线走（原路线 \(NaviBridge.distText(Int(sr.total)))）").font(.caption).foregroundColor(Color.orange)
-                    if !navi.shareMatch.isEmpty { Text(navi.shareMatch).font(.caption).foregroundColor(ContentView.sub) }
-                }
-                if navi.shareRoute == nil {                 // 途经点（分享的路线自带途经点）
-                    HStack(spacing: 12) {
-                        Text(navi.vias.isEmpty ? "途经：无" : "途经：" + navi.vias.map { $0.name }.joined(separator: " → "))
-                            .font(.caption).foregroundColor(ContentView.sub).lineLimit(2)
-                        Spacer()
-                        if addingVia {
-                            Button("取消") { addingVia = false; query = d.name; search.clear() }
-                                .font(.caption).foregroundColor(ContentView.sub)
-                        } else {
-                            Button("+ 途经点") { addingVia = true; query = ""; search.clear() }
-                                .font(.caption).foregroundColor(navi.vias.count >= 3 ? ContentView.sub : ContentView.cyan)
-                                .disabled(navi.vias.count >= 3)
-                            if !navi.vias.isEmpty {
-                                Button("清除") { navi.clearVias() }.font(.caption).foregroundColor(ContentView.sub)
-                            }
-                        }
-                    }
-                    if addingVia {
-                        Text("在上面搜索途经点（比如加油站），或者从最近去过里选；最多 3 个，按顺序经过")
-                            .font(.caption2).foregroundColor(Color.orange)
-                    }
-                }
-                Toggle("不走高速", isOn: $settings.avoidHighway)
-                    .foregroundColor(.white).tint(ContentView.pink)
-                    .onChange(of: settings.avoidHighway) { _ in navi.replan() }
-                if navi.calculating || navi.routeOptions.isEmpty {
-                    Text(navi.calculating ? "正在规划路线…" : navi.info).font(.footnote).foregroundColor(ContentView.sub)
-                }
-                if navi.planFailed && !navi.calculating {   // iOS v0.6 规划失败 / 超时
-                    Button { navi.replan() } label: {
-                        Label("重新规划", systemImage: "arrow.clockwise").font(.subheadline.bold()).foregroundColor(ContentView.cyan)
-                    }
-                }
-                if !navi.routeOptions.isEmpty {
-                    RouteMapView(routes: navi.routeOptions, selected: navi.selectedRouteID,
-                                 ghost: navi.shareRoute?.pts.map { CLLocationCoordinate2D(latitude: $0.lat, longitude: $0.lng) } ?? [],
-                                 dest: navi.destCoord,
-                                 vias: navi.vias.map { CLLocationCoordinate2D(latitude: $0.lat, longitude: $0.lng) },
-                                 night: settings.paletteNight)
-                        .frame(height: 230)
-                        .clipShape(RoundedRectangle(cornerRadius: 14))
-                    HStack(spacing: 8) {
-                        ForEach(navi.routeOptions) { o in
-                            RouteCard(option: o, selected: o.id == navi.selectedRouteID)
-                                .onTapGesture { navi.select(routeID: o.id) }
-                        }
-                    }
-                }
-                HStack(spacing: 12) {
-                    PillButton(title: "开始导航", color: ContentView.pink, enabled: navi.routeReady) {
-                        navi.start(emulate: false); showNavi = true
-                    }
-                    PillButton(title: "模拟导航", color: Color.purple, enabled: navi.routeReady) {
-                        navi.start(emulate: true); showNavi = true
-                    }
-                }
-            }
+
         }
     }
 
@@ -317,24 +233,20 @@ struct ContentView: View {
         return f.string(from: Date().addingTimeInterval(TimeInterval(remainS)))
     }
 
-    /// 点了搜索结果或最近去过：选目的地，或者（正在选途经点时）加一个途经点
+    /// 搜索、历史和收藏均进入同一个规划页
     private func choose(_ p: SearchService.Place) {
         guard !navi.navigating else {shareStatus="导航仍在运行；如需更换目的地，请先结束导航";return}
         guard !WebMotorSession.shared.running else { shareStatus = "请先结束网页导航"; return }
+        if navi.cruising {navi.stopCruise()}
         search.clear()
         hideKeyboard()
-        if addingVia {
-            addingVia = false
-            query = dest?.name ?? ""
-            navi.addVia(name: p.name, lat: p.lat, lng: p.lng)
-            return
-        }
-        dest = p
-        query = p.name                                  // 只改文字，不会再触发搜索
+        shareGeneration=UUID();shareBusy=false
+        independent.arrived=false
+        query = p.name
         shareStatus = ""
         History.shared.add(p)
-        if needAmapKey() { return }
-        navi.plan(toLat: p.lat, lng: p.lng)
+        planner.setDestination(MotorPoint(lat:p.lat,lng:p.lng,name:p.name))
+        showWebMotor = true
     }
 
     /// 读剪贴板里的高德分享链接，还原路线后按它规划
@@ -350,13 +262,15 @@ struct ContentView: View {
     private func importShare(_ t: String) {
         guard AmapShare.findUrl(t) != nil else { shareStatus = "分享的内容里没有高德链接"; return }
         if navi.navigating || WebMotorSession.shared.running { shareStatus = "正在导航：先退出导航，再导入分享的路线"; return }
-        addingVia = false
+        if navi.cruising {navi.stopCruise()}
         hideKeyboard()
+        let token=UUID();shareGeneration=token
         shareBusy = true
         shareStatus = "正在读取高德分享的路线…"
         DispatchQueue.global(qos: .userInitiated).async {
             let res = Result { try AmapShare.load(t) }
             DispatchQueue.main.async {
+                guard shareGeneration == token else{return}
                 shareBusy = false
                 guard !navi.navigating, !WebMotorSession.shared.running else { shareStatus = "导航已开始，请结束后重新导入"; return }
                 switch res {
@@ -365,16 +279,13 @@ struct ContentView: View {
                         (r.timeS > 0 ? "，约 \(NaviBridge.durText(r.timeS))" : "") +
                         (r.restored ? "" : "（高德没能原样还原，可能和分享的稍有不同）")
                     let name = r.endName.isEmpty ? "分享的目的地" : r.endName
-                    dest = SearchService.Place(name: name, address: "高德分享的\(r.kind)路线", lat: r.endLat, lng: r.endLng)
                     History.shared.add(SearchService.Place(name: name, address: "", lat: r.endLat, lng: r.endLng))
                     query = name
                     search.clear()
-                    if r.kind == "自行车" {
-                        navi.clearPlan()
-                        WebMotorSession.shared.route = MotorRoutes.fromShare(r)
-                        independentMode = .bicycle
-                        showWebMotor = true
-                    } else if !needAmapKey() { navi.plan(toLat: r.endLat, lng: r.endLng, share: r) }
+                    if navi.cruising {navi.stopCruise()}
+                    independent.arrived=false
+                    planner.importShare(r)
+                    showWebMotor = true
                 case .failure(let e):
                     shareStatus = "读取失败：\(e.localizedDescription)"
                 }
@@ -407,6 +318,8 @@ struct ContentView: View {
     private var settingsCard: some View {
         CardView {
             Text("圆屏设置").foregroundColor(.white).bold()
+            Toggle("隧道自动调暗", isOn: $settings.tunnelAuto).foregroundColor(.white).tint(ContentView.pink)
+            Text("自动识别仅支持驾车导航；其他方式可使用导航中的临时隧道快捷操作。").font(.caption).foregroundColor(ContentView.sub)
             Picker("开机动画", selection: $settings.bootBrand) {
                 ForEach(Settings.bootBrands.indices, id: \.self) { i in Text(Settings.bootBrands[i]).tag(i) }
             }.tint(ContentView.cyan)

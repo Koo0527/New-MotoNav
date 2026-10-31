@@ -48,6 +48,7 @@ final class BleLink: NSObject, ObservableObject {
     private var txChar: CBCharacteristic?
     private var wantConnected = true
     private var handshake=BleHandshakeClock()
+    private var phoneClock=BlePhoneClock()
     private var connectionRetries=0
     private var retryAfter=0.0
 
@@ -76,6 +77,7 @@ final class BleLink: NSObject, ObservableObject {
         heartbeat = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] _ in
             self?.checkConnectionSetup()
             self?.requestBuildingCapability()
+            self?.syncClock()
             MusicBridge.shared.syncLyrics()
             guard let self = self, self.isReady, self.queue.isEmpty, !self.bulkQ.hasData,
                   Date().timeIntervalSince(self.lastWriteAt) > 1.5 else { return }
@@ -154,6 +156,15 @@ final class BleLink: NSObject, ObservableObject {
     }
 
     func retryBuildingCapability() { buildingProbe.reset(); requestBuildingCapability() }
+
+    private func syncClock(force: Bool = false) {
+        guard isReady, verified else { return }
+        let date = Date()
+        if let message = phoneClock.message(wall: date.timeIntervalSince1970,
+            uptime: ProcessInfo.processInfo.systemUptime, offset: TimeZone.current.secondsFromGMT(for: date), force: force) {
+            sendOnce(message) // Never cache a timestamp for reconnect replay.
+        }
+    }
 
     var maxWrite: Int {
         guard let p = peripheral else { return 20 }
@@ -375,6 +386,7 @@ final class BleLink: NSObject, ObservableObject {
         pump()
         Settings.shared.pushAll()
         requestBuildingCapability()
+        syncClock(force: true)
         MapFeeder.shared.resendAll()                    // 圆屏可能重启过：地图块和路线重发
     }
 }
@@ -490,7 +502,8 @@ extension BleLink: CBCentralManagerDelegate, CBPeripheralDelegate {
         guard let raw = String(data: d, encoding: .utf8) else { return }
         let s = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         if s == "U,1", !verified {
-            verified = true; buildingProbe.reset(); requestBuildingCapability(); Settings.shared.pushAll(); MapFeeder.shared.resendAll(); return
+            verified = true; syncClock(force: true)
+            buildingProbe.reset(); requestBuildingCapability(); Settings.shared.pushAll(); MapFeeder.shared.resendAll(); return
         }
         if s == "CAP,HID,1" {
             mediaHIDSupported = true
@@ -502,6 +515,8 @@ extension BleLink: CBCentralManagerDelegate, CBPeripheralDelegate {
             MusicBridge.shared.syncMode(); MusicBridge.shared.refresh(force: true); return
         }
         if s == "CAP,BLD,1" {
+            // Firmware emits capabilities only on an authenticated link; U,1 can be missed during restoration.
+            if !verified { verified = true; syncClock(force: true) }
             if !buildingsSupported { buildingsSupported = true; MapFeeder.shared.onBuildingCapability() }
             return
         }

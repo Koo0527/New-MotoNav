@@ -102,7 +102,49 @@ final class Settings: ObservableObject {
     /// iOS v0.4 亮度跟着昼夜自动（和安卓版一样：日出后用白天亮度，日落后用夜间亮度）
     @Published var brightAuto: Bool { didSet { ud.set(brightAuto, forKey: "bright_auto"); sendBrightness() } }
     @Published var brightDay: Double { didSet { ud.set(brightDay, forKey: "bright_day"); if brightAuto { sendBrightness() } } }
-    @Published var brightNight: Double { didSet { ud.set(brightNight, forKey: "bright_night"); if brightAuto { sendBrightness() } } }
+    @Published var brightNight: Double { didSet { ud.set(brightNight, forKey: "bright_night"); if brightAuto || tunnelDimmed { sendBrightness() } } }
+    @Published var tunnelAuto: Bool {
+        didSet {
+            ud.set(tunnelAuto, forKey: "tunnel_auto")
+            if oldValue != tunnelAuto { resetTunnel() }
+        }
+    }
+    @Published private(set) var tunnelDimmed = false
+    private var tunnelPolicy = TunnelDimmingPolicy()
+    private var tunnelOverride: Bool?
+
+    func updateTunnel(_ evidence: TunnelEvidence, now: TimeInterval = ProcessInfo.processInfo.systemUptime) {
+        guard tunnelAuto else { return }
+        let wasDimmed = tunnelPolicy.isDimmed
+        let dimmed = tunnelPolicy.update(evidence, now: now)
+        if wasDimmed && !dimmed { tunnelOverride = nil }
+        refreshTunnel()
+    }
+
+    func toggleTunnelMode() {
+        let dimmed = !tunnelDimmed
+        tunnelOverride = dimmed == (tunnelAuto && tunnelPolicy.isDimmed) ? nil : dimmed
+        refreshTunnel()
+    }
+
+    func resetTunnel() {
+        tunnelPolicy.reset()
+        tunnelOverride = nil
+        fadeTimer?.invalidate()
+        fadeTimer = nil
+        fadeTarget = nil
+        refreshTunnel()
+    }
+
+    private func refreshTunnel() {
+        let dimmed = tunnelOverride ?? (tunnelAuto && tunnelPolicy.isDimmed)
+        if tunnelDimmed != dimmed {
+            brightTimer?.invalidate()
+            brightTimer = nil
+            tunnelDimmed = dimmed
+        }
+        applyDayNight()
+    }
     @Published var brightDesc = ""
     /// 夜间配色：0 自动（按当地日出日落切换），1 一直白天，2 一直夜间（iOS v0.3 起；原来只有开 / 关）
     @Published var nightMode: Int { didSet { ud.set(nightMode, forKey: "night_mode"); applyDayNight(force: true) } }
@@ -167,6 +209,7 @@ final class Settings: ObservableObject {
         brightAuto = ud.object(forKey: "bright_auto") as? Bool ?? true
         brightDay = ud.object(forKey: "bright_day") as? Double ?? 255
         brightNight = ud.object(forKey: "bright_night") as? Double ?? 70
+        tunnelAuto = ud.object(forKey: "tunnel_auto") as? Bool ?? true
         if let m = ud.object(forKey: "night_mode") as? Int { nightMode = m }
         else { nightMode = ud.bool(forKey: "night") ? 2 : 0 }       // 老版本的“夜间配色”开关：开 = 一直夜间
         avoidHighway = ud.object(forKey: "avoid_hw") as? Bool ?? true
@@ -181,10 +224,40 @@ final class Settings: ObservableObject {
 
     private var brightTimer: Timer?
     private var brightSent = -1
+    private var fadeTimer: Timer?
+    private var fadeTarget: Int?
     private var isDayNow = true                         // 最近一次按日出日落算出来的
 
     /// 现在该用的亮度
-    var brightnessInUse: Int { brightAuto ? Int(isDayNow ? brightDay : brightNight) : Int(brightness) }
+    var brightnessInUse: Int {
+        let normal = brightAuto ? Int(isDayNow ? brightDay : brightNight) : Int(brightness)
+        return TunnelDimmingPolicy.targetBrightness(normal: normal, night: Int(brightNight), dimmed: tunnelDimmed)
+    }
+
+    private func applyBrightness(_ target: Int, force: Bool) {
+        if !force && fadeTarget == target { return }
+        fadeTimer?.invalidate()
+        fadeTimer = nil
+        fadeTarget = nil
+        if force || brightSent < 0 {
+            brightSent = target
+            BleLink.shared.send("#b,\(target)")
+        } else if brightSent != target {
+            fadeTarget = target
+            let timer = Timer(timeInterval: 0.1, repeats: true) { [weak self] timer in
+                guard let self, timer.isValid, self.fadeTarget == target else { return }
+                self.brightSent = TunnelDimmingPolicy.nextBrightness(current: self.brightSent, target: target)
+                BleLink.shared.send("#b,\(self.brightSent)")
+                if self.brightSent == target {
+                    timer.invalidate()
+                    self.fadeTimer = nil
+                    self.fadeTarget = nil
+                }
+            }
+            fadeTimer = timer
+            RunLoop.main.add(timer, forMode: .common)
+        }
+    }
 
     private func sendBrightness() {
         brightTimer?.invalidate()                       // 拖滑块时别每一下都发
@@ -228,7 +301,7 @@ final class Settings: ObservableObject {
         let loc = NaviBridge.shared.lastLocation ?? LocationService.shared.location
         let r = SunTimes.isDaytime(lat: loc?.coordinate.latitude, lng: loc?.coordinate.longitude)
         isDayNow = r.day
-        let on: Bool
+        var on: Bool
         switch nightMode {
         case 1: on = false; nightDesc = "一直用白天配色"
         case 2: on = true; nightDesc = "一直用夜间配色"
@@ -236,6 +309,7 @@ final class Settings: ObservableObject {
             on = !r.day
             nightDesc = r.desc + (on ? "（现在是夜间配色）" : "（现在是白天配色）")
         }
+        if tunnelDimmed { on = true; nightDesc = "隧道模式 · 临时使用夜间配色" }
         if paletteNight != on { paletteNight = on }
         let v = on ? 1 : 0
         if v != nightSent || force {
@@ -244,10 +318,8 @@ final class Settings: ObservableObject {
         }
         let lv = brightnessInUse
         brightDesc = brightAuto ? "\(r.desc)，现在用\(r.day ? "白天" : "夜间")亮度 \(lv)" : ""
-        if lv != brightSent || force {
-            brightSent = lv
-            BleLink.shared.send("#b,\(lv)")
-        }
+        if tunnelDimmed { brightDesc = "隧道模式 · 临时亮度 \(lv)" }
+        applyBrightness(lv, force: force)
     }
 }
 
