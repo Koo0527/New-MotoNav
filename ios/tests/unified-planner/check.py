@@ -42,8 +42,10 @@ final class NaviBridge {
 final class LocationService { static let shared=LocationService(); var location:CLLocation?; func start(){} }
 final class RideBridge {
     static let shared=RideBridge()
-    var navigating=false; var plans=0; var clears=0; var origin:MotorPoint?
-    func plan(toLat:Double,lng:Double,origin:MotorPoint?){plans += 1;self.origin=origin}
+    var navigating=false; var plans=0; var clears=0; var origin:MotorPoint?; var endName=""; var historyEligible=true
+    func plan(toLat:Double,lng:Double,origin:MotorPoint?,endName:String="",historyEligible:Bool=true){
+        plans += 1;self.origin=origin;self.endName=endName;self.historyEligible=historyEligible
+    }
     func clearPlan(){clears += 1}
 }
 final class NavigationCoordinator {
@@ -58,6 +60,8 @@ tests = r'''
     @MainActor static func main() async {
         UserDefaults.standard.removeObject(forKey:"ride_engine_official") // keep the run hermetic
         let p=RoutePlanner()
+        assert(p.officialRide,"ordinary bicycle routes default to the official ride engine (Task 2)")
+        p.officialRide=false // the stale-result phase below exercises the compatible web planner
         p.start=MotorPoint(lat:31,lng:121,name:"origin")
         p.end=MotorPoint(lat:32,lng:122,name:"first")
         p.mode = .motorcycle
@@ -130,6 +134,48 @@ tests = r'''
         p.end=MotorPoint(lat:35,lng:125,name:"moved")
         assert(!p.ridePlanned,"geometry changes invalidate the official ride plan")
         p.officialRide=false
+        UserDefaults.standard.removeObject(forKey:"ride_engine_official")
+
+        // ---- Task 2：后端标识与分流默认 ----
+        let fresh=RoutePlanner()
+        assert(fresh.officialRide,"a fresh install keeps the official ride engine as the bicycle default")
+        assert(fresh.shareRideOfficial == false,"official re-plans of a share are always explicit")
+        // 后端标识：出行方式与实际引擎分别记录
+        p.end=MotorPoint(lat:32,lng:122,name:"backend end")
+        p.mode = .driving
+        assert(p.backend == .driveSDK,"driving runs on the driving SDK")
+        p.mode = .motorcycle
+        assert(p.backend == .independent,"ordinary motorcycle routes stay on the web backend")
+        p.importShare(AmapShare.Route(kind:"摩托车",startLat:31,startLng:121,startName:"s",endLat:32,endLng:122,endName:"e"))
+        assert(p.backend == .driveSDK,"motorcycle share uses the driving SDK while the travel mode is motorcycle")
+        p.importShare(AmapShare.Route(kind:"自行车",startLat:31,startLng:121,startName:"cs",endLat:32,endLng:122,endName:"ce"))
+        assert(p.backend == .independent && !p.usesOfficialRide,"bicycle share keeps the original line on the independent backend by default")
+        // 显式“用官方引擎重新规划”：走 rideSDK，起点交给 SDK 当前定位，不记历史
+        p.shareRideOfficial=true
+        let shareRidePlans=RideBridge.shared.plans
+        p.plan();await settle()
+        assert(RideBridge.shared.plans==shareRidePlans+1,"the explicit re-plan routes to RideBridge")
+        assert(RideBridge.shared.origin == nil,"share re-plans let the SDK start from the current position")
+        assert(RideBridge.shared.historyEligible == false,"share re-plans never enter history")
+        assert(p.usesOfficialRide && p.backend == .rideSDK,"the share re-plan runs on the ride SDK")
+        // 沿用原轨迹：回到独立预览，并清掉官方规划
+        let shareClears=RideBridge.shared.clears
+        p.restoreShareLine()
+        assert(p.routes.count==1 && !p.shareRideOfficial,"restoring returns to the original-line preview")
+        assert(RideBridge.shared.clears==shareClears+1 && p.backend == .independent,"restoring clears the ride plan and returns to the independent backend")
+        // 输入变化重置官方重划和分享
+        p.shareRideOfficial=true
+        p.end=MotorPoint(lat:36,lng:126,name:"moved again")
+        assert(p.shareRideOfficial == false && p.share == nil,"input changes reset the share re-plan and drop the share")
+        // 默认官方引擎下普通自行车进 RideBridge；显式关闭才回到网页（兼容引擎是用户的选择，不静默切换）
+        p.end=MotorPoint(lat:32,lng:122,name:"final")
+        p.officialRide=true
+        let defaultRidePlans=RideBridge.shared.plans, defaultWebRequests=MotorRoutes.requests.count
+        p.plan();await settle()
+        assert(RideBridge.shared.plans==defaultRidePlans+1 && MotorRoutes.requests.count==defaultWebRequests,"a bicycle plan with the engine on goes to RideBridge")
+        p.officialRide=false
+        p.plan();await settle()
+        assert(MotorRoutes.requests.count==defaultWebRequests+1 && RideBridge.shared.plans==defaultRidePlans+1,"turning the engine off explicitly returns to the compatible web planner")
         UserDefaults.standard.removeObject(forKey:"ride_engine_official")
         print("PASS: unified planner lifecycle")
     }

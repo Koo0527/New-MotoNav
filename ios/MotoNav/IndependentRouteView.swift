@@ -6,19 +6,26 @@ enum TravelMode: String, CaseIterable, Identifiable {
     var id: String { rawValue }
 }
 
+/// 本次规划实际执行的后端。出行方式与实际引擎分别记录：
+/// 例如“摩托车分享使用驾车SDK”、“自行车分享走独立导航”，都按这里判断，不用出行方式猜测引擎。
+enum PlanBackend: String {
+    case driveSDK, rideSDK, independent
+}
+
 final class RoutePlanner: ObservableObject {
     @Published var mode: TravelMode = .driving { didSet { inputsChanged() } }
     @Published var start: MotorPoint? { didSet { inputsChanged() } }
     @Published var end: MotorPoint? { didSet { inputsChanged() } }
     @Published var vias: [MotorPoint]=[] { didSet { inputsChanged() } }
-    /// 自行车用官方骑行 SDK 引擎（Task 1 试验开关，默认关：仍走网页兼容路线）。
-    /// 打开后走 RideBridge：SDK 算路 → 选路 → 模拟导航；失败时明确分类错误，不静默降级。
-    @Published var officialRide = UserDefaults.standard.object(forKey: "ride_engine_official") as? Bool ?? false {
+    /// 普通自行车路线默认官方骑行引擎（产品规则）；失败时明确提示，可显式改回兼容（网页）引擎，不静默切换。
+    @Published var officialRide = UserDefaults.standard.object(forKey: "ride_engine_official") as? Bool ?? true {
         didSet {
             UserDefaults.standard.set(officialRide, forKey: "ride_engine_official")
             inputsChanged()
         }
     }
+    /// 自行车分享默认保留原轨迹走独立导航；用户显式点“用官方引擎重新规划”后才置位。
+    @Published var shareRideOfficial = false
     @Published var routes: [MotorRoute]=[]
     @Published var selected=0
     @Published var busy=false
@@ -29,11 +36,22 @@ final class RoutePlanner: ObservableObject {
     private var generation=UUID()
     private var task: Task<Void,Never>?
     var usesDriving: Bool { mode == .driving || (mode == .motorcycle && share != nil) }
-    /// 自行车走官方骑行引擎（SDK）；导入的分享路线仍按独立路线走兼容导航
-    var usesOfficialRide: Bool { mode == .bicycle && officialRide && share == nil }
+    /// 官方骑行引擎（SDK）：普通自行车按开关（默认开）；自行车分享默认保留原线，
+    /// 只有显式“用官方引擎重新规划”（shareRideOfficial）后才走官方引擎。
+    var usesOfficialRide: Bool {
+        guard mode == .bicycle else { return false }
+        return share != nil ? shareRideOfficial : officialRide
+    }
+    /// 实际后端标识：driveSDK / rideSDK / independent
+    var backend: PlanBackend {
+        if usesDriving { return .driveSDK }
+        if usesOfficialRide { return .rideSDK }
+        return .independent
+    }
     func inputsChanged() {
         let imported = share != nil
         share=nil
+        shareRideOfficial=false
         invalidate()
         message=imported ? "输入或出行方式已更改，请重新规划；不再沿用分享路线" : "请规划当前路线"
     }
@@ -50,10 +68,19 @@ final class RoutePlanner: ObservableObject {
         mode=route.kind == "自行车" ? .bicycle : route.kind == "摩托车" ? .motorcycle : .driving
         start=MotorPoint(lat:route.startLat,lng:route.startLng,name:route.startName)
         end=MotorPoint(lat:route.endLat,lng:route.endLng,name:route.endName)
-        vias=[];share=route
+        vias=[];share=route;shareRideOfficial=false
         if mode == .bicycle {
             routes=[MotorRoutes.fromShare(route)];selected=0;message="已载入分享的自行车路线"
         } else { plan() }
+    }
+    /// 放弃官方重划，回到分享的原轨迹（独立导航预览）
+    func restoreShareLine() {
+        guard let route = share else { return }
+        shareRideOfficial=false
+        ridePlanned=false
+        if !NavigationCoordinator.shared.navigationActive && !NaviBridge.shared.cruising { RideBridge.shared.clearPlan() }
+        routes=[MotorRoutes.fromShare(route)];selected=0
+        message="已回到分享的原轨迹"
     }
     func load(_ entry:SavedMotorPlan) {
         guard entry.valid else{return}
@@ -70,15 +97,20 @@ final class RoutePlanner: ObservableObject {
         guard let end=end else { message="请选择目的地";return }
         guard mode != .bicycle || vias.isEmpty else { message="自行车规划暂不支持途经点，请移除途经点后重试，或切换出行方式";return }
         guard vias.count<=3 else { message="最多支持 3 个途经点";return }
-        if usesDriving {
+        // 按实际后端分流（出行方式与引擎分别记录，见 backend）
+        switch backend {
+        case .driveSDK:
             NaviBridge.shared.plan(toLat:end.lat,lng:end.lng,share:share,origin:share == nil ? start : nil,
                                    viaPoints:vias.map{NaviBridge.Via(name:$0.name,lat:$0.lat,lng:$0.lng)})
             drivingPlanned=true;message="";return
-        }
-        if usesOfficialRide {
-            // 官方骑行（Task 1）：SDK 独立算路；起点没手选时由 SDK 用当前位置
-            RideBridge.shared.plan(toLat:end.lat,lng:end.lng,origin:start)
+        case .rideSDK:
+            // 官方骑行：SDK 独立算路；起点没手选时由 SDK 用当前位置（分享重划与驾车分享一样不手传起点）。
+            // 分享的官方重划不进历史（沿用分享导入不记历史）。
+            RideBridge.shared.plan(toLat:end.lat,lng:end.lng,origin:share == nil ? start : nil,
+                                   endName:end.name,historyEligible:share == nil)
             ridePlanned=true;message="";return
+        case .independent:
+            break
         }
         let origin: MotorPoint
         if let start=start { origin=start }
@@ -152,9 +184,9 @@ struct RoutePlannerView: View {
                         if model.usesDriving {
                             Toggle("不走高速",isOn:$settings.avoidHighway).onChange(of:settings.avoidHighway){_ in model.inputsChanged()}
                         }
-                        if model.mode == .bicycle {
-                            // Task 1：自行车可选官方骑行引擎（默认关 = 网页兼容路线）
-                            Toggle("官方骑行引擎（SDK 试验）",isOn:$model.officialRide)
+                        if model.mode == .bicycle && model.share == nil {
+                            // 普通自行车路线默认官方骑行引擎；关闭后走网页兼容路线（显式选择，不静默切换）
+                            Toggle("官方骑行引擎（SDK）",isOn:$model.officialRide)
                         }
                         PillButton(title:model.busy || navi.calculating || ride.calculating ? "正在规划…" : "规划\(model.mode.rawValue)路线",color:ContentView.pink,enabled:!model.busy && !navi.calculating && !ride.calculating && model.end != nil){model.plan()}
                     }
@@ -165,7 +197,7 @@ struct RoutePlannerView: View {
                     routeResults
                     Picker("模拟速度",selection:$simulationSpeed){ForEach(NavigationSpeed.values,id:\.self){Text("\($0) km/h").tag($0)}}.pickerStyle(.segmented)
                     HStack {
-                        PillButton(title:"开始导航",color:ContentView.pink,enabled:ready && !model.usesOfficialRide){begin(false)}
+                        PillButton(title:"开始导航",color:ContentView.pink,enabled:ready){begin(false)}
                         PillButton(title:"模拟导航",color:AppTheme.accent,enabled:ready){begin(true)}
                     }
                     Text(footerHint)
@@ -205,22 +237,41 @@ struct RoutePlannerView: View {
                 HStack{ForEach(navi.routeOptions){o in RouteCard(option:o,selected:o.id == navi.selectedRouteID).onTapGesture{navi.select(routeID:o.id)}}}
             }
         } else if model.usesOfficialRide && model.ridePlanned {
-            // Task 1：官方骑行 SDK 的算路 / 选路（复用驾车卡片与预览地图）
+            // 官方骑行 SDK 的算路 / 选路（复用驾车卡片与预览地图）。
+            // 分享重划时原轨迹以橙色细线同时展示：先看原线与新方案，再开始。
             Text(ContentView.userMessage(ride.info)).font(.footnote).foregroundColor(ContentView.sub)
+            if model.share != nil {Text("橙色细线是分享的原轨迹，新方案为官方骑行路线；对比后再开始。").font(.caption).foregroundColor(.orange)}
             if let failure=ride.failure {
                 Text("\(failure.title)：\(failure.detail)").font(.footnote).foregroundColor(.orange)
             }
             if ride.planFailed {
-                PillButton(title:"重新规划",color:ContentView.pink){model.plan()}
+                // 失败时明确提示 + 显式选择：重试官方引擎，或改用兼容引擎（不静默切换）
+                HStack {
+                    PillButton(title:"重新规划",color:ContentView.pink){model.plan()}
+                    if model.share != nil {
+                        PillButton(title:"回到分享原轨迹",color:AppTheme.accent){model.restoreShareLine()}
+                    } else {
+                        PillButton(title:"改用兼容引擎",color:AppTheme.accent){model.officialRide=false;model.plan()}
+                    }
+                }
+                Text("改用兼容引擎将从网页路线规划，保持当前选择。").font(.caption).foregroundColor(ContentView.sub)
             }
             if !ride.routeOptions.isEmpty {
                 let dest: CLLocationCoordinate2D? = model.end.map { CLLocationCoordinate2D(latitude: $0.lat, longitude: $0.lng) }
+                let ghost: [CLLocationCoordinate2D] = model.share.map { $0.pts.map { CLLocationCoordinate2D(latitude:$0.lat,longitude:$0.lng) } } ?? []
                 RouteMapView(routes:ride.routeOptions,selected:ride.selectedRouteID,
-                             ghost:[],dest:dest,night:settings.paletteNight)
+                             ghost:ghost,dest:dest,night:settings.paletteNight)
                     .frame(height:260).clipShape(RoundedRectangle(cornerRadius:18))
                 HStack{ForEach(ride.routeOptions){o in RouteCard(option:o,selected:o.id == ride.selectedRouteID).onTapGesture{ride.select(routeID:o.id)}}}
+                if model.share != nil {
+                    Button("沿用分享原轨迹（独立导航）"){model.restoreShareLine()}.font(.footnote).foregroundColor(ContentView.cyan)
+                }
             }
         } else if let route=selectedRoute {
+            if model.mode == .bicycle && model.share != nil {
+                // 自行车分享默认保留原轨迹走独立导航；显式改用官方引擎重划（展示原线与新方案后再开始）
+                Button("用官方引擎重新规划"){model.shareRideOfficial=true;model.plan()}.font(.footnote).foregroundColor(ContentView.cyan)
+            }
             MotorMap(route:route,position:nil,overview:true).frame(height:260).clipShape(RoundedRectangle(cornerRadius:18))
             if !route.detailedGuidance {Text("已取得路线轨迹，暂无分段转向指引，请按地图路线行进。").font(.footnote).foregroundColor(ContentView.sub)}
             ForEach(Array(model.routes.enumerated()),id:\.offset){i,r in
@@ -242,8 +293,8 @@ struct RoutePlannerView: View {
     }
     private var footerHint: String {
         if model.usesDriving { return model.share == nil ? "驾车路线支持路况、车道和完整导航提示。" : "参考高德分享的路线，沿用驾车策略导航。" }
-        if model.usesOfficialRide { return "官方骑行引擎（试验）：SDK 骑行路线，暂不支持途经点；真实导航待验证后开放，当前可用模拟导航。" }
-        return model.mode == .motorcycle ? "按摩托车方案规划，需要时可完成高德登录或验证。" : "按自行车路线规划，暂不支持途经点。"
+        if model.usesOfficialRide { return model.share == nil ? "官方骑行引擎：SDK 骑行路线与导航，暂不支持途经点。" : "官方重划从当前位置到分享的终点；原轨迹以橙色细线保留对比。" }
+        return model.mode == .motorcycle ? "按摩托车方案规划，需要时可完成高德登录或验证。" : "按自行车路线规划，暂不支持途经点；分享的自行车路线默认按原轨迹独立导航。"
     }
     private func begin(_ simulate:Bool){
         guard ready else{model.message="请先结束当前导航或规划当前路线";return}
@@ -255,8 +306,8 @@ struct RoutePlannerView: View {
     }
 }
 
-/// Task 1 的最小骑行导航画面：只服务“算路 → 选路 → 模拟导航”链路验证。
-/// 地图优先骑行界面、真实导航与圆屏 BLE 属后续任务，不在本屏实现。
+/// 骑行导航画面：真实 / 模拟共用（共享 NavigationOverlay：读出、静音、暂停、调速、重算重试、退出）。
+/// 圆屏读数与沿线地图由 RideBridge 直接输出；地图优先的骑行界面属后续任务（Task 3）。
 struct RideNaviScreen: View {
     @ObservedObject var ride = RideBridge.shared
     @ObservedObject var settings = Settings.shared
@@ -272,10 +323,14 @@ struct RideNaviScreen: View {
                               onCycleSpeed: { ride.cycleEmuSpeed() },
                               onLayout: { _ in }) {
                 if ride.rerouteFailed {
-                    HStack {
-                        Text("重新规划失败，已保留当前路线").font(.caption)
-                        Spacer()
-                        Button("重试") { ride.retryRecalculate() }.frame(minHeight: 44)
+                    VStack(spacing: 6) {
+                        HStack {
+                            Text("重新规划失败，已保留当前路线").font(.caption)
+                            Spacer()
+                            Button("重试") { ride.retryRecalculate() }.frame(minHeight: 44)
+                        }
+                        Text("多次失败可退出导航，从当前位置改用兼容引擎重新规划并预览。")
+                            .font(.caption2).foregroundColor(AppTheme.hudSub)
                     }
                 }
             }
@@ -320,6 +375,9 @@ struct IndependentNavigationView: View {
                                   onPause: { guide.paused.toggle() },
                                   onCycleSpeed: { guide.speed = NavigationSpeed.next(guide.speed) },
                                   onLayout: { panelHeights = $0 }) {
+                    if !guide.ridePlanNotice.isEmpty {
+                        Text(guide.ridePlanNotice).font(.caption2).foregroundColor(.orange)
+                    }
                     if !metadata.status.isEmpty {
                         Text(ContentView.userMessage(metadata.status)).font(.caption2).foregroundColor(ContentView.sub)
                     }
