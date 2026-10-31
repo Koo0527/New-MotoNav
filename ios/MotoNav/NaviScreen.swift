@@ -206,7 +206,7 @@ struct AMapDriveViewRep: UIViewRepresentable {
         controller.view = v
         updateUIView(v, context: context)
         v.showTrafficLightView = true
-        AMapNaviDriveManager.sharedInstance().addDataRepresentative(v)
+        NavigationCoordinator.shared.attachDriveMap(v)      // 只有驾车引擎是当前所有者时才绑定
         return v
     }
 
@@ -227,7 +227,8 @@ struct AMapDriveViewRep: UIViewRepresentable {
     }
 
     static func dismantleUIView(_ uiView: AMapNaviDriveView, coordinator: ()) {
-        AMapNaviDriveManager.sharedInstance().removeDataRepresentative(uiView)
+        // 地图销毁时引擎可能已被切换销毁：解绑不得重建旧单例
+        NavigationCoordinator.shared.detachDriveMap(uiView)
     }
 }
 

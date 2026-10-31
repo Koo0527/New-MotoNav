@@ -171,9 +171,10 @@ final class NaviBridge: NSObject, ObservableObject {
     private var cameraRange: Int { min(1000, max(500, Int(Double(speedKmhNow) / 3.6 * 20))) }
 
     /// iOS v0.7 填了（或换了）高德 key：导航模块在没有 key 时初始化过，不会自己换 key，
-    /// 销毁重建一次，用新 key 重新初始化（导航、巡航中不动，等下次）
+    /// 销毁重建一次，用新 key 重新初始化（导航、巡航中不动，等下次）。
+    /// 引擎的销毁 / 创建统一走 NavigationCoordinator（互斥单例的所有权归它管）。
     func rebuildManager() {
-        if navigating || cruising || WebMotorSession.shared.running { return }
+        if navigating || cruising || NavigationCoordinator.shared.navigationActive { return }
         if attached {
             let m = manager
             arrival.cancel(arrival.generation)
@@ -182,14 +183,27 @@ final class NaviBridge: NSObject, ObservableObject {
             m.delegate = nil
             attached = false
         }
-        let ok = AMapNaviDriveManager.destroyInstance()
-        extraInfo = ok ? "已用新的高德 key 重新初始化导航" : "导航模块没能重建，重启一次 App 新 key 就生效了"
+        if let failure = NavigationCoordinator.shared.deactivateAll() {
+            extraInfo = failure
+            return
+        }
         routeReady = false; routeOptions = []; selectedRouteID = -1
-        attach()
+        if attach() {
+            extraInfo = "已用新的高德 key 重新初始化导航"
+        } else {
+            extraInfo = NavigationCoordinator.shared.lastFailure ?? "导航模块没能重建，重启一次 App 新 key 就生效了"
+        }
     }
 
-    func attach() {
-        if attached { return }
+    /// 认领驾车引擎（NavigationCoordinator 负责先按固定顺序销毁互斥的骑行引擎）。
+    /// 返回 false = 引擎没能就绪，本次操作不得继续。
+    @discardableResult
+    func attach() -> Bool {
+        if attached { return true }
+        guard NavigationCoordinator.shared.activate(.drive) == nil else {
+            extraInfo = NavigationCoordinator.shared.lastFailure ?? "驾车引擎没能就绪，请重试"
+            return false
+        }
         WebRouteMetadata.shared.stop()
         attached = true
         let m = manager
@@ -204,12 +218,44 @@ final class NaviBridge: NSObject, ObservableObject {
         m.setMultipleRouteNaviMode(true)
         m.updateCameraInfo = true
         m.updateTrafficInfo = true
+        return true
+    }
+
+    /// NavigationCoordinator 切换引擎时的第 1+2 步：先失效旧回调（会话代次），
+    /// 再停止导航和相关任务。stopNavi 可能同步触发模拟结束回调，所以代次必须先失效。
+    func stopForEngineSwitch() {
+        planSeq += 1
+        arrival.cancel(arrival.generation)
+        invalidateArrival()
+        tick?.invalidate(); tick = nil
+        cruiseTick?.invalidate(); cruiseTick = nil
+        cruiseIdle.stop()
+        if cruising { endCruiseQuietly() }
+        navigating = false
+        emulating = false; emuPaused = false
+        manager.stopNavi()
+    }
+
+    /// 第 3+4 步：解绑地图数据代表、delegate，释放持有的引用并清空规划状态。
+    func unbindForEngineSwitch() {
+        let m = manager
+        if let r = sessionCallbacks?.asRepresentative { m.removeDataRepresentative(r) }
+        sessionCallbacks = nil
+        m.delegate = nil
+        attached = false
+        calculating = false; routeReady = false; planFailed = false
+        routeOptions = []; selectedRouteID = -1; shareMatch = ""; routeSummary = ""
+        destLat = .nan; destLng = .nan
+        planOrigin = nil; shareRoute = nil; vias = []
+        MapFeeder.shared.onNaviEnd()
+        info = "（还没开始导航）"
     }
 
     /// Relinquish planning callbacks while independent guidance reads static camera metadata.
     /// The next SDK plan calls attach() and installs a new arrival/callback generation.
     func releaseForWebMetadata() -> Bool {
-        guard !navigating, !cruising else { return false }
+        guard !navigating, !cruising, !RideBridge.shared.navigating else { return false }
+        guard NavigationCoordinator.shared.activate(.drive) == nil else { return false }
         planSeq += 1; arrival.cancel(arrival.generation)
         if let callbacks=sessionCallbacks?.asRepresentative { manager.removeDataRepresentative(callbacks) }
         sessionCallbacks=nil;manager.delegate=nil;attached=false
@@ -231,7 +277,7 @@ final class NaviBridge: NSObject, ObservableObject {
     /// 否则一次规划最多 3 条（躲避拥堵），“不走高速”看设置。
     func plan(toLat lat: Double, lng: Double, share: AmapShare.Route? = nil,
               origin: MotorPoint? = nil, viaPoints: [Via] = []) {
-        guard !navigating,!WebMotorSession.shared.running else { return }
+        guard !navigating, !NavigationCoordinator.shared.navigationActive else { return }
         guard MotorRequest.valid(lat, lng), viaPoints.count <= 3,
               origin.map({ MotorRequest.valid($0.lat, $0.lng) }) ?? true,
               viaPoints.allSatisfy({ MotorRequest.valid($0.lat, $0.lng) }),
@@ -240,7 +286,7 @@ final class NaviBridge: NSObject, ObservableObject {
             info = "起终点或途经点无效，请重新选择"; planFailed = true
             return
         }
-        attach()
+        guard attach() else { calculating = false; planFailed = true; return }
         destLat = lat; destLng = lng
         planOrigin = origin.map { ($0.lat, $0.lng) }
         shareRoute = share
@@ -287,7 +333,7 @@ final class NaviBridge: NSObject, ObservableObject {
 
     /// 按上次的目的地重新规划（比如切换了“不走高速”）
     func replan(retry: Int = 1) {
-        guard !destLat.isNaN, !navigating, !WebMotorSession.shared.running else { return }
+        guard !destLat.isNaN, !navigating, !NavigationCoordinator.shared.navigationActive else { return }
         planFailed = false
         MapFeeder.shared.onNaviEnd()
         if cruising { stopCruise() }
@@ -381,8 +427,8 @@ final class NaviBridge: NSObject, ObservableObject {
     }
 
     func start(emulate: Bool) {
-        guard routeReady, !navigating, !WebMotorSession.shared.running else { return }
-        attach()
+        guard routeReady, !navigating, !NavigationCoordinator.shared.navigationActive else { return }
+        guard attach() else { info = "导航没能开始：\(extraInfo)"; return }
         if cruising { endCruiseQuietly() }
         // Stop a previous arrival hold before attaching a new trip's callbacks.
         arrival.cancel(arrival.generation)
@@ -467,7 +513,8 @@ final class NaviBridge: NSObject, ObservableObject {
             DispatchQueue.main.asyncAfter(deadline: .now() + 4) { [weak self] in
                 guard let self = self, seq == self.arriveSeq, self.arrival.canClearArrival(token),
                       !self.navigating, !self.cruising else { return }
-                self.manager.stopNavi()
+                // 引擎可能已被切换销毁：不能为了收尾而重建旧单例
+                NavigationCoordinator.shared.driveManagerIfActive()?.stopNavi()
                 self.resetState()
                 self.showArrived = false
                 self.lastSent = "C"
@@ -847,9 +894,9 @@ final class NaviBridge: NSObject, ObservableObject {
 
     /// 开始巡航（不设目的地）：返回 nil = 成功，否则是出错原因
     func startCruise() -> String? {
-        if navigating || WebMotorSession.shared.running { return "导航中不能开巡航，先退出导航" }
+        if navigating || NavigationCoordinator.shared.navigationActive { return "导航中不能开巡航，先退出导航" }
         if cruising { return nil }
-        attach()
+        guard attach() else { return NavigationCoordinator.shared.lastFailure ?? "巡航没能开始，请重试" }
         arrival.cancel(arrival.generation)
         manager.stopNavi()
         invalidateArrival()

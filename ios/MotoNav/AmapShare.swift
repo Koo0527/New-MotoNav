@@ -560,7 +560,12 @@ final class ShareGuide {
         guard let r = route else { return }
         if ourCalc {
             ourCalc = false
-            let m = AMapNaviDriveManager.sharedInstance()
+            // 分享重算只发生在驾车导航中，但引擎实例统一由 NavigationCoordinator 所有：
+            // 不是当前所有者时（理论上不会发生）绝不为重算重建旧单例
+            guard let m = NavigationCoordinator.shared.driveManagerIfActive() else {
+                NaviBridge.shared.extraInfo = "按分享的路线重新规划失败，先沿用高德的路线"
+                return
+            }
             if ok {
                 // 导航中算路成功：如果导航停了就用新路线接着导航
                 if m.naviMode.rawValue == 0 { _ = emulate ? m.startEmulatorNavi() : m.startGPSNavi() }
@@ -578,13 +583,14 @@ final class ShareGuide {
 
     private func reroute(_ r: AmapShare.Route) {
         if lat.isNaN || Date().timeIntervalSince(lastOurAt) < 8 { return }
+        guard let m = NavigationCoordinator.shared.driveManagerIfActive() else { return }
         let from = AmapShare.progressAhead(r, lat, lng, minD: maxProg - 50)
         let wps = AmapShare.waypointsAfter(r, from: from).compactMap { AMapNaviPoint.location(withLatitude: CGFloat($0.lat), longitude: CGFloat($0.lng)) }
         guard let s = AMapNaviPoint.location(withLatitude: CGFloat(lat), longitude: CGFloat(lng)),
               let e = AMapNaviPoint.location(withLatitude: CGFloat(r.endLat), longitude: CGFloat(r.endLng)) else { return }
         lastOurAt = Date()
         let strategy = ConvertDrivingPreferenceToDrivingStrategy(false, false, avoidHw, false, false)
-        ourCalc = AMapNaviDriveManager.sharedInstance().calculateDriveRoute(withStart: [s], end: [e], wayPoints: wps, drivingStrategy: strategy)
+        ourCalc = m.calculateDriveRoute(withStart: [s], end: [e], wayPoints: wps, drivingStrategy: strategy)
         NaviBridge.shared.extraInfo = ourCalc ? "偏航：按分享的路线重新规划（\(wps.count) 个途经点）…" : "偏航：按分享的路线重新规划没能开始"
         if ourCalc { NaviBridge.shared.setRerouting(true) }       // 圆屏继续显示“重新规划中”
     }

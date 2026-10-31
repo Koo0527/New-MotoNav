@@ -183,10 +183,10 @@ final class WebMotorSession: ObservableObject {
     @Published var remainingSeconds = 0
     private var watchdog: Timer?
     func start(_ route: MotorRoute, simulate: Bool, simulationSpeed: Int = 60) {
-        guard route.points.count>=2,!route.steps.isEmpty,!NaviBridge.shared.navigating,
+        guard route.points.count>=2,!route.steps.isEmpty,!NavigationCoordinator.shared.navigationActive,
               (route.cum.last ?? 0)>=3,(route.cum.last ?? 0)<=5_000_000,
               route.steps.allSatisfy({route.points.indices.contains($0.end)}) else { return }
-        stop(); NaviBridge.shared.stop(); NaviBridge.shared.stopCruise()
+        stop(); NaviBridge.shared.stop(); NaviBridge.shared.stopCruise(); RideBridge.shared.stop()
         self.route = route; cum = route.cum; progress = 0; stepIndex = 0; simulation = simulate; paused = false; arrived = false; running = true
         tracker=MotorRouteTracker(route.points);confirmedArrival=false;metadataSuspended=false;simulationTick=nil;realHeading=nil
         speed = NavigationSpeed.values.contains(simulationSpeed) ? simulationSpeed : 60; offCount = 0; nextVia = 0; lastFix = nil; viaProgress = route.request.vias.map { v in nearestAlong(v) }
@@ -412,16 +412,20 @@ struct MotorMap:UIViewRepresentable {
 struct WebMotorView: View {
     @ObservedObject var guide=WebMotorSession.shared
     @ObservedObject var navi=NaviBridge.shared
+    @ObservedObject var ride=RideBridge.shared
     @ObservedObject var model: RoutePlanner
     @Environment(\.dismiss) private var dismiss
     var body: some View {
         Group {
             if guide.running || guide.arrived { IndependentNavigationView() }
             else if navi.navigating || navi.showArrived { NaviScreen() }
+            else if ride.navigating || ride.showArrived { RideNaviScreen() }
             else { RoutePlannerView(model:model) }
         }
         .onChange(of:navi.navigating){active in if !active && !navi.showArrived {dismiss()}}
         .onChange(of:navi.showArrived){arrived in if !arrived && !navi.navigating {dismiss()}}
+        .onChange(of:ride.navigating){active in if !active && !ride.showArrived {dismiss()}}
+        .onChange(of:ride.showArrived){arrived in if !arrived && !ride.navigating {dismiss()}}
         .onChange(of:guide.running){active in if !active && !guide.arrived {dismiss()}}
         .onChange(of:guide.arrived){arrived in if !arrived && !guide.running {dismiss()}}
     }

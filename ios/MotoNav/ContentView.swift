@@ -10,6 +10,7 @@ import UIKit
 struct ContentView: View {
     @ObservedObject var ble = BleLink.shared
     @ObservedObject var navi = NaviBridge.shared
+    @ObservedObject var ride = RideBridge.shared
     @ObservedObject var independent = WebMotorSession.shared
     @ObservedObject var search = SearchService.shared
     @ObservedObject var settings = Settings.shared
@@ -105,11 +106,14 @@ struct ContentView: View {
 
     private var activeNavigationBanner: some View {
         Group {
-            if navi.navigating || independent.running {
+            // 统一的“正在导航”判断：驾车、官方骑行或独立导航（防止导航被其他入口抢占）
+            if NavigationCoordinator.shared.navigationActive {
                 HStack {
                     VStack(alignment:.leading,spacing:3) {
                         Text("导航继续运行中").bold()
-                        Text(independent.running ? independent.instruction : "\(navi.uiDir) · \(navi.uiDist) 米")
+                        Text(independent.running ? independent.instruction
+                             : ride.navigating ? "\(ride.uiDir) · \(ride.uiDist) 米"
+                             : "\(navi.uiDir) · \(navi.uiDist) 米")
                             .font(.caption).lineLimit(1)
                     }
                     Spacer()
@@ -533,8 +537,7 @@ struct ContentView: View {
 
     /// 搜索、历史和收藏均进入同一个规划页
     private func choose(_ p: SearchService.Place) {
-        guard !navi.navigating else {shareStatus="导航仍在运行；如需更换目的地，请先结束导航";return}
-        guard !WebMotorSession.shared.running else { shareStatus = "请先结束网页导航"; return }
+        guard !NavigationCoordinator.shared.navigationActive else {shareStatus="导航仍在运行；如需更换目的地，请先结束导航";return}
         if navi.cruising {navi.stopCruise()}
         search.clear()
         hideKeyboard()
@@ -559,7 +562,7 @@ struct ContentView: View {
     /// 导入高德分享的路线（剪贴板粘贴，或者从高德“分享到 MotoNav”过来）
     private func importShare(_ t: String) {
         guard AmapShare.findUrl(t) != nil else { shareStatus = "分享的内容里没有高德链接"; return }
-        if navi.navigating || WebMotorSession.shared.running { shareStatus = "正在导航：先退出导航，再导入分享的路线"; return }
+        if NavigationCoordinator.shared.navigationActive { shareStatus = "正在导航：先退出导航，再导入分享的路线"; return }
         if navi.cruising {navi.stopCruise()}
         hideKeyboard()
         let sequence=UUID();shareImportID=sequence
@@ -598,7 +601,7 @@ struct ContentView: View {
             Text("不设目的地，也能查看地图和道路提醒")
                 .font(.caption).foregroundColor(ContentView.sub)
             PillButton(title: navi.cruising ? "结束巡航" : "开始巡航", color: navi.cruising ? Color.gray : ContentView.cyan.opacity(0.8),
-                       enabled: !navi.navigating && !WebMotorSession.shared.running) {
+                       enabled: !NavigationCoordinator.shared.navigationActive) {
                 cruiseNote = ""
                 if navi.cruising { navi.stopCruise() }
                 else if !needAmapKey(), let err = navi.startCruise() { cruiseNote = err }

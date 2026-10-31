@@ -49,7 +49,7 @@ struct MotoNavApp: App {
         BleLink.shared.connect()
         LocationService.shared.start()
         Settings.shared.startDayNight()                 // 夜间配色、亮度按日出日落自动切换（每分钟检查）
-        NaviBridge.shared.attach()
+        // 驾车 / 骑行引擎不再在启动时无条件创建：由 NavigationCoordinator 按需认领（算路、巡航时）
     }
 
     var body: some Scene {

@@ -235,6 +235,13 @@ final class AMapNaviDriveManager {
     func addDataRepresentative(_ view:AMapNaviDriveView) { representatives.append(view) }
     func removeDataRepresentative(_ view:AMapNaviDriveView) { representatives.removeAll{$0 === view} }
 }
+final class NavigationCoordinator {
+    static let shared=NavigationCoordinator()
+    enum Engine { case none, drive, ride }
+    var active:Engine = .drive
+    func attachDriveMap(_ view:AMapNaviDriveView) { guard active == .drive else { return }; AMapNaviDriveManager.shared.addDataRepresentative(view) }
+    func detachDriveMap(_ view:AMapNaviDriveView) { guard active == .drive else { return }; AMapNaviDriveManager.shared.removeDataRepresentative(view) }
+}
 ''' + readout + navigation + r'''
 let drive=DriveViewController()
 let renderer=AMapDriveViewRep(controller:drive,night:true)
@@ -272,6 +279,15 @@ for (direction,symbol,label) in [("L","arrow.turn.up.left","左转"),("R","arrow
 }
 AMapDriveViewRep.dismantleUIView(view,coordinator:())
 check(AMapNaviDriveManager.shared.representatives.isEmpty,"dismissal must detach the map")
+// 引擎所有权：非驾车所有者时，地图绑定/解绑不得触碰驾车单例（切换骑行后地图销毁不得重建它）
+NavigationCoordinator.shared.active = .ride
+let rideView=renderer.makeUIView(context:())
+check(AMapNaviDriveManager.shared.representatives.isEmpty,"attaching a map while ride owns the engine touches no drive SDK")
+AMapDriveViewRep.dismantleUIView(rideView,coordinator:())
+check(AMapNaviDriveManager.shared.representatives.isEmpty,"map teardown under a foreign owner still touches no drive SDK")
+NavigationCoordinator.shared.active = .none
+AMapDriveViewRep.dismantleUIView(view,coordinator:())
+check(AMapNaviDriveManager.shared.representatives.isEmpty,"teardown with no owner also stays silent")
 print("PASS navigation UI: shared display, native hints, map padding, turn accessibility and SDK map lifecycle")
 ''')
 
@@ -315,6 +331,13 @@ final class ShareGuide {
 final class Settings { static let shared=Settings(); func resetTunnel() {} }
 final class BleLink { static let shared=BleLink(); func send(_ text:String) {} }
 final class AMapNaviDriveManager { var onStop:(()->Void)?; func stopNavi() { onStop?() } }
+final class RideBridge { static let shared=RideBridge() }
+final class WebMotorSession { static let shared=WebMotorSession() }
+final class NavigationCoordinator {
+    static let shared=NavigationCoordinator()
+    var driveManager:AMapNaviDriveManager?
+    func driveManagerIfActive()->AMapNaviDriveManager? { driveManager }
+}
 final class AMapNaviLocation {
     let coordinate:CLLocationCoordinate2D?
     let speed=60,heading=90.0
