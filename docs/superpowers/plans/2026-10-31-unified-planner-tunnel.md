@@ -51,8 +51,8 @@ Files: Settings.swift, NaviBridge.swift, NaviScreen.swift, WebMotor.swift, Conte
 
 - [x] Review mode/input lifecycle, stale callbacks, share imports, brightness races and restoration.
 - [x] Render the shared planning/navigation UI when useful, build arm64 iPhone and verify signing.
-- [ ] Update the diagnostic source copy while retaining traffic-light probing, increment integrated version to 0.16.0 build 13, install and launch on the connected iPhone.
-- [ ] Update release/testing notes, record checks, and report road-test limits explicitly.
+- [x] Update the diagnostic source copy while retaining traffic-light probing, increment integrated version to 0.16.0 build 13, install and launch on the connected iPhone.
+- [x] Update release/testing notes, record checks, and report road-test limits explicitly.
 
 ## Integration follow-up authorized by user
 
@@ -60,4 +60,4 @@ Files: Settings.swift, NaviBridge.swift, NaviScreen.swift, WebMotor.swift, Conte
 - Restore all12 selectable firmware map styles; preserve style preferences and reject native/material packet mismatches.
 - Independent review found invalid SDK link types could appear outside; fixed and re-reviewed, unknown evidence retains dimming. Policy suite now124 checks.
 - Corrected upstream maps test fixture paths to production cache generation3; 670map checks pass.
-- All CLI regression groups pass; signed arm64 Debug build13 compiles, app/extension signatures and device provisioning verified. Build13 installed successfully; launch pending device unlock.
+- All CLI regression groups pass; signed arm64 Debug build13 compiles, app/extension signatures and device provisioning verified. Build13 installed and launched successfully on the unlocked iPhone; process19670 verified running.
