@@ -34,6 +34,8 @@
 		504FC21197979CFC1DC66A01 /* PhoneClockSync.swift in Sources */ = {isa = PBXBuildFile; fileRef = 48D0B1D2E520C53C7B02F7BB /* PhoneClockSync.swift */; };
 		562A8BDFD5FE84EC55914B53 /* NaviSessionCallbacks.swift in Sources */ = {isa = PBXBuildFile; fileRef = FEA0D76EEBF01653D1E587E8 /* NaviSessionCallbacks.swift */; };
 		5990C5F0E5EAB70145D9379E /* NaviBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E30F4D8B800F5F593B76481 /* NaviBridge.swift */; };
+		2D84B7F1C63E90A5D812C4F7 /* RideBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A5C31E8F07B4D62C5E89A10 /* RideBridge.swift */; };
+		7F2B93D408AC5E17C0D1B6E3 /* NavigationCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E17A0C5D9283F61B7E40C21 /* NavigationCoordinator.swift */; };
 		5F7F5314C01A0D2CD404D52C /* AppTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = F78D5BA9B14F846A2B253F95 /* AppTheme.swift */; };
 		637279724CB8969F644B3AC5 /* WebMotor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 971EA77C65E2C989914BC80A /* WebMotor.swift */; };
 		6858BB9A033F1A212B9C5A4B /* WebRouteMetadata.swift in Sources */ = {isa = PBXBuildFile; fileRef = 39875FF77DBF047AA1EBA757 /* WebRouteMetadata.swift */; };
@@ -123,6 +125,8 @@
 		78E8A2064569BFBA9955CD8C /* Config.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Config.swift; sourceTree = "<group>"; };
 		7DC453D7088A6379C98DCD3B /* BleHandshakeClock.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BleHandshakeClock.swift; sourceTree = "<group>"; };
 		7E30F4D8B800F5F593B76481 /* NaviBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NaviBridge.swift; sourceTree = "<group>"; };
+		4E17A0C5D9283F61B7E40C21 /* NavigationCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NavigationCoordinator.swift; sourceTree = "<group>"; };
+		9A5C31E8F07B4D62C5E89A10 /* RideBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RideBridge.swift; sourceTree = "<group>"; };
 		81CC79C3CE39CD25B49AA08D /* LyricsTimeline.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = LyricsTimeline.swift; sourceTree = "<group>"; };
 		844A8F6DBE900D970FEE8BAB /* MapDefaults.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MapDefaults.swift; sourceTree = "<group>"; };
 		88F6F7FEE25CC563EEC49A1F /* CruiseIdleTimer.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CruiseIdleTimer.swift; sourceTree = "<group>"; };
@@ -259,6 +263,8 @@
 				B06991A4E6681422A044C310 /* Speech.swift */,
 				7E30F4D8B800F5F593B76481 /* NaviBridge.swift */,
 				FEA0D76EEBF01653D1E587E8 /* NaviSessionCallbacks.swift */,
+				4E17A0C5D9283F61B7E40C21 /* NavigationCoordinator.swift */,
+				9A5C31E8F07B4D62C5E89A10 /* RideBridge.swift */,
 				43332154B324B9A7004CB3C3 /* ArrivalPolicy.swift */,
 				929DE07BFB6EF4EEB08632D5 /* RouteMap.swift */,
 				04C63477564D9DE7E1066725 /* AmapShare.swift */,
@@ -489,6 +495,8 @@
 				ABBCC4AD2877914978EB58E7 /* Settings.swift in Sources */,
 				B88940BFDB14C57288B4528D /* Speech.swift in Sources */,
 				5990C5F0E5EAB70145D9379E /* NaviBridge.swift in Sources */,
+				7F2B93D408AC5E17C0D1B6E3 /* NavigationCoordinator.swift in Sources */,
+				2D84B7F1C63E90A5D812C4F7 /* RideBridge.swift in Sources */,
 				562A8BDFD5FE84EC55914B53 /* NaviSessionCallbacks.swift in Sources */,
 				96EEC660FCE57B693CF21764 /* ArrivalPolicy.swift in Sources */,
 				10EFB4D9DE7D69DC0E92AA58 /* RouteMap.swift in Sources */,
