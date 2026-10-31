@@ -330,7 +330,11 @@ final class ShareGuide {
 }
 final class Settings { static let shared=Settings(); func resetTunnel() {} }
 final class BleLink { static let shared=BleLink(); func send(_ text:String) {} }
-final class AMapNaviDriveManager { var onStop:(()->Void)?; func stopNavi() { onStop?() } }
+final class AMapNaviDriveManager {
+    var onStop:(()->Void)?
+    var stopNaviCalls=0
+    func stopNavi() { stopNaviCalls += 1; onStop?() }
+}
 final class RideBridge { static let shared=RideBridge() }
 final class WebMotorSession { static let shared=WebMotorSession() }
 final class NavigationCoordinator {
@@ -401,11 +405,28 @@ begin(cancelled,simulate:true)
 cancelled.mnLocation(cancelled.manager,location:AMapNaviLocation(32,118))
 cancelled.emuPaused=true
 cancelled.manager.onStop={cancelled.mnEmuEnd(cancelled.manager)}
+NavigationCoordinator.shared.driveManager=cancelled.manager   // 驾车引擎属主：stopNavi 正常触达
+let stopsBefore=cancelled.manager.stopNaviCalls
 cancelled.stop()
+check(cancelled.manager.stopNaviCalls==stopsBefore+1,"stop touches the SDK while drive owns the engine")
 expectPhone(cancelled,"manual simulation exit restores phone position despite synchronous end callback")
 check(!cancelled.emulating && !cancelled.emuPaused,"manual exit clears simulation flags")
 check(cancelled.lastLocation==nil,"manual exit clears cached simulation location")
 
+// 独立导航接管（WebMotor.start → NaviBridge.stop）时引擎可能已切到骑行：
+// stop 不得触碰或重建不属于驾车的单例，但仍要完成自身收尾
+NavigationCoordinator.shared.driveManager=nil              // 骑行引擎属主（或尚未创建）
+phone()
+let takenOver=NaviBridge()
+begin(takenOver,simulate:true)
+takenOver.mnLocation(takenOver.manager,location:AMapNaviLocation(32,118))
+takenOver.manager.onStop={takenOver.mnEmuEnd(takenOver.manager)}
+takenOver.stop()
+check(takenOver.manager.stopNaviCalls==0,"takeover stop never touches a drive engine the coordinator does not own")
+check(!takenOver.navigating && !takenOver.emulating,"takeover stop still finishes its own navigation state")
+expectPhone(takenOver,"takeover stop still restores the live phone position")
+
+NavigationCoordinator.shared.driveManager=cancelled.manager
 begin(cancelled,simulate:false)
 expectPhone(cancelled,"a new GPS trip must not reuse the previous simulator position")
 cancelled.mnLocation(cancelled.manager,location:AMapNaviLocation(31.23,121.47))

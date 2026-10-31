@@ -478,7 +478,9 @@ final class NaviBridge: NSObject, ObservableObject {
     func stop() {
         // stopNavi may emit emulator-end immediately. Close the gate first.
         arrival.cancel(arrival.generation)
-        manager.stopNavi()
+        // 独立导航接管时会调用这里：引擎可能已切到骑行（或尚未创建），
+        // 只有驾车引擎是当前所有者时才允许触碰，绝不为停止而重建旧单例
+        NavigationCoordinator.shared.driveManagerIfActive()?.stopNavi()
         finish("C", "已退出导航")
     }
 
