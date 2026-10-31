@@ -11,15 +11,26 @@ final class RoutePlanner: ObservableObject {
     @Published var start: MotorPoint? { didSet { inputsChanged() } }
     @Published var end: MotorPoint? { didSet { inputsChanged() } }
     @Published var vias: [MotorPoint]=[] { didSet { inputsChanged() } }
+    /// 自行车用官方骑行 SDK 引擎（Task 1 试验开关，默认关：仍走网页兼容路线）。
+    /// 打开后走 RideBridge：SDK 算路 → 选路 → 模拟导航；失败时明确分类错误，不静默降级。
+    @Published var officialRide = UserDefaults.standard.object(forKey: "ride_engine_official") as? Bool ?? false {
+        didSet {
+            UserDefaults.standard.set(officialRide, forKey: "ride_engine_official")
+            inputsChanged()
+        }
+    }
     @Published var routes: [MotorRoute]=[]
     @Published var selected=0
     @Published var busy=false
     @Published var message=""
     @Published private(set) var drivingPlanned=false
+    @Published private(set) var ridePlanned=false
     @Published private(set) var share: AmapShare.Route?
     private var generation=UUID()
     private var task: Task<Void,Never>?
     var usesDriving: Bool { mode == .driving || (mode == .motorcycle && share != nil) }
+    /// 自行车走官方骑行引擎（SDK）；导入的分享路线仍按独立路线走兼容导航
+    var usesOfficialRide: Bool { mode == .bicycle && officialRide && share == nil }
     func inputsChanged() {
         let imported = share != nil
         share=nil
@@ -27,8 +38,12 @@ final class RoutePlanner: ObservableObject {
         message=imported ? "输入或出行方式已更改，请重新规划；不再沿用分享路线" : "请规划当前路线"
     }
     func invalidate() {
-        generation=UUID();task?.cancel();task=nil;routes=[];selected=0;busy=false;drivingPlanned=false
-        if !NaviBridge.shared.navigating && !NaviBridge.shared.cruising && !WebMotorSession.shared.running { NaviBridge.shared.clearPlan() }
+        generation=UUID();task?.cancel();task=nil;routes=[];selected=0;busy=false
+        drivingPlanned=false;ridePlanned=false
+        if !NavigationCoordinator.shared.navigationActive && !NaviBridge.shared.cruising {
+            NaviBridge.shared.clearPlan()
+            RideBridge.shared.clearPlan()
+        }
     }
     func setDestination(_ point: MotorPoint) { start=nil;vias=[];end=point }
     func importShare(_ route: AmapShare.Route) {
@@ -48,7 +63,7 @@ final class RoutePlanner: ObservableObject {
         message="已恢复起终点和途经点，点击规划获取最新路线"
     }
     func plan() {
-        guard !WebMotorSession.shared.running,!NaviBridge.shared.navigating else { message="请先结束当前导航或巡航";return }
+        guard !NavigationCoordinator.shared.navigationActive else { message="请先结束当前导航或巡航";return }
         if NaviBridge.shared.cruising {NaviBridge.shared.stopCruise()}
         invalidate()
         guard !Settings.shared.keysMissing else { message="请先在地图 Key 页面填写自己的高德 iOS Key";return }
@@ -59,6 +74,11 @@ final class RoutePlanner: ObservableObject {
             NaviBridge.shared.plan(toLat:end.lat,lng:end.lng,share:share,origin:share == nil ? start : nil,
                                    viaPoints:vias.map{NaviBridge.Via(name:$0.name,lat:$0.lat,lng:$0.lng)})
             drivingPlanned=true;message="";return
+        }
+        if usesOfficialRide {
+            // 官方骑行（Task 1）：SDK 独立算路；起点没手选时由 SDK 用当前位置
+            RideBridge.shared.plan(toLat:end.lat,lng:end.lng,origin:start)
+            ridePlanned=true;message="";return
         }
         let origin: MotorPoint
         if let start=start { origin=start }
@@ -104,6 +124,7 @@ struct RoutePlannerView: View {
     @ObservedObject var model: RoutePlanner
     @ObservedObject var navi=NaviBridge.shared
     @ObservedObject var guide=WebMotorSession.shared
+    @ObservedObject var ride=RideBridge.shared
     @ObservedObject var settings=Settings.shared
     @State private var pick: Int? // 0 origin, 1 destination
     @State private var login=false
@@ -131,41 +152,23 @@ struct RoutePlannerView: View {
                         if model.usesDriving {
                             Toggle("不走高速",isOn:$settings.avoidHighway).onChange(of:settings.avoidHighway){_ in model.inputsChanged()}
                         }
-                        PillButton(title:model.busy || navi.calculating ? "正在规划…" : "规划\(model.mode.rawValue)路线",color:ContentView.pink,enabled:!model.busy && !navi.calculating && model.end != nil){model.plan()}
+                        if model.mode == .bicycle {
+                            // Task 1：自行车可选官方骑行引擎（默认关 = 网页兼容路线）
+                            Toggle("官方骑行引擎（SDK 试验）",isOn:$model.officialRide)
+                        }
+                        PillButton(title:model.busy || navi.calculating || ride.calculating ? "正在规划…" : "规划\(model.mode.rawValue)路线",color:ContentView.pink,enabled:!model.busy && !navi.calculating && !ride.calculating && model.end != nil){model.plan()}
                     }
                     if model.mode != .driving {Button("路线历史"){showHistory=true}.foregroundColor(ContentView.cyan)}
                     if !model.message.isEmpty {Text(ContentView.userMessage(model.message)).font(.footnote).foregroundColor(ContentView.sub)}
                     if model.share != nil {Text("已载入高德分享路线；更改输入或方式将重新规划。").font(.caption).foregroundColor(.orange)}
                     if model.mode == .motorcycle && !model.usesDriving {Button("高德登录／验证"){login=true}.font(.footnote).foregroundColor(ContentView.cyan)}
-                    if model.usesDriving && model.drivingPlanned {
-                        Text(ContentView.userMessage(navi.info)).font(.footnote).foregroundColor(ContentView.sub)
-                        if !navi.shareMatch.isEmpty {Text(navi.shareMatch).font(.caption).foregroundColor(ContentView.sub)}
-                        if !navi.routeOptions.isEmpty {
-                            RouteMapView(routes:navi.routeOptions,selected:navi.selectedRouteID,
-                                         ghost:navi.shareRoute?.pts.map{CLLocationCoordinate2D(latitude:$0.lat,longitude:$0.lng)} ?? [],
-                                         dest:navi.destCoord,vias:navi.vias.map{CLLocationCoordinate2D(latitude:$0.lat,longitude:$0.lng)},night:settings.paletteNight)
-                                .frame(height:260).clipShape(RoundedRectangle(cornerRadius:18))
-                            HStack{ForEach(navi.routeOptions){o in RouteCard(option:o,selected:o.id == navi.selectedRouteID).onTapGesture{navi.select(routeID:o.id)}}}
-                        }
-                    } else if let route=selectedRoute {
-                        MotorMap(route:route,position:nil,overview:true).frame(height:260).clipShape(RoundedRectangle(cornerRadius:18))
-                        if !route.detailedGuidance {Text("已取得路线轨迹，暂无分段转向指引，请按地图路线行进。").font(.footnote).foregroundColor(ContentView.sub)}
-                        ForEach(Array(model.routes.enumerated()),id:\.offset){i,r in
-                            Button{model.selected=i}label:{
-                                HStack{
-                                    Image(systemName:model.selected==i ? "checkmark.circle.fill" : "circle")
-                                    VStack(alignment:.leading,spacing:4){Text("方案 \(i+1) · \(NaviBridge.durText(r.seconds))").bold();Text(NaviBridge.distText(r.totalMeters)).font(.subheadline)}
-                                    Spacer()
-                                }.padding(14).background(RoundedRectangle(cornerRadius:14).fill(ContentView.card))
-                            }
-                        }
-                    }
+                    routeResults
                     Picker("模拟速度",selection:$simulationSpeed){ForEach(NavigationSpeed.values,id:\.self){Text("\($0) km/h").tag($0)}}.pickerStyle(.segmented)
                     HStack {
-                        PillButton(title:"开始导航",color:ContentView.pink,enabled:ready){begin(false)}
+                        PillButton(title:"开始导航",color:ContentView.pink,enabled:ready && !model.usesOfficialRide){begin(false)}
                         PillButton(title:"模拟导航",color:AppTheme.accent,enabled:ready){begin(true)}
                     }
-                    Text(model.usesDriving ? (model.share == nil ? "驾车路线支持路况、车道和完整导航提示。" : "参考高德分享的路线，沿用驾车策略导航。") : model.mode == .motorcycle ? "按摩托车方案规划，需要时可完成高德登录或验证。" : "按自行车路线规划，暂不支持途经点。")
+                    Text(footerHint)
                         .font(.caption).foregroundColor(ContentView.sub)
                     if settings.tunnelAuto {
                         Text(model.usesDriving ? "本方式支持隧道自动调暗。" : "本方式可在导航页手动开启隧道模式，暂不自动识别隧道。")
@@ -188,13 +191,110 @@ struct RoutePlannerView: View {
 
     }
     private var selectedRoute: MotorRoute? {model.routes.indices.contains(model.selected) ? model.routes[model.selected] : nil}
-    private var ready: Bool { !model.busy && !guide.running && !navi.navigating && (model.usesDriving ? model.drivingPlanned && navi.routeReady : selectedRoute != nil) }
+    /// 规划结果区：驾车 SDK / 官方骑行 SDK（Task 1）/ 网页路线 三选一展示
+    @ViewBuilder private var routeResults: some View {
+        if model.usesDriving && model.drivingPlanned {
+            Text(ContentView.userMessage(navi.info)).font(.footnote).foregroundColor(ContentView.sub)
+            if !navi.shareMatch.isEmpty {Text(navi.shareMatch).font(.caption).foregroundColor(ContentView.sub)}
+            if !navi.routeOptions.isEmpty {
+                let ghost: [CLLocationCoordinate2D] = navi.shareRoute?.pts.map{CLLocationCoordinate2D(latitude:$0.lat,longitude:$0.lng)} ?? []
+                let viaPins: [CLLocationCoordinate2D] = navi.vias.map{CLLocationCoordinate2D(latitude:$0.lat,longitude:$0.lng)}
+                RouteMapView(routes:navi.routeOptions,selected:navi.selectedRouteID,
+                             ghost:ghost,dest:navi.destCoord,vias:viaPins,night:settings.paletteNight)
+                    .frame(height:260).clipShape(RoundedRectangle(cornerRadius:18))
+                HStack{ForEach(navi.routeOptions){o in RouteCard(option:o,selected:o.id == navi.selectedRouteID).onTapGesture{navi.select(routeID:o.id)}}}
+            }
+        } else if model.usesOfficialRide && model.ridePlanned {
+            // Task 1：官方骑行 SDK 的算路 / 选路（复用驾车卡片与预览地图）
+            Text(ContentView.userMessage(ride.info)).font(.footnote).foregroundColor(ContentView.sub)
+            if let failure=ride.failure {
+                Text("\(failure.title)：\(failure.detail)").font(.footnote).foregroundColor(.orange)
+            }
+            if ride.planFailed {
+                PillButton(title:"重新规划",color:ContentView.pink){model.plan()}
+            }
+            if !ride.routeOptions.isEmpty {
+                let dest: CLLocationCoordinate2D? = model.end.map { CLLocationCoordinate2D(latitude: $0.lat, longitude: $0.lng) }
+                RouteMapView(routes:ride.routeOptions,selected:ride.selectedRouteID,
+                             ghost:[],dest:dest,night:settings.paletteNight)
+                    .frame(height:260).clipShape(RoundedRectangle(cornerRadius:18))
+                HStack{ForEach(ride.routeOptions){o in RouteCard(option:o,selected:o.id == ride.selectedRouteID).onTapGesture{ride.select(routeID:o.id)}}}
+            }
+        } else if let route=selectedRoute {
+            MotorMap(route:route,position:nil,overview:true).frame(height:260).clipShape(RoundedRectangle(cornerRadius:18))
+            if !route.detailedGuidance {Text("已取得路线轨迹，暂无分段转向指引，请按地图路线行进。").font(.footnote).foregroundColor(ContentView.sub)}
+            ForEach(Array(model.routes.enumerated()),id:\.offset){i,r in
+                Button{model.selected=i}label:{
+                    HStack{
+                        Image(systemName:model.selected==i ? "checkmark.circle.fill" : "circle")
+                        VStack(alignment:.leading,spacing:4){Text("方案 \(i+1) · \(NaviBridge.durText(r.seconds))").bold();Text(NaviBridge.distText(r.totalMeters)).font(.subheadline)}
+                        Spacer()
+                    }.padding(14).background(RoundedRectangle(cornerRadius:14).fill(ContentView.card))
+                }
+            }
+        }
+    }
+    private var ready: Bool {
+        !model.busy && !guide.running && !navi.navigating && !ride.navigating &&
+            (model.usesDriving ? model.drivingPlanned && navi.routeReady
+             : model.usesOfficialRide ? model.ridePlanned && ride.routeReady
+             : selectedRoute != nil)
+    }
+    private var footerHint: String {
+        if model.usesDriving { return model.share == nil ? "驾车路线支持路况、车道和完整导航提示。" : "参考高德分享的路线，沿用驾车策略导航。" }
+        if model.usesOfficialRide { return "官方骑行引擎（试验）：SDK 骑行路线，暂不支持途经点；真实导航待验证后开放，当前可用模拟导航。" }
+        return model.mode == .motorcycle ? "按摩托车方案规划，需要时可完成高德登录或验证。" : "按自行车路线规划，暂不支持途经点。"
+    }
     private func begin(_ simulate:Bool){
         guard ready else{model.message="请先结束当前导航或规划当前路线";return}
         if let end=model.end {History.shared.add(SearchService.Place(name:end.name,address:"",lat:end.lat,lng:end.lng))}
         if navi.cruising {navi.stopCruise()}
         if model.usesDriving {navi.preferredSimulationSpeed=simulationSpeed;navi.start(emulate:simulate)}
+        else if model.usesOfficialRide {ride.preferredSimulationSpeed=simulationSpeed;ride.start(emulate:simulate)}
         else if let route=selectedRoute {MotorPlanHistory.shared.save(route);guide.start(route,simulate:simulate,simulationSpeed:simulationSpeed)}
+    }
+}
+
+/// Task 1 的最小骑行导航画面：只服务“算路 → 选路 → 模拟导航”链路验证。
+/// 地图优先骑行界面、真实导航与圆屏 BLE 属后续任务，不在本屏实现。
+struct RideNaviScreen: View {
+    @ObservedObject var ride = RideBridge.shared
+    @ObservedObject var settings = Settings.shared
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        ZStack {
+            AppTheme.bg.ignoresSafeArea()
+            NavigationOverlay(readout: readout, muted: settings.voiceMuted,
+                              onOverview: {}, onMute: toggleMute,
+                              onSettings: { dismiss() }, onEnd: exitNavi,
+                              onPause: { ride.toggleEmuPause() },
+                              onCycleSpeed: { ride.cycleEmuSpeed() },
+                              onLayout: { _ in }) {
+                if ride.rerouteFailed {
+                    HStack {
+                        Text("重新规划失败，已保留当前路线").font(.caption)
+                        Spacer()
+                        Button("重试") { ride.retryRecalculate() }.frame(minHeight: 44)
+                    }
+                }
+            }
+        }
+    }
+
+    private var readout: NavigationReadout {
+        NavigationReadout(direction: ride.uiDir, turnMetres: ride.uiDist, instruction: ride.uiRoad,
+                          status: ride.info, speed: ride.uiSpeed, remaining: ride.uiRemainM,
+                          remainingSeconds: ride.uiRemainS, simulation: ride.emulating, paused: ride.emuPaused,
+                          simulationSpeed: ride.emuSpeed, arrived: ride.showArrived)
+    }
+    private func toggleMute() {
+        settings.voiceMuted.toggle()
+        if settings.voiceMuted { Speech.shared.stopNow() }
+    }
+    private func exitNavi() {
+        ride.stop()
+        dismiss()
     }
 }
 

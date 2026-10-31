@@ -40,12 +40,23 @@ final class NaviBridge {
     func plan(toLat:Double,lng:Double,share:AmapShare.Route?=nil,origin:MotorPoint?=nil,viaPoints:[Via]=[]){plans += 1;self.origin=origin;vias=viaPoints;imported=share != nil}
 }
 final class LocationService { static let shared=LocationService(); var location:CLLocation?; func start(){} }
+final class RideBridge {
+    static let shared=RideBridge()
+    var navigating=false; var plans=0; var clears=0; var origin:MotorPoint?
+    func plan(toLat:Double,lng:Double,origin:MotorPoint?){plans += 1;self.origin=origin}
+    func clearPlan(){clears += 1}
+}
+final class NavigationCoordinator {
+    static let shared=NavigationCoordinator()
+    var navigationActive:Bool { NaviBridge.shared.navigating || RideBridge.shared.navigating || WebMotorSession.shared.running }
+}
 enum MapGeo { static func wgsToGcj(_ lat:Double,_ lng:Double)->(lat:Double,lng:Double){(lat,lng)} }
 '''
 tests = r'''
 @main struct Tests {
     @MainActor static func settle() async { for _ in 0..<20 { await Task.yield() } }
     @MainActor static func main() async {
+        UserDefaults.standard.removeObject(forKey:"ride_engine_official") // keep the run hermetic
         let p=RoutePlanner()
         p.start=MotorPoint(lat:31,lng:121,name:"origin")
         p.end=MotorPoint(lat:32,lng:122,name:"first")
@@ -100,6 +111,26 @@ tests = r'''
         p.invalidate();p.plan()
         assert(NaviBridge.shared.clears==clears,"invalidating must not clear an active navigation")
         assert(NaviBridge.shared.plans==plans,"planning must not create concurrent sessions")
+        NaviBridge.shared.navigating=false
+        // 官方骑行引擎：自行车模式下经 RideBridge 走 SDK 算路（Task 1 最小链路）
+        let rideClears=RideBridge.shared.clears
+        p.invalidate()
+        assert(RideBridge.shared.clears==rideClears+1,"invalidating also clears the official ride plan")
+        p.officialRide=true
+        let webRequests=MotorRoutes.requests.count, drivePlans=NaviBridge.shared.plans
+        p.plan();await settle()
+        assert(p.ridePlanned && RideBridge.shared.plans==1 && RideBridge.shared.origin?.lat==31,"official ride bicycle plans go to RideBridge with the manual origin")
+        assert(MotorRoutes.requests.count==webRequests && NaviBridge.shared.plans==drivePlans,"official ride bypasses the web planner and the driving SDK")
+        RideBridge.shared.navigating=true
+        let ridePlans=RideBridge.shared.plans
+        p.invalidate();p.plan()
+        assert(RideBridge.shared.plans==ridePlans,"an official ride navigation blocks replanning")
+        assert(p.message.contains("导航"),"the block reason is surfaced")
+        RideBridge.shared.navigating=false
+        p.end=MotorPoint(lat:35,lng:125,name:"moved")
+        assert(!p.ridePlanned,"geometry changes invalidate the official ride plan")
+        p.officialRide=false
+        UserDefaults.standard.removeObject(forKey:"ride_engine_official")
         print("PASS: unified planner lifecycle")
     }
 }
@@ -125,14 +156,19 @@ enum MotorRequest {
 }
 enum AmapShare { struct Route { let id:Int } }
 final class WebMotorSession { static let shared=WebMotorSession(); var running=false }
+final class RideBridge { static let shared=RideBridge(); var navigating=false }
+final class NavigationCoordinator {
+    static let shared=NavigationCoordinator()
+    var navigationActive:Bool { bridge.navigating || RideBridge.shared.navigating || WebMotorSession.shared.running }
+}
 final class NaviBridge {
     struct Via { let name:String; let lat:Double; let lng:Double }
-    var navigating=false, cruising=false, planFailed=false
+    var navigating=false, cruising=false, planFailed=false, calculating=false
     var info="", destLat=Double.nan, destLng=Double.nan
     var planOrigin:(Double,Double)?, shareRoute:AmapShare.Route?, vias:[Via]=[]
     var attachments=0, replans=0, clears=0
     var onReplan:(()->Void)?
-    func attach(){attachments += 1}
+    @discardableResult func attach()->Bool{attachments += 1;return true}
     func replan(){replans += 1;onReplan?()}
     func clearPlan(){clears += 1;destLat = .nan;destLng = .nan;planOrigin=nil;shareRoute=nil;vias=[]}
 ''' + plan + r'''
