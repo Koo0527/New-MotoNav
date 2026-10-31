@@ -154,6 +154,16 @@ enum MotorRoutes {
     }
 }
 
+/// Independent takeover notices. The takeover itself is never blocked (engine ownership rules);
+/// these are brief in-app hints so a reclaimed official-ride plan does not disappear silently.
+enum IndependentTakeoverPolicy {
+    /// 官方骑行处于“已规划未导航”时被独立导航启动抢占：返回提示文案；其余情况返回 nil。
+    static func ridePlanNotice(officialRidePlanned: Bool, rideNavigating: Bool) -> String? {
+        guard officialRidePlanned, !rideNavigating else { return nil }
+        return "已规划的官方骑行路线被本次独立导航取代"
+    }
+}
+
 /// Independent route following. Never converts motor or bicycle routes into a drive SDK route.
 final class WebMotorSession: ObservableObject {
     static let shared = WebMotorSession()
@@ -168,6 +178,8 @@ final class WebMotorSession: ObservableObject {
     @Published var position: MotorPoint?
     @Published var arrived = false
     @Published var overview = false
+    /// 官方骑行规划被独立导航抢占时的短暂提示（4 秒后自动消失；不阻断接管）
+    @Published var ridePlanNotice = ""
     private var cum: [Double] = [], progress = 0.0, timer: Timer?, token = UUID(), announced = ""
     private var stepIndex = 0, offCount = 0, rerouting = false, lastReplan = Date.distantPast
     private var roadSent = "", footerSent = ""
@@ -186,6 +198,15 @@ final class WebMotorSession: ObservableObject {
         guard route.points.count>=2,!route.steps.isEmpty,!NavigationCoordinator.shared.navigationActive,
               (route.cum.last ?? 0)>=3,(route.cum.last ?? 0)<=5_000_000,
               route.steps.allSatisfy({route.points.indices.contains($0.end)}) else { return }
+        // 引擎抢占提示（产品裁定：不阻断接管）：官方骑行“已规划未导航”的路线被本次独立导航取代
+        if let notice = IndependentTakeoverPolicy.ridePlanNotice(officialRidePlanned: RideBridge.shared.routeReady,
+                                                                 rideNavigating: RideBridge.shared.navigating) {
+            ridePlanNotice = notice
+            DispatchQueue.main.asyncAfter(deadline:.now()+4) { [weak self] in
+                guard let self = self, self.ridePlanNotice == notice else { return }
+                self.ridePlanNotice = ""
+            }
+        }
         stop(); NaviBridge.shared.stop(); NaviBridge.shared.stopCruise(); RideBridge.shared.stop()
         self.route = route; cum = route.cum; progress = 0; stepIndex = 0; simulation = simulate; paused = false; arrived = false; running = true
         tracker=MotorRouteTracker(route.points);confirmedArrival=false;metadataSuspended=false;simulationTick=nil;realHeading=nil
