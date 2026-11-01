@@ -198,9 +198,10 @@ print("PASS rides: append-only storage, legacy files, interrupted tail recovery,
 
 navigation = (root / "MotoNav/NaviScreen.swift").read_text()
 readout = navigation[navigation.index("struct NavigationReadout"):navigation.index("struct NavigationPanelHeights")]
+layout = navigation[navigation.index("enum NaviHudLayout"):navigation.index("/// Three navigation engines")]
 navigation = navigation[navigation.index("final class DriveViewController:"):navigation.index("struct NaviScreen:")]
 # UIKit's edge-inset return type is replaced only at the macOS test boundary.
-navigation = navigation.replace("@objc(driveViewEdgePadding:)", "")
+navigation = navigation.replace("@objc(driveViewEdgePadding:)", "").replace("@objc(rideViewEdgePadding:)", "")
 run("navigation-ui", r'''
 import Foundation
 import CoreGraphics
@@ -214,7 +215,12 @@ struct UIEdgeInsets: Equatable {
     var top:CGFloat,left:CGFloat,bottom:CGFloat,right:CGFloat
     static let zero=Self(top:0,left:0,bottom:0,right:0)
 }
+enum NaviBridge {
+    static func distText(_ m:Int)->String { "\(m) 米" }
+    static func durText(_ s:Int)->String { "\(s) 秒" }
+}
 @objc protocol AMapNaviDriveViewDelegate {}
+@objc protocol AMapNaviRideViewDelegate {}
 enum AMapNaviViewMapModeType { case day,night }
 enum AMapNaviDriveViewShowMode { case overview,carPositionLocked }
 final class AMapNaviDriveView: NSObject {
@@ -235,14 +241,34 @@ final class AMapNaviDriveManager {
     func addDataRepresentative(_ view:AMapNaviDriveView) { representatives.append(view) }
     func removeDataRepresentative(_ view:AMapNaviDriveView) { representatives.removeAll{$0 === view} }
 }
+final class AMapNaviRideManager {
+    static let shared=AMapNaviRideManager()
+    static func sharedInstance()->AMapNaviRideManager { shared }
+    var representatives:[AMapNaviRideView]=[]
+    func addDataRepresentative(_ view:AMapNaviRideView) { representatives.append(view) }
+    func removeDataRepresentative(_ view:AMapNaviRideView) { representatives.removeAll{$0 === view} }
+}
+enum AMapNaviRideViewShowMode { case overview,carPositionLocked }
+final class AMapNaviRideView: NSObject {
+    var delegate:AMapNaviRideViewDelegate?
+    var showMode=AMapNaviRideViewShowMode.carPositionLocked
+    var showUIElements=true
+    var screenAnchor=CGPoint(x:0.5,y:0.5)
+    var bounds=CGRect(x:0,y:0,width:393,height:852)
+    var overviewUpdates=0
+    init(frame:CGRect) { super.init() }
+    func updateRoutePolylineInTheVisualRangeWhenTheShowModeIsOverview() { overviewUpdates+=1 }
+}
 final class NavigationCoordinator {
     static let shared=NavigationCoordinator()
     enum Engine { case none, drive, ride }
     var active:Engine = .drive
     func attachDriveMap(_ view:AMapNaviDriveView) { guard active == .drive else { return }; AMapNaviDriveManager.shared.addDataRepresentative(view) }
     func detachDriveMap(_ view:AMapNaviDriveView) { guard active == .drive else { return }; AMapNaviDriveManager.shared.removeDataRepresentative(view) }
+    func attachRideMap(_ view:AMapNaviRideView) { guard active == .ride else { return }; AMapNaviRideManager.shared.representatives.append(view) }
+    func detachRideMap(_ view:AMapNaviRideView) { guard active == .ride else { return }; AMapNaviRideManager.shared.representatives.removeAll{$0 === view} }
 }
-''' + readout + navigation + r'''
+''' + readout + layout + navigation + r'''
 let drive=DriveViewController()
 let renderer=AMapDriveViewRep(controller:drive,night:true)
 let view=renderer.makeUIView(context:())
@@ -277,6 +303,26 @@ for (direction,symbol,label) in [("L","arrow.turn.up.left","左转"),("R","arrow
     readout.direction=direction
     check(readout.turn.symbol==symbol && readout.turn.label==label,"both engines need the same visible and spoken turn direction")
 }
+// 缺失数据显示"—"，不填充虚构提示
+var missing=NavigationReadout(direction:"S",turnMetres:-1,instruction:"",status:"",speed:0,remaining:-1,
+                              remainingSeconds:0,simulation:false,paused:false,simulationSpeed:60,arrived:false)
+check(missing.turnDistanceText=="—" && missing.remainingText=="剩余 —" && missing.etaText=="到达时间 —",
+      "missing guidance data renders an em dash instead of an invented value")
+var present=NavigationReadout(direction:"S",turnMetres:1200,instruction:"",status:"",speed:0,remaining:3400,
+                              remainingSeconds:120,simulation:false,paused:false,simulationSpeed:60,arrived:false)
+check(present.turnDistanceText=="1200 米" && present.remainingText=="剩余 3400 米" && present.etaText=="约 120 秒 到",
+      "real guidance data renders the true values")
+// 统一 HUD 布局：按实测卡片高度设置地图可视区域（动态字号、安全区由实测传入）
+var insets=NaviHudLayout.mapEdgeInsets(panelTop:150,panelBottom:200,safeTop:59,safeBottom:34)
+check(insets==UIEdgeInsets(top:225,left:16,bottom:250,right:16),
+      "map insets follow measured panel heights, safe areas and breathing margin")
+check(NaviHudLayout.mapEdgeInsets(panelTop:0,panelBottom:0,safeTop:0,safeBottom:0,margin:0) == .zero,
+      "zero inputs collapse to zero insets")
+let anchor=NaviHudLayout.carAnchor(boundsHeight:852,padding:UIEdgeInsets(top:225,left:16,bottom:250,right:16))
+check(abs(anchor.y-(225+0.6*(852-475))/852)<0.0001 && anchor.x==0.5,
+      "the vehicle anchor sits at about 60% of the HUD-free visible area")
+check(NaviHudLayout.carAnchor(boundsHeight:852,padding:UIEdgeInsets(top:900,left:16,bottom:0,right:16)).y==0.85,
+      "the anchor stays clamped inside the map")
 AMapDriveViewRep.dismantleUIView(view,coordinator:())
 check(AMapNaviDriveManager.shared.representatives.isEmpty,"dismissal must detach the map")
 // 引擎所有权：非驾车所有者时，地图绑定/解绑不得触碰驾车单例（切换骑行后地图销毁不得重建它）
@@ -288,6 +334,39 @@ check(AMapNaviDriveManager.shared.representatives.isEmpty,"map teardown under a 
 NavigationCoordinator.shared.active = .none
 AMapDriveViewRep.dismantleUIView(view,coordinator:())
 check(AMapNaviDriveManager.shared.representatives.isEmpty,"teardown with no owner also stays silent")
+// 官方骑行地图容器：与驾车同一套统一 HUD 规则（默认隐藏 SDK 自带 UI、边距、锚点、属主门禁）
+NavigationCoordinator.shared.active = .ride
+let rideCtl=RideViewController()
+let rideRenderer=AMapRideViewRep(controller:rideCtl)
+let rv=rideRenderer.makeUIView(context:())
+check(!rv.showUIElements,"ride navigation must also leave room for the shared App interface")
+check(AMapNaviRideManager.shared.representatives.count==1,"the ride map attaches to the ride engine data")
+check(!rideCtl.isOverview,"ride view starts in follow mode")
+rideCtl.toggleOverview()
+check(rv.showMode == .overview && rideCtl.isOverview,"the shared overview button really toggles into overview")
+rideCtl.toggleOverview()
+check(rv.showMode != .overview,"and back into follow mode")
+rv.showMode = .overview
+var ridePadded=rideRenderer
+ridePadded.edgePadding=UIEdgeInsets(top:200,left:16,bottom:260,right:16)
+ridePadded.updateUIView(rv,context:())
+check(rv.overviewUpdates==1 && rideCtl.mapPadding(rv)==ridePadded.edgePadding,
+      "ride overview must avoid the measured panels")
+check(abs(rv.screenAnchor.y-NaviHudLayout.carAnchor(boundsHeight:rv.bounds.height,padding:ridePadded.edgePadding).y)<0.0001,
+      "ride anchor follows the same pure layout rule as drive")
+var rideFull=rideRenderer
+rideFull.showNativeUI=true
+rideFull.updateUIView(rv,context:())
+check(rv.showUIElements,"full ride navigation restores the SDK interface")
+check(rideCtl.mapPadding(rv) == .zero,"the SDK ride interface controls its own visible map area")
+AMapRideViewRep.dismantleUIView(rv,coordinator:())
+check(AMapNaviRideManager.shared.representatives.isEmpty,"ride map dismissal detaches from the engine")
+NavigationCoordinator.shared.active = .drive
+let strayRide=rideRenderer.makeUIView(context:())
+check(AMapNaviRideManager.shared.representatives.isEmpty && AMapNaviDriveManager.shared.representatives.isEmpty,
+      "attaching a ride map while drive owns the engine touches no ride SDK and rebuilds no drive singleton")
+AMapRideViewRep.dismantleUIView(strayRide,coordinator:())
+check(AMapNaviRideManager.shared.representatives.isEmpty,"ride map teardown under a foreign owner stays silent")
 print("PASS navigation UI: shared display, native hints, map padding, turn accessibility and SDK map lifecycle")
 ''')
 

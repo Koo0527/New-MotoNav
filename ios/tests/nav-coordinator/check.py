@@ -51,6 +51,9 @@ final class AMapNaviRideManager {
     static var shared: AMapNaviRideManager?
     static var destroyResult = true
     static var destroys = 0, creates = 0
+    var rideRepresentatives: [AMapNaviRideView] = []
+    func addDataRepresentative(_ view: AMapNaviRideView) { rideRepresentatives.append(view) }
+    func removeDataRepresentative(_ view: AMapNaviRideView) { rideRepresentatives.removeAll { $0 === view } }
     static func sharedInstance() -> AMapNaviRideManager {
         if shared == nil { shared = AMapNaviRideManager(); creates += 1; events.append("ride.create") }
         return shared!
@@ -62,6 +65,7 @@ final class AMapNaviRideManager {
     }
 }
 final class AMapNaviDriveView {}
+final class AMapNaviRideView {}
 '''
 
 tests = r'''
@@ -141,6 +145,19 @@ tests = r'''
         check(AMapNaviDriveManager.creates == driveCreates && events.isEmpty, "detach after a switch touches no SDK at all")
         coordinator.attachDriveMap(view)
         check(AMapNaviRideManager.shared != nil && AMapNaviDriveManager.creates == driveCreates, "attach is also owner-gated")
+        // 骑行地图（AMapNaviRideView）走同一套属主门禁：骑行属主才绑定，切换/无属主不得重建单例
+        let rideMap = AMapNaviRideView()
+        coordinator.attachRideMap(rideMap)
+        check(AMapNaviRideManager.shared!.rideRepresentatives.count == 1, "ride map attaches while ride owns the engine")
+        let rideEvents = events.count
+        coordinator.attachRideMap(rideMap)
+        check(events.count == rideEvents, "repeat ride map attach triggers no engine lifecycle events")
+        check(coordinator.activate(.none) == nil, "release the ride engine for the teardown case")
+        let rideCreates = AMapNaviRideManager.creates
+        events.removeAll()
+        coordinator.detachRideMap(rideMap)
+        check(AMapNaviRideManager.shared == nil && AMapNaviRideManager.creates == rideCreates && events.isEmpty,
+              "ride map teardown must not recreate the destroyed ride singleton")
         print("PASS navigation coordinator: ownership, fixed switch order, destroy failure, unified navigation state")
     }
 }

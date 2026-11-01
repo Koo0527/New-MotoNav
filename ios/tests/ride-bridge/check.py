@@ -293,6 +293,12 @@ tests = r'''
         check(bridge.uiDir == "L" && bridge.uiDist == 120, "turn info reaches the UI state")
         check(bridge.uiRoad.contains("林荫道"), "road name follows the drive text rules")
         check(bridge.uiRemainM == 1500, "remaining distance is published")
+        // 显示侧取整（与驾车 uiDist 同规则：>=1000 米取整到百位）；圆屏线上格式不变
+        let far = AMapNaviInfo()
+        far.iconType = .left; far.segmentRemainDistance = 1580; far.routeRemainDistance = 5200
+        far.routeRemainTime = 900
+        bridge.testNaviInfo(far)
+        check(bridge.uiDist == 1600 && bridge.uiRemainM == 5200, "display turn distance rounds to hundreds past 1 km")
 
         // 模拟导航：暂停 / 继续、调速
         bridge.toggleEmuPause()
