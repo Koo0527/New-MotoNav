@@ -24,41 +24,37 @@ cd /Users/zhaoyuancun/MotoNav/ios && xcodebuild -workspace MotoNav.xcworkspace \
 - 产物：`ios/build/DD/Build/Products/Release-iphoneos/MotoNav.app`；`Info.plist` 实测 `CFBundleShortVersionString=0.16.0`、`CFBundleVersion=15`，主二进制约 99.7 MB。
 - 构建输出中的大量 `unable to open object file` warning 全部来自高德 SDK 预编译静态库（dSYM 缺失），不影响签名与安装，与此前 Build13/14 构建现象一致。
 
-## 未完成（被阻断，如实记录）
+## 真机执行结果（安装 / 启动 / 进程存活已完成）
 
-### 3. 覆盖安装到 iPhone —— 被设备锁定阻断
+首轮执行（2026-11-01 上午）因手机锁屏被阻断：USB 层始终可见（`devicectl list devices` 显示 `available (paired)`），但 CoreDevice 隧道无法建立，安装尝试 5 次均报 `RemotePairingError 4 (tunnel connection failed)`，启动与日志检查随之未执行；当时已如实记录，未伪造结果。用户解锁手机后复验，全部通过，过程如下。
 
-目标设备：`Yc's iPhone`（UDID `00008130-0004491C1811401C`，iPhone 15 Pro）。USB 层始终可见（`xcrun devicectl list devices` 全程显示 `available (paired)`），但所有依赖 RemotePairing 隧道的操作均失败：
-
-```
-ERROR: The tunnel connection failed while the system tried to connect to the device.
-       (com.apple.dt.CoreDeviceError error 4 (0x04) / com.apple.dt.RemotePairingError error 4)
-```
-
-- 安装命令共尝试 5 次（`xcrun devicectl device install app --device 00008130-0004491C1811401C <app路径>`），间隔约 30s / 60s / 90s，并在文档整理后再试 1 次（简报要求重试一次，已超额多试），错误完全相同。
-- 诊断：`xcrun devicectl device info details` 返回 `Connection: Device State: disconnected`；`info lockState` 亦因同一隧道错误不可用。USB 可见但隧道起不来，符合"手机处于锁屏状态"的表现（CoreDevice 隧道需要设备解锁后才建立）。本机 `remoted` 进程在运行；无 sudo 权限重启它；libimobiledevice（idevicesyslog 等）未安装。
-- 结论：安装、启动验证、日志检查均未执行——不是构建问题，是设备侧状态问题。**不伪造任何验证结果。**
-
-### 4. 启动验证与日志检查 —— 未执行（依赖上一步），能力边界已查明
-
-供后续执行时参考（已通过 `--help` 核实语法）：
-
-- 启动：`xcrun devicectl device process launch --device 00008130-0004491C1811401C com.u238zyc.motonav`
-- 进程存活：`xcrun devicectl device info processes --device 00008130-0004491C1811401C`（约 10 秒后复查 motonav 进程仍在）
-- 日志：devicectl **没有**通用设备 syslog 子命令；尽力而为的替代是 `process launch --console`（桥接 App stdout，但会阻塞至 App 退出）。idevicesyslog 本机不可用。故启动日志中 ride-engine/NavigationCoordinator 初始化检查为能力受限项，如实记为未完成。
-
-### 5. 用户解锁手机后的补装步骤（约 2 分钟）
-
-保持手机解锁 + USB 连接，然后在仓库根目录执行：
+### 3. 覆盖安装到 iPhone ✅
 
 ```sh
-xcrun devicectl device install app --device 00008130-0004491C \
+xcrun devicectl device install app --device 00008130-0004491C1811401C \
+  /Users/zhaoyuancun/MotoNav/ios/build/DD/Build/Products/Release-iphoneos/MotoNav.app
+```
+
+- 解锁后第 1 次仍报隧道错误；等待 30 秒后 `devicectl device info lockState` 返回 `unlockedSinceBoot: true`（隧道已可用），重试安装成功。
+- 结果：`App installed: bundleID com.u238zyc.motonav, installationURL file:///private/var/containers/Bundle/Application/FB943389-756D-473E-9ED7-4D4E715A94D0/MotoNav.app/`。覆盖安装、未卸载，高德 Key、设置与历史记录保留（待用户在 A1 打开 App 时最终核对）。
+
+### 4. 启动验证与进程存活 ✅（日志检查为能力受限项）
+
+- 启动：`xcrun devicectl device process launch --device 00008130-0004491C1811401C com.u238zyc.motonav`。前两次被 SpringBoard 拒绝（`FBSOpenApplicationServiceErrorDomain error 1, reason: Locked`，`devicectl device info displays` 显示 `backlight is off`，即解锁后手机又自动锁屏）；30 秒后屏幕点亮（`backlight is on and active`）重试成功：`Launched application with com.u238zyc.motonav bundle identifier.`
+- 进程存活：`devicectl device info processes` 在启动后约 10 秒与 35 秒两次复查，均见 `22396  /private/var/containers/Bundle/Application/FB943389-.../MotoNav.app/MotoNav`（PID 稳定、路径与安装容器一致）——无启动崩溃。
+- 安装版本核对：`devicectl device info apps` 显示 `MotoNav  com.u238zyc.motonav  0.16.0  15`，确认手机上即 Build15。
+- 日志检查（尽力而为）：devicectl **没有**通用设备 syslog 子命令（已查 `--help` 全部子命令）；替代手段 `process launch --console` 会阻塞至 App 退出、idevicesyslog（libimobiledevice）本机未安装。故"启动日志中 ride-engine/NavigationCoordinator 初始化无错误"未能直接核验，以上述 35 秒进程存活作为无启动崩溃的间接证据；如需日志级核验，可在 Mac 上 Xcode 连接设备查看控制台。
+
+### 5. 复查命令（备用）
+
+```sh
+xcrun devicectl device install app --device 00008130-0004491C1811401C \
   /Users/zhaoyuancun/MotoNav/ios/build/DD/Build/Products/Release-iphoneos/MotoNav.app
 xcrun devicectl device process launch --device 00008130-0004491C1811401C com.u238zyc.motonav
 sleep 10 && xcrun devicectl device info processes --device 00008130-0004491C1811401C | grep -i motonav
 ```
 
-覆盖安装沿用同一 Bundle ID/签名，不卸载，手机上的高德 Key、设置与历史记录保留。若安装仍报隧道错误，解锁手机后在"设置 > 开发者"确认 Developer Mode 仍开启，重新插拔 USB 再试。安装成功后先核对：设置页版本应显示 `iOS v0.16.0`，历史记录、收藏、Key 均在。
+覆盖安装沿用同一 Bundle ID/签名，不卸载。若再遇隧道错误，解锁手机（保持屏幕亮起）后重试。
 
 ## 用户待办验收清单（逐条勾选）
 
@@ -66,7 +62,7 @@ sleep 10 && xcrun devicectl device info processes --device 00008130-0004491C1811
 
 ### A. 安装与基础（先做）
 
-- [ ] **A1 覆盖安装 Build15 并首次启动**：解锁手机后按第 5 节命令安装；App 能打开、四栏目（导航/轨迹/圆屏/我的）正常，设置页显示 `iOS v0.16.0`，Key/收藏/历史仍在。
+- [ ] **A1 首次打开 Build15 核对**：安装与启动已由 agent 完成（见第 3、4 节）；手动打开 App，确认四栏目（导航/轨迹/圆屏/我的）正常，设置页显示 `iOS v0.16.0`，Key/收藏/历史均在。
 - [ ] **A2 骑行链路最小冒烟**：首页搜索一个 1–3 km 的自行车目的地 → 出现规划结果与路线预览（默认官方骑行引擎，后端标识 rideSDK）→ 模拟导航可开始、有转向播报与到达结束。
 
 ### B. 模式切换稳定性（计划核心项）
@@ -101,5 +97,5 @@ sleep 10 && xcrun devicectl device info processes --device 00008130-0004491C1811
 ## 边界说明
 
 - 本轮 agent 侧仅改动构建号与文档，未改任何产品代码；产品代码为 Task 1–4 已评审合入的实现（`2741a7f..96c3266`）。
-- 16 套 macOS 回归测试在 Task 4 已全绿；本记录的真机项（安装/启动/日志）因设备锁屏未执行，不以上述测试替代。
+- 16 套 macOS 回归测试在 Task 4 已全绿；本轮真机侧已完成覆盖安装、启动与进程存活核验（35 秒内无崩溃），启动日志级检查因工具能力受限未做（见第 4 节），B–F 清单全部待用户实操，不以测试或进程存活替代。
 - 实车与圆屏项受硬件与安全条件限制，只能由用户完成；E 类请勿为测试目的违反交规或在开放道路操作手机。
