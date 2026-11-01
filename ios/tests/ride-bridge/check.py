@@ -211,6 +211,7 @@ tests = r'''
     @MainActor static func main() {
         let coordinator = NavigationCoordinator.shared
         let bridge = RideBridge.shared
+        check(RideBridge.planTimeout == 25, "the production plan-timeout default is the required 25 seconds")
         RideBridge.planTimeout = 25
 
         // 无效输入：不认领引擎，不发出算路请求
@@ -484,7 +485,163 @@ tests = r'''
         check(feeder.naviEnds == 1, "manual exit ends the along-route map session")
         UserDefaults.standard.removeObject(forKey: "motor_plan_history_v1")
 
+        // ---- Task 4 回归：连续改变起终点（最新输入生效，过期结果丢弃）----
+        bridge.clearPlan()
+        bridge.plan(toLat: 30.1, lng: 110.1, endName: "第一目的地")
+        bridge.plan(toLat: 30.2, lng: 110.2, endName: "第二目的地")
+        bridge.plan(toLat: 30.3, lng: 110.3, endName: "最终目的地")
+        check(abs(coordinator.rideManager.calcEndPOI!.locPoint!.latitude - 30.3) < 1e-9
+              && abs(coordinator.rideManager.calcEndPOI!.locPoint!.longitude - 110.3) < 1e-9,
+              "after consecutive destination changes only the latest input reaches the SDK")
+        let firstCallback = coordinator.rideManager.calcCallback
+        bridge.plan(toLat: 30.4, lng: 110.4, endName: "又一次")
+        firstCallback?(makeGroup(), nil)                       // 两代之前的迟到结果
+        check(bridge.calculating && !bridge.routeReady && bridge.routeOptions.isEmpty,
+              "a result from two destination generations back is discarded")
+        coordinator.rideManager.calcCallback?(makeGroup(), nil)
+        check(bridge.routeReady && bridge.routeOptions.first?.id == 1, "the latest request's result wins")
+
+        // ---- Task 4 回归：算路超时后迟到结果不覆盖新输入，且可重试 ----
+        RideBridge.planTimeout = 0.05
+        bridge.clearPlan()
+        bridge.plan(toLat: 30.5, lng: 110.5)
+        wait(0.2)
+        check(bridge.planFailed && !bridge.calculating, "the 25 s plan timeout fires (shortened here)")
+        coordinator.rideManager.calcCallback?(makeGroup(), nil) // 超时后才到的结果
+        check(!bridge.routeReady && bridge.planFailed && bridge.routeOptions.isEmpty,
+              "a result arriving after the timeout cannot satisfy or overwrite the timed-out request")
+        bridge.replan()                                          // “重新规划”按钮
+        check(bridge.calculating && !bridge.planFailed, "re-plan after a timeout retries the same destination")
+        coordinator.rideManager.calcCallback?(makeGroup(), nil)
+        check(bridge.routeReady, "the retried plan succeeds")
+        RideBridge.planTimeout = 25
+
+        // ---- Task 4 回归：路线选择一致性（预览、选路、开始导航同一 AMapNaviRouteGroup）----
+        bridge.plan(toLat: 30.45, lng: 110.45)
+        let identityGroup = makeGroup()
+        coordinator.rideManager.calcCallback?(identityGroup, nil)
+        check(bridge.routeReady && bridge.routeOptions.count == 2, "the identity group becomes the preview options")
+        bridge.select(routeID: 2)
+        check(identityGroup.selections == [1, 2],
+              "selection happens on the saved group itself (auto first route, then the user's pick)")
+        bridge.start(emulate: false)
+        check(coordinator.rideManager.startedGPSGroups.last === identityGroup,
+              "navigation starts with the exact route group that previewed and was selected")
+        bridge.stop()
+        bridge.start(emulate: true)
+        check(coordinator.rideManager.startedGroups.last === identityGroup,
+              "emulated navigation reuses the same saved route group")
+        bridge.stop()
+
+        // ---- Task 4 回归：重算失败保留原线、不自动切换引擎 ----
+        bridge.plan(toLat: 30.6, lng: 110.6)
+        coordinator.rideManager.calcCallback?(makeGroup(), nil)
+        bridge.start(emulate: false)
+        bridge.testNaviInfo(info2)
+        let managerBefore = coordinator.rideManager
+        bridge.testRouteCalculateFailure(NSError(domain: "AMapNavi", code: 2))
+        check(bridge.rerouteFailed && bridge.navigating && bridge.routeReady,
+              "an in-navigation recalculation failure keeps the current route and navigation")
+        check(coordinator.active == .ride && coordinator.rideManager === managerBefore,
+              "recalculation failure never switches or recreates the engine")
+        bridge.retryRecalculate()
+        check(!bridge.rerouteFailed && coordinator.rideManager === managerBefore && coordinator.active == .ride,
+              "retry recalculates without touching engine ownership")
+
+        // ---- Task 4 回归：重复到达只结算一次（对齐 ArrivalPolicy 语义）----
+        ble.sent.removeAll()
+        bridge.testNaviInfo(info2)
+        bridge.testArrived()
+        let tripSummaries = ble.sent.filter { $0.hasPrefix("#O") }.count
+        let arrivalMarks = ble.sent.filter { $0 == "A,0" }.count
+        check(tripSummaries == 1 && arrivalMarks == 1, "the first terminal callback settles exactly once")
+        bridge.testArrived()
+        bridge.testEmulatorEnd()
+        ble.sent.removeAll()
+        bridge.testArrived()
+        check(ble.sent.filter { $0.hasPrefix("#O") }.count == 0 && !ble.sent.contains("A,0"),
+              "duplicate destination and emulator-end callbacks produce no second settlement")
+        check(!bridge.navigating, "settled trip stays finished")
+        wait(4.3)
+        // 真实导航收到杂散的模拟结束回调必须被策略拒绝；随后真正的到达回调照常结算
+        bridge.plan(toLat: 30.7, lng: 110.7)
+        coordinator.rideManager.calcCallback?(makeGroup(), nil)
+        bridge.start(emulate: false)
+        ble.sent.removeAll()
+        bridge.testEmulatorEnd()
+        check(bridge.navigating && !ble.sent.contains("A,0"),
+              "a stray emulator-end callback cannot finish a GPS ride navigation (ArrivalPolicy gate)")
+        bridge.testArrived()
+        check(!bridge.navigating && ble.sent.contains("A,0"), "the real destination callback then settles once")
+        wait(4.3)
+
+        // ---- Task 4 回归：模拟结束/取消恢复真实定位来源（Build14 语义，ride 路径）----
+        LocationService.shared.preciseCalls.removeAll()
+        bridge.plan(toLat: 30.8, lng: 110.8)
+        coordinator.rideManager.calcCallback?(makeGroup(), nil)
+        bridge.start(emulate: true)
+        bridge.toggleEmuPause()
+        feeder.locations.removeAll()
+        bridge.stop()                                            // 模拟中手动取消
+        check(!bridge.emulating && !bridge.emuPaused, "cancelling an emulation clears both emulation flags")
+        check(LocationService.shared.preciseCalls.last == false,
+              "cancelling an emulation restores the real location source immediately")
+        let lateEmuLocation = AMapNaviLocation(); lateEmuLocation.speed = 25
+        lateEmuLocation.coordinate = AMapNaviPoint.location(withLatitude: 30.81, longitude: 110.81)
+        bridge.testNaviLocation(lateEmuLocation)
+        check(feeder.locations.isEmpty, "late simulator fixes cannot move the map position after the trip ended")
+        feeder.routeKeys.removeAll()
+        coordinator.rideManager.naviRoute = makeRoute(id: 9, time: 600, length: 3000, label: "收尾路线")
+        bridge.testNaviInfo(info2)
+        check(feeder.routeKeys.isEmpty, "late guidance cannot re-feed the along-route map")
+        // 新会话从干净状态开始：同样的读数会重新下发（去重状态已随会话重置）
+        bridge.plan(toLat: 30.9, lng: 110.9)
+        coordinator.rideManager.calcCallback?(makeGroup(), nil)
+        bridge.start(emulate: true)
+        ble.sent.removeAll()
+        bridge.testNaviInfo(info2)
+        check(ble.sent.contains("L,120"), "a fresh session re-sends the same guidance (per-session dedup reset)")
+
+        // ---- Task 4 回归：旧代次代理的迟到回调不得覆盖新会话（规划 / 导航 / 地图）----
+        bridge.stopForEngineSwitch(); bridge.unbindForEngineSwitch()
+        func currentToken() -> UInt64 {
+            for t in UInt64(1)...1024 where bridge.acceptsCallback(t) { return t }
+            fatalError("no live ride session token found")
+        }
+        // 规划代次：旧代理的失败/结果都不得影响新规划
+        bridge.plan(toLat: 31.0, lng: 111.0)
+        let oldPlanRelay = RideSessionCallbacks(bridge: bridge, token: currentToken())
+        bridge.plan(toLat: 31.1, lng: 111.1)                     // 新规划代次
+        oldPlanRelay.mnRouteFail(coordinator.rideManager, error: NSError(domain: "AMapNavi", code: 2))
+        check(bridge.calculating && !bridge.planFailed,
+              "a retained previous-generation relay cannot fail the new plan")
+        oldPlanRelay.mnRouteSuccess(coordinator.rideManager)
+        coordinator.rideManager.calcCallback?(makeGroup(), nil)
+        check(bridge.routeReady && bridge.routeOptions.count == 2,
+              "the stale relay's success callback does not double-settle the new plan")
+        // 导航代次：旧代理的导航信息/到达不得覆盖新导航会话
+        bridge.start(emulate: false)
+        let navRelayOld = oldPlanRelay                            // 规划代次的代理在导航代次里也已过期
+        let freshNavRelay = RideSessionCallbacks(bridge: bridge, token: currentToken())
+        feeder.routeKeys.removeAll()
+        coordinator.rideManager.naviRoute = makeRoute(id: 9, time: 600, length: 3000, label: "当前路线")
+        navRelayOld.mnNaviInfo(coordinator.rideManager, info: info2)
+        check(bridge.uiDir.isEmpty && feeder.routeKeys.isEmpty,
+              "a stale relay cannot publish guidance to the new navigation session")
+        navRelayOld.mnArrived(coordinator.rideManager)
+        check(bridge.navigating, "a stale relay cannot finish the new navigation session")
+        freshNavRelay.mnNaviInfo(coordinator.rideManager, info: info2)
+        check(bridge.uiDir == "L" && bridge.uiDist == 120, "the current relay's guidance is published")
+        check(feeder.routeKeys.count == 1, "the current relay feeds the along-route map")
+        coordinator.rideManager.naviRoute = makeRoute(id: 9, time: 600, length: 4500, label: "换一条路线")
+        navRelayOld.mnNaviInfo(coordinator.rideManager, info: info2)
+        check(feeder.routeKeys.count == 1,
+              "a stale relay cannot re-feed the map even when its payload carries a different route")
+        bridge.stop()
+        UserDefaults.standard.removeObject(forKey: "motor_plan_history_v1")
+
         print("PASS ride bridge: planning, generations, timeout, error classes, selection, navigation, round screen, reroute, arrival, history and teardown")
+        print("PASS ride bridge task4: consecutive inputs, timeout retry, route identity, reroute keeps line, single settlement, emulation restore, stale relay isolation")
     }
 }
 '''
