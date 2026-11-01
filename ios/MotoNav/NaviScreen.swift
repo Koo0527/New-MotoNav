@@ -107,7 +107,6 @@ struct NavigationOverlay<Extra: View>: View {
                 VStack(spacing: 12) {
                     topCard
                     Spacer(minLength: 12)
-                    extra
                     bottomBar
                 }
             }
@@ -181,9 +180,11 @@ struct NavigationOverlay<Extra: View>: View {
         })
     }
 
-    /// 底部轻量玻璃控制栏：速度、全览／跟随、静音、隧道快捷操作、更多；结束保持独立的长按操作
+    /// 底部轻量玻璃控制栏：附加状态条（更快路线、重算重试、兼容提示）、速度、全览／跟随、
+    /// 静音、隧道快捷操作、更多；结束保持独立的长按操作。附加条与控制同底，不悬在地图上。
     private var bottomBar: some View {
         VStack(spacing: 10) {
+            extra
             HStack(spacing: 2) {
                 VStack(spacing: 0) {
                     Text("\(max(0, readout.speed))").font(.title3.weight(.bold).monospacedDigit()).lineLimit(1)
