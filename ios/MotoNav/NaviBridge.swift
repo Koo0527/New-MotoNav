@@ -894,10 +894,29 @@ final class NaviBridge: NSObject, ObservableObject {
 
     // MARK: - 巡航模式（iOS v0.3，和安卓 v4.7 一样）
 
+    /// 官方骑行规划被巡航抢占时的短暂提示（4 秒后自动消失；不阻断接管）
+    @Published var ridePlanNotice = ""
+
+    /// 引擎抢占提示（产品裁定：不阻断接管）：官方骑行“已规划未导航”的路线被本次巡航取代。
+    /// 与独立导航 WebMotorSession.start 里的提示完全同机制（同一文案来源、4 秒自动消失、不阻断接管）。
+    /// 必须在 attach() 之前调用：attach 会销毁骑行引擎并清空 RideBridge 的规划状态。
+    func surfaceRidePlanTakeoverNotice() {
+        if let notice = IndependentTakeoverPolicy.ridePlanNotice(officialRidePlanned: RideBridge.shared.routeReady,
+                                                                 rideNavigating: RideBridge.shared.navigating,
+                                                                 takenOverBy: "巡航") {
+            ridePlanNotice = notice
+            DispatchQueue.main.asyncAfter(deadline:.now()+4) { [weak self] in
+                guard let self = self, self.ridePlanNotice == notice else { return }
+                self.ridePlanNotice = ""
+            }
+        }
+    }
+
     /// 开始巡航（不设目的地）：返回 nil = 成功，否则是出错原因
     func startCruise() -> String? {
         if navigating || NavigationCoordinator.shared.navigationActive { return "导航中不能开巡航，先退出导航" }
         if cruising { return nil }
+        surfaceRidePlanTakeoverNotice()      // 引擎抢占提示：官方骑行“已规划未导航”被巡航取代（不阻断）
         guard attach() else { return NavigationCoordinator.shared.lastFailure ?? "巡航没能开始，请重试" }
         arrival.cancel(arrival.generation)
         manager.stopNavi()

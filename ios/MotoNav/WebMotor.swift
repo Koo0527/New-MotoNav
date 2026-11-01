@@ -158,9 +158,10 @@ enum MotorRoutes {
 /// these are brief in-app hints so a reclaimed official-ride plan does not disappear silently.
 enum IndependentTakeoverPolicy {
     /// 官方骑行处于“已规划未导航”时被独立导航启动抢占：返回提示文案；其余情况返回 nil。
-    static func ridePlanNotice(officialRidePlanned: Bool, rideNavigating: Bool) -> String? {
+    /// takenOverBy 是同一文案来源里的抢占方描述：巡航路径传“巡航”，独立导航用默认值。
+    static func ridePlanNotice(officialRidePlanned: Bool, rideNavigating: Bool, takenOverBy: String = "独立导航") -> String? {
         guard officialRidePlanned, !rideNavigating else { return nil }
-        return "已规划的官方骑行路线被本次独立导航取代"
+        return "已规划的官方骑行路线被本次\(takenOverBy)取代"
     }
 }
 

@@ -1,4 +1,5 @@
-"""Independent takeover of a planned official ride: real WebMotorSession.start + takeover policy (macOS)."""
+"""Independent takeover of a planned official ride: real WebMotorSession.start, the cruise notice from
+NaviBridge.startCruise (surfaceRidePlanTakeoverNotice), and the shared takeover policy (macOS)."""
 from pathlib import Path
 import os
 import subprocess
@@ -10,6 +11,10 @@ s = (root / 'MotoNav/WebMotor.swift').read_text()
 session = s[s.index('/// Independent takeover notices'):s.index('\nfinal class MotorBrowser')]
 # Production planning-input types and the arrival gate used by the session.
 core = s[s.index('struct MotorPoint'):s.index('enum MotorRoutes')]
+# Cruise takeover notice: the real property + method NaviBridge.startCruise calls before attach()
+# (attach tears the ride engine down and wipes RideBridge's planned-but-not-navigating plan).
+n = (root / 'MotoNav/NaviBridge.swift').read_text()
+cruise = n[n.index('    /// 官方骑行规划被巡航抢占时的短暂提示'):n.index('    /// 开始巡航（不设目的地）')]
 
 stubs = r'''
 import Foundation
@@ -95,6 +100,15 @@ enum TextImage {
 }
 '''
 
+# Carries the real cruise notice members extracted verbatim from NaviBridge.swift so the
+# harness executes the production cruise path (NaviBridge itself needs the AMap SDK).
+cruise_harness = '''
+/// 承载从 NaviBridge.swift 逐字抽取的巡航提示代码（属性 + startCruise 调用的方法）
+final class CruiseNavi: ObservableObject {
+    static let shared = CruiseNavi()
+''' + cruise + '''}
+'''
+
 tests = r'''
 @main struct Tests {
     @MainActor static func main() {
@@ -130,7 +144,25 @@ tests = r'''
         check(RideBridge.shared.stopCalls == stops + 1, "the idle ride bridge is still stopped for engine ownership")
         session.stop(sendCancel: false)
         check(!session.running, "the independent session ends cleanly")
-        print("PASS ride preemption: explicit notice, unblocked takeover, auto-clear")
+
+        // 巡航路径（真实 NaviBridge.surfaceRidePlanTakeoverNotice + 同一决策函数）：同一机制显示提示
+        RideBridge.shared.navigating = false
+        RideBridge.shared.routeReady = true
+        check(IndependentTakeoverPolicy.ridePlanNotice(officialRidePlanned: true, rideNavigating: false, takenOverBy: "巡航") == "已规划的官方骑行路线被本次巡航取代",
+              "the cruise takeover reuses the same notice wording source")
+        check(IndependentTakeoverPolicy.ridePlanNotice(officialRidePlanned: false, rideNavigating: false, takenOverBy: "巡航") == nil,
+              "no ride plan means no cruise notice")
+        check(IndependentTakeoverPolicy.ridePlanNotice(officialRidePlanned: true, rideNavigating: true, takenOverBy: "巡航") == nil,
+              "an active ride navigation earns no cruise notice (startCruise is blocked anyway)")
+        CruiseNavi.shared.surfaceRidePlanTakeoverNotice()
+        check(CruiseNavi.shared.ridePlanNotice.contains("官方骑行"), "the cruise takeover surfaces the notice in-app")
+        check(CruiseNavi.shared.ridePlanNotice.contains("巡航"), "the cruise notice names the cruise takeover")
+        wait(4.3)
+        check(CruiseNavi.shared.ridePlanNotice.isEmpty, "the cruise notice is brief and auto-clears")
+        RideBridge.shared.routeReady = false
+        CruiseNavi.shared.surfaceRidePlanTakeoverNotice()
+        check(CruiseNavi.shared.ridePlanNotice.isEmpty, "no cruise notice when the ride engine has no plan")
+        print("PASS ride preemption: explicit notice, unblocked takeover, auto-clear (independent start + cruise)")
     }
 }
 '''
@@ -138,7 +170,7 @@ tests = r'''
 with tempfile.TemporaryDirectory(prefix='motonav-ride-preempt-') as tmp:
     swift = Path(tmp) / 'main.swift'
     swift.write_text(stubs + core + (root / 'MotoNav/RouteGeometry.swift').read_text() + '\n'
-                     + (root / 'MotoNav/MotorRouteTracker.swift').read_text() + '\n' + session + tests)
+                     + (root / 'MotoNav/MotorRouteTracker.swift').read_text() + '\n' + session + cruise_harness + tests)
     env = dict(os.environ, CLANG_MODULE_CACHE_PATH=str(Path(tmp) / 'cache'), SWIFT_MODULE_CACHE_PATH=str(Path(tmp) / 'cache'))
     subprocess.run(['swiftc', '-parse-as-library', str(swift), '-o', str(Path(tmp) / 'check')], check=True, env=env)
     subprocess.run([str(Path(tmp) / 'check')], check=True, env=env)

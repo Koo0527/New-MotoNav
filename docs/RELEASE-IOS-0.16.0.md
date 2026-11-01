@@ -22,7 +22,7 @@
 
 新增 `NavigationCoordinator` 统一管理驾车与骑行SDK实例：按固定顺序失效回调、停止导航、解绑地图后销毁旧实例再创建新引擎，销毁失败不重复创建；移除启动时无条件创建驾车引擎的行为。规划后端标识扩展为 `driveSDK / rideSDK / independent`，出行方式与实际引擎分别记录。`RideBridge` 提供骑行规划、选路、真实/模拟导航与暂停继续，回调转换为现有导航读数与BLE圆屏消息（转向、距离、道路、速度、剩余、ETA、GPS状态、到达），不改ESP32协议；SDK匹配位置用于导航，手机定位继续用于当前位置与轨迹，真实导航记录轨迹、模拟不记录。
 
-三种导航界面收敛为地图优先统一布局：顶部紧凑卡片（方向、下次动作与距离、道路、ETA、剩余），底部玻璃控制栏（速度、全览/跟随、静音、隧道、更多），驾车用Drive地图、官方骑行用Ride地图、网页/分享兼容沿用现有地图。已通过16套回归测试（含ride-bridge、ride-ble-parity、ride-units、unified-navi-ui等）与arm64签名Release编译；真机骑行引擎回调、圆屏联测与实车场景待用户验收（见[验证记录](VERIFY-RIDE-ENGINE-BUILD15.md)）。
+三种导航界面收敛为地图优先统一布局：顶部紧凑卡片（方向、下次动作与距离、道路、ETA、剩余），底部玻璃控制栏（速度、全览/跟随、静音、隧道、更多），驾车用Drive地图、官方骑行用Ride地图、网页/分享兼容沿用现有地图。官方骑行地图在夜间配色时保持日间样式（SDK 限制），HUD 深色背板保证信息可读。已通过16套回归测试（含ride-bridge、ride-ble-parity、ride-units、unified-navi-ui等）与arm64签名Release编译；真机骑行引擎回调、圆屏联测与实车场景待用户验收（见[验证记录](VERIFY-RIDE-ENGINE-BUILD15.md)）。
 
 ## iPhone与圆屏实测
 
