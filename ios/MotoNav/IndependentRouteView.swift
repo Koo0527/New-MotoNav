@@ -306,34 +306,73 @@ struct RoutePlannerView: View {
     }
 }
 
-/// 骑行导航画面：真实 / 模拟共用（共享 NavigationOverlay：读出、静音、暂停、调速、重算重试、退出）。
-/// 圆屏读数与沿线地图由 RideBridge 直接输出；地图优先的骑行界面属后续任务（Task 3）。
+/// 骑行导航画面：地图优先 —— AMapNaviRideView 作为骑行引擎的数据代表画路线和车标，
+/// 浮层用与驾车/兼容导航同一套统一 HUD（顶部紧凑卡 + 底部控制栏 + 更多菜单）。
+/// 真实 / 模拟共用；到达展示保留 4 秒（RideBridge 收尾），随后自动回规划页。
 struct RideNaviScreen: View {
     @ObservedObject var ride = RideBridge.shared
     @ObservedObject var settings = Settings.shared
+    @StateObject private var rideCtl = RideViewController()
     @Environment(\.dismiss) private var dismiss
+    @State private var confirmClose = false
+    @State private var showNativeUI = false
+    @State private var panelHeights = NavigationPanelHeights()
 
     var body: some View {
-        ZStack {
-            AppTheme.bg.ignoresSafeArea()
-            NavigationOverlay(readout: readout, muted: settings.voiceMuted,
-                              onOverview: {}, onMute: toggleMute,
-                              onSettings: { dismiss() }, onEnd: exitNavi,
-                              onPause: { ride.toggleEmuPause() },
-                              onCycleSpeed: { ride.cycleEmuSpeed() },
-                              onLayout: { _ in }) {
-                if ride.rerouteFailed {
-                    VStack(spacing: 6) {
-                        HStack {
-                            Text("重新规划失败，已保留当前路线").font(.caption)
-                            Spacer()
-                            Button("重试") { ride.retryRecalculate() }.frame(minHeight: 44)
+        GeometryReader { geometry in
+            ZStack(alignment: .bottomTrailing) {
+                AMapRideViewRep(controller: rideCtl, showNativeUI: showNativeUI,
+                                edgePadding: NaviHudLayout.mapEdgeInsets(panelTop: panelHeights.top,
+                                                                         panelBottom: panelHeights.bottom,
+                                                                         safeTop: geometry.safeAreaInsets.top,
+                                                                         safeBottom: geometry.safeAreaInsets.bottom))
+                    .ignoresSafeArea()
+                if !showNativeUI || ride.showArrived {
+                    NavigationOverlay(readout: readout, muted: settings.voiceMuted,
+                                      onOverview: rideCtl.toggleOverview, onMute: toggleMute,
+                                      onSettings: { dismiss() }, onEnd: exitNavi,
+                                      onPause: { ride.toggleEmuPause() },
+                                      onCycleSpeed: { ride.cycleEmuSpeed() },
+                                      onLayout: { panelHeights = $0 },
+                                      onShowNativeUI: { showNativeUI = true }) {
+                        if ride.rerouteFailed {
+                            VStack(spacing: 6) {
+                                HStack {
+                                    Text("重新规划失败，已保留当前路线").font(.caption)
+                                    Spacer()
+                                    Button("重试") { ride.retryRecalculate() }.frame(minHeight: 44)
+                                }
+                                Text("多次失败可退出导航，从当前位置改用兼容引擎重新规划并预览。")
+                                    .font(.caption2).foregroundColor(AppTheme.hudSub)
+                            }
                         }
-                        Text("多次失败可退出导航，从当前位置改用兼容引擎重新规划并预览。")
-                            .font(.caption2).foregroundColor(AppTheme.hudSub)
                     }
+                } else {
+                    Button { showNativeUI = false } label: {
+                        Label("返回 App 风格", systemImage: "arrow.uturn.backward")
+                            .font(.subheadline.bold()).foregroundColor(ContentView.pink).padding(14)
+                            .background(Capsule().fill(AppTheme.hudCard))
+                    }.padding(16).padding(.bottom, 88)
                 }
             }
+        }
+        .onAppear { rideCtl.onClose = { confirmClose = true } }
+        .alert("退出导航？", isPresented: $confirmClose) {
+            Button("退出导航", role: .destructive) { exitNavi() }
+            Button("继续导航", role: .cancel) {}
+        }
+        .onChange(of: ride.navigating) { now in
+            if !now && !ride.showArrived { dismiss() }
+        }
+        .onChange(of: ride.showArrived) { now in
+            // 到达展示保留 4 秒：RideBridge 到达 4 秒后才清 showArrived，这里随之自动退出
+            if !now && !ride.navigating { dismiss() }
+        }
+        .confirmationDialog("导航选项", isPresented: $rideCtl.showMore, titleVisibility: .hidden) {
+            Button(rideCtl.isOverview ? "回到车头跟随" : "看全程") { rideCtl.toggleOverview() }
+            Button("返回首页修改设置") { dismiss() }
+            Button("退出导航", role: .destructive) { exitNavi() }
+            Button("取消", role: .cancel) {}
         }
     }
 
@@ -365,10 +404,13 @@ struct IndependentNavigationView: View {
             ZStack {
                 if let route = guide.route {
                     MotorMap(route: route, position: guide.position, overview: guide.overview,
-                             edgePadding: UIEdgeInsets(top: panelHeights.top + geometry.safeAreaInsets.top + 16,
-                                                       left: 16, bottom: panelHeights.bottom + geometry.safeAreaInsets.bottom + 16, right: 16))
+                             edgePadding: NaviHudLayout.mapEdgeInsets(panelTop: panelHeights.top,
+                                                                      panelBottom: panelHeights.bottom,
+                                                                      safeTop: geometry.safeAreaInsets.top,
+                                                                      safeBottom: geometry.safeAreaInsets.bottom))
                         .ignoresSafeArea()
                 }
+                // 兼容导航：不传 onShowNativeUI——SDK 专属功能（完整导航界面）在菜单里隐藏，不伪造入口
                 NavigationOverlay(readout: readout, muted: settings.voiceMuted,
                                   onOverview: { guide.overview.toggle() }, onMute: toggleMute,
                                   onSettings: { dismiss() }, onEnd: exitNavi,

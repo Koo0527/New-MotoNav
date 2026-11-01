@@ -571,7 +571,8 @@ final class RideBridge: NSObject, ObservableObject {
         guard arrival.acceptsGuidance(arrival.generation), let n = n else { return }
         let dir = NaviBridge.iconToDir(n.iconType.rawValue)
         uiDir = dir
-        uiDist = n.segmentRemainDistance
+        // 显示侧取整（与驾车 uiDist 同规则：>=1000 米取整到百位）；圆屏线上格式由 pushTurn 单独处理
+        uiDist = roundDist(n.segmentRemainDistance)
         uiRemainM = n.routeRemainDistance
         uiRemainS = n.routeRemainTime
         if dir == "A" { uiRoad = "前方为目的地" }
