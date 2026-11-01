@@ -607,6 +607,8 @@ struct ContentView: View {
                 else if !needAmapKey(), let err = navi.startCruise() { cruiseNote = err }
             }
             if !cruiseNote.isEmpty { Text(cruiseNote).font(.caption).foregroundColor(Color.orange) }
+            // 官方骑行规划被巡航抢占：与独立导航（WebMotorSession.ridePlanNotice）同机制的短暂提示
+            if !navi.ridePlanNotice.isEmpty { Text(navi.ridePlanNotice).font(.caption2).foregroundColor(.orange) }
         }
     }
 
