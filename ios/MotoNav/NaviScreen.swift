@@ -25,6 +25,11 @@ struct NavigationReadout {
         default: return ("arrow.up", "直行")
         }
     }
+
+    // 缺失数据显示"—"或真实状态，不填充虚构提示：负距离 / 非正耗时 = 还没有真实数据
+    var turnDistanceText: String { turnMetres >= 0 ? NaviBridge.distText(turnMetres) : "—" }
+    var remainingText: String { remaining >= 0 ? "剩余 \(NaviBridge.distText(remaining))" : "剩余 —" }
+    var etaText: String { remainingSeconds > 0 ? "约 \(NaviBridge.durText(remainingSeconds)) 到" : "到达时间 —" }
 }
 
 struct NavigationPanelHeights: Equatable {
@@ -41,7 +46,35 @@ private struct NavigationPanelHeightKey: PreferenceKey {
     }
 }
 
-/// Both navigation engines supply data and actions to the same phone interface.
+// MARK: - 统一 HUD 布局（纯函数：按实测卡片高度设置地图可视区域）
+//
+// 三种导航（驾车 SDK / 官方骑行 SDK / 网页兼容）共用同一套 HUD 与这套内缩规则：
+// 地图可视区域按 HUD 面板实测高度 + 安全区 + 呼吸间距内缩。HUD 高度由 PreferenceKey
+// 实测（动态字号放大时卡片长高，内缩跟着长），安全区由 GeometryReader 实测（横屏 /
+// 刘海屏取实际值），因此竖屏、横屏、安全区、动态字号都由同一公式覆盖。
+enum NaviHudLayout {
+    /// 地图可视区域边距：HUD 面板实测高度 + 安全区 + 固定呼吸间距（默认 16）
+    static func mapEdgeInsets(panelTop: CGFloat, panelBottom: CGFloat,
+                              safeTop: CGFloat, safeBottom: CGFloat,
+                              margin: CGFloat = 16) -> UIEdgeInsets {
+        UIEdgeInsets(top: panelTop + safeTop + margin, left: margin,
+                     bottom: panelBottom + safeBottom + margin, right: margin)
+    }
+
+    /// 自车图标锚点：车标落在去掉 HUD 后可视区域约 60% 高度处（车标偏下，前方视野更大）。
+    /// 结果限制在 [0.15, 0.85]，保证车标始终在地图内。
+    static func carAnchor(boundsHeight: CGFloat, padding: UIEdgeInsets) -> CGPoint {
+        guard boundsHeight > 0 else { return CGPoint(x: 0.5, y: 0.72) }
+        let visible = max(0, boundsHeight - padding.top - padding.bottom)
+        let y = (padding.top + visible * 0.6) / boundsHeight
+        return CGPoint(x: 0.5, y: min(0.85, max(0.15, y)))
+    }
+}
+
+/// Three navigation engines (drive SDK / official ride SDK / independent web route)
+/// share this map-first HUD: one compact top card, short status strips and a glass
+/// bottom control bar. Simulation controls, "return to settings" and the full SDK
+/// interface entry live in the more menu; the long-press end action stays separate.
 struct NavigationOverlay<Extra: View>: View {
     @ObservedObject private var settings = Settings.shared
     let readout: NavigationReadout
@@ -53,10 +86,13 @@ struct NavigationOverlay<Extra: View>: View {
     let onPause: () -> Void
     let onCycleSpeed: () -> Void
     let onLayout: (NavigationPanelHeights) -> Void
+    /// 完整 SDK 界面切换入口（官方驾车 / 骑行保留）；兼容导航传 nil = 菜单里隐藏，不伪造入口
+    var onShowNativeUI: (() -> Void)? = nil
     @ViewBuilder var extra: Extra
     @State private var holding = false
     @State private var holdHint = false
     @State private var confirmEnd = false
+    @State private var showMore = false
 
     var body: some View {
         ZStack {
@@ -69,69 +105,125 @@ struct NavigationOverlay<Extra: View>: View {
                 .padding(30).background(RoundedRectangle(cornerRadius: 22).fill(AppTheme.hudCard))
             } else {
                 VStack(spacing: 12) {
-                    HStack(spacing: 18) {
-                        Image(systemName: readout.turn.symbol).font(.system(size: 48, weight: .bold))
-                            .foregroundColor(ContentView.pink).frame(width: 58).accessibilityLabel(readout.turn.label)
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text(readout.turnMetres >= 0 ? NaviBridge.distText(readout.turnMetres) : "—")
-                                .font(.system(size: 30, weight: .heavy))
-                            Text(readout.instruction.isEmpty ? "沿路线前进" : readout.instruction).font(.headline).lineLimit(2)
-                            Text(ContentView.userMessage(readout.status)).font(.caption).foregroundColor(AppTheme.hudSub)
-                        }
-                        Spacer(minLength: 0)
-                    }
-                    .padding(18).background(RoundedRectangle(cornerRadius: 22).fill(AppTheme.hudCard))
-                    .background(GeometryReader { geometry in
-                        Color.clear.preference(key: NavigationPanelHeightKey.self,
-                                               value: NavigationPanelHeights(top: geometry.size.height))
-                    })
+                    topCard
                     Spacer(minLength: 12)
-                    VStack(spacing: 12) {
-                        HStack {
-                            Text("\(max(0, readout.speed))").font(.system(size: 32, weight: .bold)) + Text(" km/h").font(.caption)
-                            Spacer()
-                            VStack(alignment: .trailing) {
-                                Text("剩余 \(NaviBridge.distText(max(0, readout.remaining)))").bold()
-                                Text("约 \(NaviBridge.durText(max(0, readout.remainingSeconds)))").font(.caption)
-                            }
-                        }
-                        extra
-                        HStack {
-                            Button("全览／跟随", action: onOverview).frame(minHeight: 44)
-                            Spacer()
-                            Button(muted ? "取消静音" : "静音", action: onMute).frame(minHeight: 44)
-                            Spacer()
-                            Button("返回设置", action: onSettings).frame(minHeight: 44)
-                        }.font(.subheadline)
-                        Button(settings.tunnelDimmed ? "隧道模式：开（点击关闭）" : "隧道模式：关（点击开启）") {
-                            settings.toggleTunnelMode()
-                        }
-                        .font(.subheadline).frame(maxWidth: .infinity, minHeight: 44)
-                        .accessibilityValue(settings.tunnelDimmed ? "开启" : "关闭")
-                        if readout.simulation {
-                            HStack {
-                                Button(readout.paused ? "继续" : "暂停", action: onPause).frame(minHeight: 44)
-                                Spacer()
-                                Button("\(readout.simulationSpeed) km/h", action: onCycleSpeed).frame(minHeight: 44)
-                            }.font(.subheadline)
-                        }
-                        endButton
-                    }
-                    .padding(18).background(RoundedRectangle(cornerRadius: 22).fill(AppTheme.hudCard))
-                    .background(GeometryReader { geometry in
-                        Color.clear.preference(key: NavigationPanelHeightKey.self,
-                                               value: NavigationPanelHeights(bottom: geometry.size.height))
-                    })
+                    extra
+                    bottomBar
                 }
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity).padding(16)
         .foregroundColor(.white).tint(ContentView.pink)
         .onPreferenceChange(NavigationPanelHeightKey.self, perform: onLayout)
+        .confirmationDialog("导航选项", isPresented: $showMore, titleVisibility: .hidden) {
+            moreMenu
+        }
         .alert("结束导航？", isPresented: $confirmEnd) {
             Button("结束", role: .destructive, action: onEnd)
             Button("继续导航", role: .cancel) {}
         }
+    }
+
+    /// 更多菜单：模拟控制、返回设置（不停止导航）与完整 SDK 界面入口
+    @ViewBuilder private var moreMenu: some View {
+        if readout.simulation {
+            Button(readout.paused ? "继续模拟" : "暂停模拟", action: onPause)
+            Button("模拟车速 \(readout.simulationSpeed) km/h", action: onCycleSpeed)
+        }
+        Button("返回设置（导航继续）", action: onSettings)
+        if let onShowNativeUI {
+            Button("完整导航提示", action: onShowNativeUI)
+        }
+        Button("取消", role: .cancel) {}
+    }
+
+    /// 顶部单张紧凑卡片：方向图标、下次动作与距离、道路名、剩余里程和 ETA
+    private var topCard: some View {
+        VStack(spacing: 8) {
+            HStack(spacing: 14) {
+                Image(systemName: readout.turn.symbol).font(.largeTitle.weight(.bold))
+                    .foregroundColor(ContentView.pink).frame(minWidth: 44)
+                    .accessibilityLabel(readout.turn.label)
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        Text(readout.turnDistanceText)
+                            .font(.title2.weight(.heavy)).lineLimit(1).minimumScaleFactor(0.6)
+                        Text(readout.turn.label).font(.subheadline.weight(.semibold)).foregroundColor(AppTheme.hudSub)
+                    }
+                    Text(readout.instruction.isEmpty ? "沿路线前进" : readout.instruction)
+                        .font(.subheadline).lineLimit(2)
+                    HStack(spacing: 14) {
+                        Label(readout.remainingText, systemImage: "point.topleft.down.curvedto.point.bottomright.up")
+                        Label(readout.etaText, systemImage: "clock")
+                    }
+                    .font(.caption).foregroundColor(AppTheme.hudSub)
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(16)
+            .background(RoundedRectangle(cornerRadius: 20).fill(AppTheme.hudCard))
+            // 简短状态条：弱定位、重算、模拟中等真实状态（只显示实际状态，不虚构提示）
+            if !readout.status.isEmpty {
+                HStack(spacing: 6) {
+                    Image(systemName: "info.circle")
+                    Text(ContentView.userMessage(readout.status)).lineLimit(2)
+                }
+                .font(.caption).foregroundColor(AppTheme.hudSub)
+                .padding(.horizontal, 12).padding(.vertical, 6)
+                .background(Capsule().fill(AppTheme.hudCard))
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .accessibilityLabel("状态：\(ContentView.userMessage(readout.status))")
+            }
+        }
+        .background(GeometryReader { geometry in
+            Color.clear.preference(key: NavigationPanelHeightKey.self,
+                                   value: NavigationPanelHeights(top: geometry.size.height))
+        })
+    }
+
+    /// 底部轻量玻璃控制栏：速度、全览／跟随、静音、隧道快捷操作、更多；结束保持独立的长按操作
+    private var bottomBar: some View {
+        VStack(spacing: 10) {
+            HStack(spacing: 2) {
+                VStack(spacing: 0) {
+                    Text("\(max(0, readout.speed))").font(.title3.weight(.bold).monospacedDigit()).lineLimit(1)
+                    Text("km/h").font(.caption2).foregroundColor(AppTheme.hudSub)
+                }
+                .frame(minWidth: 48)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("当前时速 \(max(0, readout.speed)) 公里每小时")
+                barButton("全览／跟随", systemImage: "map", action: onOverview)
+                barButton(muted ? "取消静音" : "静音", systemImage: muted ? "speaker.slash.fill" : "speaker.wave.2.fill", action: onMute)
+                barButton("隧道", systemImage: settings.tunnelDimmed ? "moon.fill" : "moon") {
+                    settings.toggleTunnelMode()
+                }
+                .accessibilityValue(settings.tunnelDimmed ? "开启" : "关闭")
+                .accessibilityHint("手动切换隧道模式")
+                barButton("更多", systemImage: "ellipsis") { showMore = true }
+            }
+            endButton
+        }
+        .padding(14)
+        .background(
+            ZStack { RoundedRectangle(cornerRadius: 22).fill(AppTheme.hudCard) }
+                .liquidGlass(RoundedRectangle(cornerRadius: 22), interactive: true)
+        )
+        .background(GeometryReader { geometry in
+            Color.clear.preference(key: NavigationPanelHeightKey.self,
+                                   value: NavigationPanelHeights(bottom: geometry.size.height))
+        })
+    }
+
+    private func barButton(_ title: String, systemImage: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            VStack(spacing: 3) {
+                Image(systemName: systemImage).font(.body)
+                Text(title).font(.caption2).lineLimit(1).minimumScaleFactor(0.6)
+            }
+            .frame(maxWidth: .infinity, minHeight: 44)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 
     private var endButton: some View {
@@ -219,8 +311,8 @@ struct AMapDriveViewRep: UIViewRepresentable {
         if v.showCrossImage != showNativeUI { v.showCrossImage = showNativeUI }
         controller.edgePadding = padding
         if !showNativeUI, v.bounds.height > 0 {
-            let visible = max(0, v.bounds.height - padding.top - padding.bottom)
-            let anchor = CGPoint(x: 0.5, y: min(0.85, max(0.15, (padding.top + visible * 0.6) / v.bounds.height)))
+            // 按实测卡片高度设置自车锚点（统一 HUD 布局纯函数，与地图边距同一套输入）
+            let anchor = NaviHudLayout.carAnchor(boundsHeight: v.bounds.height, padding: padding)
             if v.screenAnchor != anchor { v.screenAnchor = anchor }
         }
         if changed, v.showMode == .overview { v.updateRoutePolylineInTheVisualRangeWhenTheShowModeIsOverview() }
@@ -229,6 +321,71 @@ struct AMapDriveViewRep: UIViewRepresentable {
     static func dismantleUIView(_ uiView: AMapNaviDriveView, coordinator: ()) {
         // 地图销毁时引擎可能已被切换销毁：解绑不得重建旧单例
         NavigationCoordinator.shared.detachDriveMap(uiView)
+    }
+}
+
+/// 接住高德骑行导航界面的按钮回调（与 DriveViewController 同一模式，运行时登记协议）
+final class RideViewController: NSObject, ObservableObject {
+    weak var view: AMapNaviRideView?
+    var edgePadding = UIEdgeInsets.zero
+    var onClose: (() -> Void)?
+    @Published var showMore = false
+
+    var asDelegate: AMapNaviRideViewDelegate? {
+        class_addProtocol(RideViewController.self, AMapNaviRideViewDelegate.self)
+        return (self as AnyObject) as? AMapNaviRideViewDelegate
+    }
+
+    @objc(rideViewCloseButtonClicked:)
+    func closeTapped(_ v: AMapNaviRideView) { onClose?() }
+
+    @objc(rideViewMoreButtonClicked:)
+    func moreTapped(_ v: AMapNaviRideView) { showMore = true }
+
+    @objc(rideViewEdgePadding:)
+    func mapPadding(_ v: AMapNaviRideView) -> UIEdgeInsets { edgePadding }
+
+    var isOverview: Bool { view?.showMode == .overview }
+    func toggleOverview() {
+        guard let v = view else { return }
+        v.showMode = v.showMode == .overview ? .carPositionLocked : .overview
+    }
+}
+
+/// 官方骑行的地图容器：AMapNaviRideView（SDK 10.1.600 自带，作为骑行引擎的数据代表）。
+/// 与驾车容器同一套规则：默认隐藏 SDK 自带 UI 由统一 HUD 自绘，可切回完整 SDK 界面；
+/// 可视区域按实测 HUD 高度内缩。注意 SDK 骑行视图只支持白天样式，夜间由 HUD 深色底保证可读。
+struct AMapRideViewRep: UIViewRepresentable {
+    let controller: RideViewController
+    var showNativeUI = false
+    var edgePadding = UIEdgeInsets.zero
+
+    func makeUIView(context: Context) -> AMapNaviRideView {
+        let v = AMapNaviRideView(frame: .zero)
+        v.delegate = controller.asDelegate
+        v.showUIElements = false
+        v.screenAnchor = CGPoint(x: 0.5, y: 0.72)
+        controller.view = v
+        updateUIView(v, context: context)
+        NavigationCoordinator.shared.attachRideMap(v)      // 只有骑行引擎是当前所有者时才绑定
+        return v
+    }
+
+    func updateUIView(_ v: AMapNaviRideView, context: Context) {
+        let padding = showNativeUI ? .zero : edgePadding
+        let changed = v.showUIElements != showNativeUI || controller.edgePadding != padding
+        if v.showUIElements != showNativeUI { v.showUIElements = showNativeUI }
+        controller.edgePadding = padding
+        if !showNativeUI, v.bounds.height > 0 {
+            let anchor = NaviHudLayout.carAnchor(boundsHeight: v.bounds.height, padding: padding)
+            if v.screenAnchor != anchor { v.screenAnchor = anchor }
+        }
+        if changed, v.showMode == .overview { v.updateRoutePolylineInTheVisualRangeWhenTheShowModeIsOverview() }
+    }
+
+    static func dismantleUIView(_ uiView: AMapNaviRideView, coordinator: ()) {
+        // 地图销毁时引擎可能已被切换销毁：解绑不得重建旧单例
+        NavigationCoordinator.shared.detachRideMap(uiView)
     }
 }
 
@@ -245,15 +402,18 @@ struct NaviScreen: View {
         GeometryReader { geometry in
             ZStack(alignment: .bottomTrailing) {
                 AMapDriveViewRep(controller: drive, night: settings.paletteNight, showNativeUI: showNativeUI,
-                                 edgePadding: UIEdgeInsets(top: panelHeights.top + geometry.safeAreaInsets.top + 16,
-                                                           left: 16, bottom: panelHeights.bottom + geometry.safeAreaInsets.bottom + 16, right: 16))
+                                 edgePadding: NaviHudLayout.mapEdgeInsets(panelTop: panelHeights.top,
+                                                                          panelBottom: panelHeights.bottom,
+                                                                          safeTop: geometry.safeAreaInsets.top,
+                                                                          safeBottom: geometry.safeAreaInsets.bottom))
                     .ignoresSafeArea()
                 if !showNativeUI || navi.showArrived {
                     NavigationOverlay(readout: readout, muted: settings.voiceMuted,
                                       onOverview: drive.toggleOverview, onMute: toggleMute,
                                       onSettings: { dismiss() }, onEnd: exitNavi,
                                       onPause: navi.toggleEmuPause, onCycleSpeed: navi.cycleEmuSpeed,
-                                      onLayout: { panelHeights = $0 }) {
+                                      onLayout: { panelHeights = $0 },
+                                      onShowNativeUI: { showNativeUI = true }) {
                         if navi.uiSuggestMin > 0 {
                             HStack {
                                 Text("发现更快路线，能省约 \(navi.uiSuggestMin) 分钟").font(.caption)
@@ -262,9 +422,6 @@ struct NaviScreen: View {
                                 Button("不用") { navi.clearSuggest() }.frame(minHeight: 44)
                             }
                         }
-                        Button { showNativeUI = true } label: {
-                            Label("完整导航提示", systemImage: "map").font(.subheadline).frame(maxWidth: .infinity, minHeight: 44)
-                        }.accessibilityHint("显示高德完整导航界面，导航继续运行")
                     }
                 } else {
                     Button { showNativeUI = false } label: {

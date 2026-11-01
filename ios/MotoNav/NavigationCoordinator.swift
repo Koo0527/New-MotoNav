@@ -139,4 +139,18 @@ final class NavigationCoordinator {
         guard let m = driveManagerIfActive() else { return }
         m.removeDataRepresentative(view)
     }
+
+    // MARK: - 官方骑行导航地图视图的数据代表（RideNaviScreen 的 AMapNaviRideView）
+
+    /// 绑定骑行地图视图：骑行引擎必须是当前所有者（与驾车地图同一套属主门禁）
+    func attachRideMap(_ view: AMapNaviRideView) {
+        guard let m = rideManagerIfActive() else { return }
+        m.addDataRepresentative(view)
+    }
+
+    /// 解绑骑行地图视图：地图销毁时引擎可能已被切换销毁，不得重建旧单例
+    func detachRideMap(_ view: AMapNaviRideView) {
+        guard let m = rideManagerIfActive() else { return }
+        m.removeDataRepresentative(view)
+    }
 }
