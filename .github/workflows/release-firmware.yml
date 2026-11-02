@@ -43,6 +43,15 @@ jobs:
           cc firmware/tests/idle-power-off-test.c -o /tmp/motonav-idle
           /tmp/motonav-idle
           python3 -m unittest discover -s firmware/tests -p 'test_flash_macos.py'
+          python3 firmware/tests/game-destination-draw/check.py
+          python3 firmware/tests/lane-visibility/check.py
+          clang++ -O1 -g -std=c++17 -fsanitize=address,undefined firmware/tests/raster-smoothing/main.cpp -o /tmp/raster-smoothing
+          /tmp/raster-smoothing
+          python3 firmware/tests/raster-work/check_sources.py
+          g++ -O2 -std=c++17 -fsanitize=address,undefined -fno-omit-frame-pointer firmware/tests/raster-work/main.cpp -o /tmp/raster-work
+          /tmp/raster-work
+          g++ -O2 -std=c++17 -fsanitize=address,undefined -fno-omit-frame-pointer firmware/tests/raster-work/receiver.cpp -o /tmp/raster-receiver
+          /tmp/raster-receiver
   release:
     if: needs.tests.outputs.has_payload == 'true'
     needs: tests

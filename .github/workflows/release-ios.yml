@@ -28,11 +28,21 @@ jobs:
           python3 ios/tests/ios-fixes/check.py
           python3 ios/tests/unified-planner/check.py
           python3 ios/tests/tunnel-settings/check.py
+          python3 ios/tests/g-recording/check.py
+          swiftc ios/MotoNav/GMotionReporter.swift ios/tests/g-motion/main.swift -o /tmp/g-motion
+          /tmp/g-motion
+          python3 ios/tests/g-motion/check-location.py
+          swiftc ios/MotoNav/BleCapabilityProbe.swift ios/MotoNav/BleHandshakeClock.swift ios/tests/ble-capability/main.swift -o /tmp/ble-capability
+          /tmp/ble-capability
+          swiftc ios/MotoNav/GChartGeometry.swift ios/tests/g-chart/main.swift -o /tmp/g-chart
+          /tmp/g-chart
           python3 ios/tests/tunnel-sdk/check.py
           swiftc ios/MotoNav/TunnelDimming.swift ios/tests/tunnel-dimming/main.swift -o /tmp/tunnel-dimming
           /tmp/tunnel-dimming
           swiftc ios/MotoNav/PhoneClockSync.swift ios/tests/phone-clock/main.swift -o /tmp/phone-clock
           /tmp/phone-clock
+          swiftc ios/MotoNav/NavigationSpeed.swift ios/tests/sim-speed/main.swift -o /tmp/sim-speed
+          /tmp/sim-speed
       - name: Verify report export and record recovery
         run: |
           swiftc ios/MotoNav/MapReportExport.swift ios/tests/map-export/main.swift -o /tmp/map-export
@@ -80,6 +90,19 @@ jobs:
             ~/Library/Caches/CocoaPods
             ~/.cocoapods/repos
           key: ios-pods-${{ runner.os }}-${{ hashFiles('ios/Podfile.lock') }}
+      - name: Verify reroute recovery and screen-off cached maps
+        run: |
+          python3 ios/tests/reroute-recovery/run.py
+          python3 ios/tests/screenoff-maps/run.py
+      - name: Verify progressive building capture and delivery
+        run: |
+          python3 ios/tests/building-capture/check.py
+          python3 ios/tests/building-delivery/check.py
+          python3 ios/tests/building-offline/check.py
+          python3 ios/tests/map-smoothing/check.py
+          python3 ios/tests/smoothing-cache/check.py
+          swiftc -O ios/MotoNav/MapGeo.swift ios/MotoNav/RasterProcessing.swift ios/MotoNav/RouteMapPlan.swift ios/tests/building-progress/main.swift -o /tmp/building-progress
+          /tmp/building-progress
       - name: Verify navigation, BLE clock and route history
         run: |
           set -euo pipefail
@@ -88,6 +111,8 @@ jobs:
           /tmp/maps
           swiftc ios/MotoNav/BleWritePacer.swift ios/tests/ble-pacing/main.swift -o /tmp/pacing
           /tmp/pacing
+          swiftc ios/MotoNav/BleIdlePolicy.swift ios/tests/ble-idle-policy/main.swift -o /tmp/ble-idle
+          /tmp/ble-idle
           swiftc ios/MotoNav/ArrivalPolicy.swift ios/tests/arrival/main.swift -o /tmp/arrival
           /tmp/arrival
           clang++ -std=c++17 ios/tests/phone-clock/receiver.cpp -o /tmp/clock-receiver
@@ -96,6 +121,7 @@ jobs:
           /tmp/music
           swiftc ios/MotoNav/ArrivalPolicy.swift ios/MotoNav/NaviSessionCallbacks.swift ios/tests/arrival-relay/SDKStubs.swift ios/tests/arrival-relay/main.swift -o /tmp/relay
           /tmp/relay
+          python3 ios/tests/lane-guidance/check.py
           swiftc -O ios/MotoNav/MapGeo.swift ios/MotoNav/RasterProcessing.swift ios/MotoNav/MapStyles.swift ios/tests/four-styles/main.swift -o /tmp/styles
           /tmp/styles
           swiftc -O ios/MotoNav/MapGeo.swift ios/MotoNav/RasterProcessing.swift ios/MotoNav/MapStyles.swift ios/MotoNav/RouteMapPlan.swift ios/tests/map-delivery/main.swift -o /tmp/map-delivery
