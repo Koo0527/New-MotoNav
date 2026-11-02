@@ -42,3 +42,4 @@ __pycache__/
 *.x509.pem
 *.idsig
 *.class
+.zcode/
