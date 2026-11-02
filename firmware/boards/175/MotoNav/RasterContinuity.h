@@ -3,127 +3,89 @@
 #include <stddef.h>
 #include <string.h>
 
-#define RASTER_FLAG_PALETTE   0x8000
-#define RASTER_FLAG_BUILDINGS 0x4000
-#define RASTER_FLAG_DEFLATE   0x2000
-#define RASTER_FLAG_DELTA     0x1000
-#define RASTER_MM_MASK        0x0FFF
-
 // 校验完整游程后才允许写入备用底图；坏包不会使当前底图失效。
 struct RasterHeader {
   uint16_t frame, width, height, mm;
   int32_t x0, y0;
-  int32_t refX0, refY0;
   uint32_t dataStart, dataEnd;
   int blocksWide;
   size_t bytes;
   bool palette;
   bool buildings;
-  bool deflate;
-  bool delta;
 };
 static inline uint16_t rasterU16(const uint8_t *p) { return (uint16_t)(p[0] | ((uint16_t)p[1] << 8)); }
-static inline uint32_t rasterU32(const uint8_t *p) {
-  return (uint32_t)p[0] | ((uint32_t)p[1]<<8) | ((uint32_t)p[2]<<16) | ((uint32_t)p[3]<<24);
+static inline int32_t rasterI32(const uint8_t *p) {
+  return (int32_t)((uint32_t)p[0] | ((uint32_t)p[1]<<8) | ((uint32_t)p[2]<<16) | ((uint32_t)p[3]<<24));
 }
-static inline int32_t rasterI32(const uint8_t *p) { return (int32_t)rasterU32(p); }
-static inline bool rasterHeaderCheck(const uint8_t *p, uint32_t len, RasterHeader &h, uint32_t maxPixels, size_t capacity) {
+static inline bool rasterCheck(const uint8_t *p, uint32_t len, RasterHeader &h, uint32_t maxPixels, size_t capacity) {
   if (!p || len<16) return false;
   h.frame=rasterU16(p); h.x0=rasterI32(p+2); h.y0=rasterI32(p+6);
   h.width=rasterU16(p+10); h.height=rasterU16(p+12);
-  uint16_t flags=rasterU16(p+14);
-  h.palette=(flags&RASTER_FLAG_PALETTE)!=0;
-  h.buildings=(flags&RASTER_FLAG_BUILDINGS)!=0;
-  h.deflate=(flags&RASTER_FLAG_DEFLATE)!=0;
-  h.delta=(flags&RASTER_FLAG_DELTA)!=0;
-  h.mm=flags&RASTER_MM_MASK;
-  h.refX0=h.x0; h.refY0=h.y0;
-  if (h.palette && (h.buildings || h.delta)) return false;
+  uint16_t flags=rasterU16(p+14); h.palette=(flags&0x8000)!=0; h.buildings=(flags&0x4000)!=0; h.mm=flags&0x3fff;
+  if ((flags & 0x3000) || (h.palette && h.buildings)) return false; // Retired experimental wire flags.
   uint32_t n=(uint32_t)h.width*h.height;
   if (!h.width || !h.height || !h.mm || n>maxPixels) return false;
   h.blocksWide=(h.width+15)/16;
   h.bytes=(size_t)h.blocksWide*((h.height+15)/16)*128;
-  h.dataStart=h.palette ? 48 : (h.delta ? 24 : 16);
+  h.dataStart=h.palette ? 48 : 16;
   if (h.bytes>capacity || len<h.dataStart) return false;
-  if (h.delta) {
-    h.refX0=rasterI32(p+16); h.refY0=rasterI32(p+20);
-    int64_t dx=(int64_t)h.x0-h.refX0, dy=(int64_t)h.refY0-h.y0;
-    if ((dx*1000)%h.mm!=0 || (dy*1000)%h.mm!=0) return false;
-  }
-  return true;
-}
-static inline bool rasterCheck(const uint8_t *p, uint32_t len, RasterHeader &h, uint32_t maxPixels, size_t capacity) {
-  if (!rasterHeaderCheck(p,len,h,maxPixels,capacity) || h.deflate) return false;
-  uint32_t n=(uint32_t)h.width*h.height;
   uint32_t pos=h.dataStart, count=0;
-  uint8_t maxColor=h.palette ? 15 : ((h.buildings || h.delta) ? 7 : 3);
   while (pos<len && count<n) {
     uint8_t b=p[pos++]; uint32_t run=(b>>4)+1;
     if ((b>>4)==15) { if (pos>=len) return false; run=16+p[pos++]; }
-    if ((b&15)>maxColor || run>n-count) return false;
+    if ((!h.palette && (b&15)>(h.buildings ? 7 : 3)) || run>n-count) return false;
     count+=run;
   }
   if (count!=n) return false;
   h.dataEnd=pos;
   return true;
 }
-static inline void rasterCopyReference(uint8_t *out, const uint8_t *ref, const RasterHeader &h) {
-  int ox=(int)(((int64_t)h.x0-h.refX0)*1000/h.mm);
-  int oy=(int)(((int64_t)h.refY0-h.y0)*1000/h.mm);
-  if (ox==0 && oy==0) {
-    memcpy(out,ref,h.bytes);
-    return;
-  }
-  memset(out,0,h.bytes);
-  int xStart=ox<0 ? -ox : 0;
-  int xEnd=ox>0 ? (int)h.width-ox : (int)h.width;
-  int yStart=oy<0 ? -oy : 0;
-  int yEnd=oy>0 ? (int)h.height-oy : (int)h.height;
-  if (xStart>=xEnd || yStart>=yEnd) return;
-  if ((ox&15)==0 && (oy&15)==0 && (h.width&15)==0 && (h.height&15)==0) {
-    int bxStart=xStart>>4, bxEnd=xEnd>>4, byStart=yStart>>4, byEnd=yEnd>>4;
-    int bxOff=ox>>4, byOff=oy>>4;
-    for (int by=byStart;by<byEnd;by++) {
-      for (int bx=bxStart;bx<bxEnd;bx++) {
-        memcpy(out+(((size_t)by*h.blocksWide+bx)<<7),
-               ref+(((size_t)(by+byOff)*h.blocksWide+(bx+bxOff))<<7),128);
-      }
-    }
-    return;
-  }
-  for (int y=yStart;y<yEnd;y++) {
-    int ry=y+oy;
-    uint32_t outRow=((uint32_t)(y>>4)*h.blocksWide<<8)|((y&15)<<4);
-    uint32_t refRow=((uint32_t)(ry>>4)*h.blocksWide<<8)|((ry&15)<<4);
-    for (int x=xStart;x<xEnd;x++) {
-      int rx=x+ox;
-      uint32_t refA=refRow+(((uint32_t)(rx>>4))<<8)+(rx&15);
-      uint8_t c=(ref[refA>>1]>>((refA&1)<<2))&15;
-      if (c) {
-        uint32_t outA=outRow+(((uint32_t)(x>>4))<<8)+(x&15);
-        out[outA>>1]|=(outA&1) ? (c<<4) : c;
-      }
-    }
-  }
-}
-static inline void rasterDecode(const uint8_t *p, const RasterHeader &h, uint8_t *out, const uint8_t *ref = nullptr) {
-  if (h.delta && ref) rasterCopyReference(out,ref,h);
-  else memset(out,0,h.bytes);
-  uint32_t pos=h.dataStart, i=0, n=(uint32_t)h.width*h.height;
+// RLE spans stay within one 16-pixel tile row. Write packed pairs in one
+// contiguous operation instead of recomputing tiled addresses per pixel.
+struct RasterDecodeCursor {
+  size_t cleared=0;
+  uint32_t pos=0, emitted=0, run=0;
   int x=0,y=0;
-  while (i<n) {
-    uint8_t b=p[pos++], color=b&15; uint32_t run=(b>>4)+1;
-    if ((b>>4)==15) run=16+p[pos++];
-    if (color) for (uint32_t j=0;j<run;j++) {
-      uint32_t a=((uint32_t)((y>>4)*h.blocksWide+(x>>4))<<8)|((y&15)<<4)|(x&15);
-      out[a>>1]^=(a&1) ? color<<4 : color;
-      if (++x==h.width) { x=0; y++; }
-    } else { x+=run; while (x>=h.width) { x-=h.width; y++; } }
-    i+=run;
+  uint8_t color=0;
+  bool started=false,done=false;
+};
+// Each call performs at most budget bytes of clearing or budget pixels of
+// decoding. A run may be suspended mid-nibble; padding remains exactly zero.
+static inline bool rasterDecodeStep(const uint8_t *p,const RasterHeader &h,uint8_t *out,
+                                     RasterDecodeCursor &s,uint32_t budget) {
+  if(s.done || !budget)return s.done;
+  if(!s.started){s.pos=h.dataStart;s.started=true;}
+  if(s.cleared<h.bytes) {
+    size_t take=h.bytes-s.cleared;if(take>budget)take=budget;
+    memset(out+s.cleared,0,take);s.cleared+=take;
+    return false;
   }
-  if (h.delta && !h.palette && !h.buildings) {
-    for (size_t k=0;k<h.bytes;k++) out[k]&=0x33;
+  const uint32_t n=(uint32_t)h.width*h.height;
+  while(budget && s.emitted<n) {
+    if(!s.run) {
+      uint8_t b=p[s.pos++];s.color=b&15;s.run=(b>>4)+1;
+      if((b>>4)==15)s.run=16+p[s.pos++];
+    }
+    uint32_t take=s.run;if(take>budget)take=budget;
+    if(s.color) {
+      if(take>(uint32_t)(h.width-s.x))take=h.width-s.x;
+      if(take>(uint32_t)(16-(s.x&15)))take=16-(s.x&15);
+      const uint32_t addr=((uint32_t)((s.y>>4)*h.blocksWide+(s.x>>4))<<7)|((s.y&15)<<3)|((s.x&15)>>1);
+      uint8_t *target=out+addr;uint32_t left=take;
+      if(s.x&1){*target++|=s.color<<4;left--;}
+      const uint32_t pairs=left>>1;
+      if(pairs)memset(target,s.color|(s.color<<4),pairs);
+      if(left&1)target[pairs]|=s.color;
+    }
+    s.x+=take;while(s.x>=h.width){s.x-=h.width;s.y++;}
+    s.run-=take;s.emitted+=take;budget-=take;
   }
+  s.done=s.emitted==n;
+  return s.done;
+}
+static inline void rasterDecode(const uint8_t *p,const RasterHeader &h,uint8_t *out) {
+  RasterDecodeCursor cursor;
+  while(!rasterDecodeStep(p,h,out,cursor,65536)){}
 }
 static inline bool rasterRead(const uint8_t *pixels, const RasterHeader &h, int x, int y, uint8_t &color) {
   if (!pixels || (uint32_t)x>=h.width || (uint32_t)y>=h.height) return false;

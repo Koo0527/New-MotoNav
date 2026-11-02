@@ -10,10 +10,12 @@ void handleBulk(const uint8_t *d, int n) {
   Bulk &b = bulks[type];
   if (!b.buf || total == 0 || total > b.cap || parts == 0 || parts > 4096 || seq >= parts) return;
   if (id != b.id || total != b.total || parts != b.parts) {     // 新的一份：从头开始收
+    if(type==3)cancelPendingRaster();
     b.id = id; b.total = total; b.parts = parts; b.got = 0; b.done = false;
     memset(b.mask, 0, sizeof(b.mask));
   }
   if (b.done) { pendingAck = "K," + String(type) + "," + String(id); return; }   // 重复的：再确认一次
+  if(type==3 && pendingRasterWork.active)return; // A duplicate tail must not acknowledge unfinished work.
   uint32_t len = n - 15;
   if (off >= total) return;
   if (off + len > total) len = total - off;
@@ -32,12 +34,15 @@ void handleBulk(const uint8_t *d, int n) {
     } else if (type == 4) {
       parseGhost(b.buf, total);                        // v4.4 原路线
     } else {
-      if (!parseRaster(b.buf,total)) {
-        // 没有成功解码就不回“已确认”，通知手机回退全量重发。
+      b.done=false;
+      if (!queueRasterWork(b.buf,total,id)) {
+        // 没有成功解码就不回“已确认”，并允许相同编号完整重发。
         b.done=false; b.got=0; memset(b.mask,0,sizeof(b.mask));
         pendingAck = "N," + String(type) + "," + String(id);
         return;
       }
+      if(pendingRasterWork.active)return;
+      b.done=true;
     }
     pendingAck = "K," + String(type) + "," + String(id);
     navDirty = true;

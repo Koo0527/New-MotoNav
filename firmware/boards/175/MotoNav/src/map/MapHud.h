@@ -103,9 +103,9 @@ void drawTripLine(int y) {
   }
 }
 
-// 车道跟随转弯倒计时显示（当前从 500 米开始）；有测速牌时再往下让一点。
+// SDK 控制车道提示的有效期；高速预告常早于 500 米转弯倒计时。
 void drawMapLanes() {
-  const bool visible = laneN > 0 && ringActive;
+  const bool visible = laneN > 0;
 #if FPS_SERIAL_DIAGNOSTICS
   static int previous = -1;
   const int state = visible ? laneN : 0;

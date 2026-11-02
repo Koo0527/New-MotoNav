@@ -176,8 +176,19 @@ void mapFillPoly(const float *xs, const float *ys, int n, uint16_t c) {
   }
 }
 
+#include "../../MapPlayerMarker.h"
 // 车头箭头（白色，深色描边）
-void drawPlayer(float x, float y) {
+void drawPlayer(float x, float y, float heading = 0) {
+  if (themeIdx >= 1 && themeIdx <= 3) {
+    float xs[14], ys[14];
+    for (int pass=0; pass<2; ++pass) {
+      int n=MapPlayerMarker::vertices(themeIdx,heading,pass==0?1.22f:1.0f,x,y,xs,ys);
+      if (themeIdx == 3) {
+        xs[n]=xs[0]; ys[n]=ys[0]; mapPolyline(xs,ys,n+1,pass==0?4:2,pass==0?C_BLACK:GameMapStyle::palette(themeIdx,nightOn).player,true);
+      } else mapFillPoly(xs,ys,n,pass==0?C_BLACK:GameMapStyle::palette(themeIdx,nightOn).player);
+    }
+    return;
+  }
   // v3.9 车头箭头缩小到原来的约 70%
   const float T[4][2] = {{0, -13}, {-10, 10.5f}, {0, 5}, {10, 10.5f}};
   for (int pass = 0; pass < 2; pass++) {

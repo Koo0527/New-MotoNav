@@ -16,12 +16,14 @@ typedef struct {
   uint32_t checkedAt;
   bool sampled;
   bool batteryOnly;
+  bool valid;
 } IdlePowerSupply;
 
 static inline void idlePowerSupplyUpdate(IdlePowerSupply *supply, uint32_t now,
                                          int axpStatus1) {
   supply->checkedAt = now;
   supply->sampled = true;
+  supply->valid = axpStatus1 >= 0 && axpStatus1 <= 255;
   /* STATUS1 bit 5: VBUS-good. Full batteries still have this bit set on USB. */
   supply->batteryOnly = axpStatus1 >= 0 && axpStatus1 <= 255 &&
                         (axpStatus1 & 0x20) == 0;

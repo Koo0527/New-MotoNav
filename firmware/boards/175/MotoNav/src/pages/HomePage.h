@@ -101,25 +101,18 @@ void animateCat() {
 
 #include "../../FixedPageLayout.h"
 // 固定位置：音乐在左、导航居中、天气在右；降雨在天气上方、预警在下方。
-int page = 0;                               // 0 = 导航 / 首页，1 = 天气，2 = 音乐
+void drawGInstrument();
+int page = 0;                               // 0 = 导航 / 首页，1 = 天气，2 = 音乐，3 = 本地 G 仪表
 int wxDetail = 0;                           // 天气列：0 = 天气，1 = 上方降雨，2 = 下方预警
 unsigned long pageAt = 0;
 
 // 页面顺序对应滑动位置：音乐在左，主页居中，天气在右；导航主页不显示。
-void drawPageDots() {
-  if (page == 0 && inNav) return;
-  const int pageOrder[] = {2, 0, 1};
-  for (int i = 0; i < 3; i++) {
-    aaDisc(CX + (i - 1) * 20, 444, 4, page == pageOrder[i] ? C_WHITE : 0x4208);
-  }
-  if (page == 1) for (int i = 0; i < 3; i++) {
-    aaDisc(438, CX + (i - 1) * 18, 3,
-      i == FixedPageLayout::weatherRow(wxDetail) ? C_WHITE : 0x4208);
-  }
-}
+// 具体画法在 FixedPageLayout::drawPageDots（G 仪表页复用同一份逻辑）。
+void drawPageDots() { FixedPageLayout::drawPageDots(page, wxDetail, inNav); }
 
 // Update just the clock rectangle once its displayed minute/date changes.
 void drawHomeClock(bool force=false) {
+  if(deviceControls.asleep)return;
   if(!onWaitScreen||sliding||page!=0||inNav)return;
   static int64_t drawnMinute=-2;
   const uint32_t now=millis();
@@ -138,7 +131,9 @@ void drawHomeClock(bool force=false) {
 
 void drawWaiting(int st) {
   waitSt = st;
+  if(deviceControls.asleep)return;
   if (sliding) return;                                                 // v5.5 正在滑动：滑完再画
+  if (page == 3) { onWaitScreen = false; return; }
   if (page == 2) { onWaitScreen = false; musicDirty = true; return; }
   if (page == 1) { onWaitScreen = false; wxDirty = true; return; }   // v5.3 正在看天气：先不画首页，滑回来时再画
   gfx->fillScreen(C_BLACK);

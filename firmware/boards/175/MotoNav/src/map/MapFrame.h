@@ -88,11 +88,14 @@ void drawMapFrame() {
     updateRouteProgress(cx, cy);
     float split = routeProg >= 0 ? routeProg : 0;
     float w0 = fmaxf(6, 13 * wk), w1 = fmaxf(4, 9 * wk);
+    if (themeIdx == 3 && routeCum) drawGameRouteDots(split, cx, cy, sc, cs, sn, viewR);
+    else {
     if (split > 0 && trailMode == 1)
       drawRouteRange(0, split, cx, cy, sc, cs, sn, viewR, w0 * 0.8f, w1 * 0.75f, TH.done2, TH.done);
     drawRouteRange(split, (float)(routeN - 1), cx, cy, sc, cs, sn, viewR, w0, w1, C_ROUTE2, C_ROUTE);
     if (!dragon && styleIdx()!=ST_MINIMAL && curveOn && routeCurv) drawRouteCurved(split, (float)(routeN - 1), cx, cy, sc, cs, sn, viewR, w1);   // v6.1
     if (!dragon && styleIdx()!=ST_MINIMAL) drawTraffic(cx, cy, sc, cs, sn, viewR, w0, w1, split);                       // v5.0 路况颜色
+    }
   }
   profMark(2);
   obsN = 0;                                             // v3.8 占位框从头登记
@@ -103,7 +106,7 @@ void drawMapFrame() {
   if (!dragon && !cleanOn && !cruiseOn) drawMapLights(cx, cy, sc, cs, sn);   // v3.2 路线上的红绿灯（v4.9 清爽模式不画；v7.6 巡航不画）
   if (!dragon) drawMapCams(cx, cy, sc, cs, sn);                      // v3.5 电子眼
   if (!cruiseOn) drawDestBlip(cx, cy, sc, cs, sn);      // v2.9 目的地标记（v7.6 巡航没有目的地）
-  drawPlayer(CX, MAP_PY);
+  drawPlayer(CX, MAP_PY, hPred - viewHdg);
   profMark(3);
   {
     int st = styleIdx();                                // v6.1 纸地图、蓝图、掌机像素不压暗边缘

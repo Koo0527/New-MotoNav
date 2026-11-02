@@ -1,4 +1,5 @@
 #pragma once
+#include "GameRouteDots.h"
 // 路线接收、进度和路线绘制。由 MotoNav.ino 按依赖顺序包含，仅编译一次。
 void parseRoute(const uint8_t *p, uint32_t len) {
   routeSegmentCache.clear();
@@ -206,5 +207,32 @@ void drawGhost(float cx, float cy, float sc, float cs, float sn, float viewR, fl
       tmpX[m] = CX + sc * (dx * cs - dy * sn); tmpY[m] = MAP_PY - sc * (dx * sn + dy * cs); m++;
     }
     if (m >= 2) mapPolyline(tmpX, tmpY, m, w, styleIdx()==ST_MINIMAL ? 0x8410 : 0xFD20, true);
+  }
+}
+
+// Route-origin phase stays fixed while the camera moves or zooms.
+void drawGameRouteDots(float split, float cx, float cy, float sc, float cs, float sn, float viewR) {
+  if (!routeCum) return;
+  int splitK = min((int)split, routeN - 2);
+  float splitD = routeCum[splitK] + (routeCum[splitK+1]-routeCum[splitK])*(split-splitK);
+  for (int bi=0; bi*RB_STEP<routeN-1; ++bi) {
+    const int32_t *bb=rbBox+4*bi;
+    if (bb[2]<cx-viewR || bb[0]>cx+viewR || bb[3]<cy-viewR || bb[1]>cy+viewR) continue;
+    int end=min(routeN-1,(bi+1)*RB_STEP);
+    for (int k=bi*RB_STEP; k<end; ++k) {
+      gameVisibleDots(routeCum[k],routeCum[k+1],(double)routeX[k]-cx,(double)routeY[k]-cy,
+        (double)routeX[k+1]-routeX[k],(double)routeY[k+1]-routeY[k],viewR,[&](double t,double d) {
+        bool done=d<splitD;
+        if (done && trailMode!=1) return;
+        float dx=routeX[k]+((double)routeX[k+1]-routeX[k])*t-cx;
+        float dy=routeY[k]+((double)routeY[k+1]-routeY[k])*t-cy;
+        int traffic=0;
+        if (!done) for (int i=0; i<trafN; ++i)
+          if (d>=trafA[i] && d<trafB[i]) traffic=trafS[i];
+        uint16_t color=gameDotColor(done,TH.done,C_ROUTE,curveOn && routeCurv,
+          routeCurv ? CURVE_COL[routeCurv[k]] : C_ROUTE,traffic);
+        gfx->fillCircle(CX+sc*(dx*cs-dy*sn),MAP_PY-sc*(dx*sn+dy*cs),2,color);
+      });
+    }
   }
 }

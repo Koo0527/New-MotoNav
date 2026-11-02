@@ -170,6 +170,8 @@ class RxCB : public BLECharacteristicCallbacks {
     int next = (rxHead + 1) % RXQ_SLOTS;
     if (next == rxTail) rxTail = (rxTail + 1) % RXQ_SLOTS;   // 队列满：丢掉最旧的一条
     rxq[rxHead].len = n;
+    rxq[rxHead].receivedAt=millis();rxq[rxHead].epoch=mediaConnectionEpoch;
+    rxq[rxHead].authenticated=bleConnected&&bleAuthed;
     memcpy(rxq[rxHead].data, c->getData(), n);
     rxHead = next;
     portEXIT_CRITICAL(&mux);

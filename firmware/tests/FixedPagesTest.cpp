@@ -28,7 +28,7 @@ String operator+(const std::string& s,int n){return String(s+std::to_string(n));
 constexpr float PI=3.14159265358979323846f;
 constexpr int LCD_WIDTH=466,LCD_HEIGHT=466,CX=233,WAIT_READY=1,WAIT_NOLINK=0;
 constexpr int MALLOC_CAP_SPIRAM=1;
-constexpr uint16_t C_BLACK=0,C_CYAN=0x07ff,C_WHITE=0xffff,C_GREY=0x8410,C_ORANGE=0xfd20,C_RED=0xf800;
+constexpr uint16_t C_BLACK=0,C_CYAN=0x07ff,C_WHITE=0xffff,C_GREY=0x8410,C_ORANGE=0xfd20,C_RED=0xf800,C_YELLOW=0xffe0;
 template<class T> T constrain(T n,T lo,T hi){return min(hi,max(lo,n));}
 uint32_t fakeNow=100;
 unsigned long millis(){fakeNow+=5;return fakeNow;}
@@ -40,8 +40,13 @@ struct Canvas {
   void fillScreen(uint16_t c){std::fill(pixels,pixels+466*466,c);}
   uint16_t* getFramebuffer(){return pixels;}
   void drawPixel(int x,int y,uint16_t c){if(x>=0&&x<466&&y>=0&&y<466)pixels[y*466+x]=c;}
+  void drawFastHLine(int x,int y,int w,uint16_t c){fillRect(x,y,w,1,c);}
+  void drawFastVLine(int x,int y,int h,uint16_t c){fillRect(x,y,1,h,c);}
+  void drawCircle(int x,int y,int r,uint16_t c){for(int i=0;i<720;i++){float a=i*0.00872664626f;drawPixel(lroundf(x+r*cosf(a)),lroundf(y+r*sinf(a)),c);}}
+  void drawLine(int x,int y,int xx,int yy,uint16_t c){int n=max(abs(xx-x),abs(yy-y));for(int i=0;i<=n;i++)drawPixel(n?x+(xx-x)*i/n:x,n?y+(yy-y)*i/n:y,c);}
   void fillRect(int x,int y,int w,int h,uint16_t c){for(int j=y;j<y+h;j++)for(int i=x;i<x+w;i++)drawPixel(i,j,c);}
   void fillRoundRect(int x,int y,int w,int h,int,uint16_t c){fillRect(x,y,w,h,c);}
+  void drawRoundRect(int x,int y,int w,int h,int,uint16_t c){fillRect(x,y,w,h,c);}
   void fillTriangle(int ax,int ay,int bx,int by,int cx,int cy,uint16_t c){
     for(int y=min({ay,by,cy});y<=max({ay,by,cy});y++)for(int x=min({ax,bx,cx});x<=max({ax,bx,cx});x++){
       int a=(x-ax)*(by-ay)-(y-ay)*(bx-ax),b=(x-bx)*(cy-by)-(y-by)*(cx-bx),d=(x-cx)*(ay-cy)-(y-cy)*(ax-cx);
@@ -50,12 +55,12 @@ struct Canvas {
   }
 } canvas;
 Canvas* gfx=&canvas;
-struct Text {std::string value;int y;};
+struct Text {std::string value;int y;int x=0;};
 std::vector<Text> text;
-void printCentered(const std::string& s,int,int y,int,uint16_t){text.push_back({s,y});}
+void printCentered(const std::string& s,int x,int y,int,uint16_t){text.push_back({s,y,x});}
 void drawTextImg(int slot,int y,uint8_t){text.push_back({"bitmap-slot-"+std::to_string(slot),y});}
 void aaDisc(float x,float y,float r,uint16_t c){for(int j=(int)(y-r);j<=y+r;j++)for(int i=(int)(x-r);i<=x+r;i++)if((i-x)*(i-x)+(j-y)*(j-y)<=r*r)canvas.drawPixel(i,j,c);}
-void drawPageDots(){}
+uint16_t blend565(uint16_t a,uint16_t,int){return a;}
 void drawRedRing(){}
 void flushWait(){}
 void flushAsync(){}
@@ -83,7 +88,12 @@ struct {
 namespace AppleMediaData { double duration(const char*){return 0;} }
 bool hidMediaReady(){return false;}
 struct {bool enqueue(int){return true;}} hidPulses;
+#include "../boards/175/MotoNav/GInstrumentRuntime.h"
+GInstrument::Estimator gEstimator;GInstrument::Output gOutput;int gState=0;
 #include "../boards/175/MotoNav/FixedPageLayout.h"
+#include "../boards/175/MotoNav/TouchLockBadge.h"
+// v7.12.10-pages.175c.9 起分页点由 FixedPageLayout 共享实现（真画到内存画布上）。
+void drawPageDots(){FixedPageLayout::drawPageDots(page,wxDetail,inNav);}
 #include "../boards/175/MotoNav/src/pages/WeatherPage.h"
 #include "../boards/175/MotoNav/src/pages/PageNavigation.h"
 
@@ -97,6 +107,44 @@ void swipe(int dx,int dy,bool finish=true){
 }
 bool has(const std::string& value){for(const auto& s:text)if(s.value==value)return true;return false;}
 int main(){
+  reset(3);gOutput.update(0,true,0.25f,0.5f);gState=2;drawGInstrument();
+  assert(has("ACCEL 0.50g")&&has("R 0.25"));
+  unsigned before=gScaleIndex;gInstrumentTap(316,86);assert(gScaleIndex==(before+1)%3);
+  gInstrumentTap(146,86);assert(gOutput.count==0&&gOutput.accel==0);
+  gOutput.update(100,false,0,0);gState=5;text.clear();drawGInstrument();assert(has("G DATA UNAVAILABLE"));
+
+  // v7.12.10-pages.175c.9：G 仪表页提示点——右侧两个纵向点（下点高亮，G 在首页下方），
+  // 不画底部横向点；首次显示、100ms 连续刷新、无数据重绘、换页返回后都在。
+  auto dotAt=[&](int x,int y){return canvas.pixels[y*466+x];};
+  auto gDotsVisible=[&](){
+    assert(dotAt(438,224)==0x4208&&dotAt(438,242)==C_WHITE);
+    assert(dotAt(213,444)==C_BLACK&&dotAt(233,444)==C_BLACK&&dotAt(253,444)==C_BLACK);
+  };
+  reset(3);gOutput.update(0,true,0.25f,0.5f);gState=2;text.clear();
+  drawGInstrument();gDotsVisible();                                   // 首次显示
+  { // 右侧峰值文字右缘收在 x=431，与纵向点(x≥435)不重叠
+    const Text* r=nullptr;for(const auto&t:text)if(!r&&t.value.rfind("R ",0)==0)r=&t;
+    assert(r&&r->x+(int)r->value.length()*6/2<=431);
+  }
+  fakeNow+=200;gInstrumentPageTick();gDotsVisible();                  // 持续刷新仍保留
+  gOutput.update(0,false,0,0);gState=5;drawGInstrument();gDotsVisible(); // 无数据整屏重绘仍保留
+  swipe(0,350);assert(page==0);swipe(0,-350);assert(page==3);
+  fakeNow+=200;gInstrumentPageTick();gDotsVisible();                  // 换页返回后仍保留
+
+  // v7.12.10-pages.175c.9：锁定徽标在左上 CX-44，与蓝牙点、电池（含充电标与三位百分比）
+  // 以及状态栏局部刷新擦除矩形都不相交；先擦后画不留残影。
+  const auto badge=TouchLockBadge::bounds(CX);
+  auto disjoint=[&](int x0,int y0,int x1,int y1){
+    return badge.x+badge.w-1<x0||x1<badge.x||badge.y+badge.h-1<y0||y1<badge.y;
+  };
+  assert(disjoint(CX-7,23,CX+7,37));    // 蓝牙点 (CX,30) r7
+  assert(disjoint(CX+14,22,CX+60,40));  // 电池主体+充电标+“100”三位百分比
+  assert(disjoint(CX-9,21,CX+67,39));   // 状态栏局部刷新擦除矩形不误擦徽标
+  TouchLockBadge::draw(CX);
+  assert(dotAt(CX-44,28)==C_YELLOW);
+  TouchLockBadge::erase(CX);
+  assert(dotAt(CX-44,28)==C_BLACK);
+
   // Every adjacent transition is reversible; outside edges are immovable.
   reset();swipe(350,0);assert(page==2);
   swipe(-350,0);assert(page==0);
@@ -110,6 +158,10 @@ int main(){
   swipe(0,350);assert(page==1&&wxDetail==0);
   swipe(350,0);assert(page==0);
   swipe(0,350);assert(page==0&&!dragging);
+  swipe(0,-350);assert(page==3);
+  swipe(350,0);assert(page==3&&!dragging);
+  swipe(0,-350);assert(page==3&&!dragging);
+  swipe(0,350);assert(page==0);
   reset(2);swipe(350,0);assert(page==2&&!dragging);
   swipe(0,350);assert(page==2&&!dragging);
 

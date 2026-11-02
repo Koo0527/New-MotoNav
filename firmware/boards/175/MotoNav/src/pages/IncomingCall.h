@@ -34,6 +34,7 @@ int16_t touchX0 = 0, touchY0 = 0, touchX1 = 0, touchY1 = 0;
 void dragMove(int dx, int dy, unsigned long now);   // v5.5 跟手换页
 int musicButtonAt(int x, int y);
 void musicTap(int x, int y);
+void gInstrumentTap(int x,int y);
 void dragEnd();
 void dragAbort();
 
@@ -43,13 +44,14 @@ void touchPoll() {
   static unsigned long lastPoll = 0;
   unsigned long now = millis();
   if (!touchOK) return;
-  if (!touchIrq && !touchDown && !callOn) return;
+  if (!touchIrq && !touchDown && !callOn && !deviceControls.touchBlocked) return;
   if (now - lastPoll < 12) return;
   lastPoll = now;
   touchIrq = false;
   if (callAnswerSent && now - callAnswerAt > 4000) callAnswerSent = false;   // 4 秒还在响：允许再按一次
   int16_t x[5] = {0}, y[5] = {0};
   uint8_t n = touch.getPoint(x, y, 1);
+  if (!controlTouchGate(n > 0, now)) return;
   if (n > 0) {
     if (!touchDown) {
       touchDown = true;
@@ -69,6 +71,7 @@ void touchPoll() {
     if (callOn || pairOn || touchEat || fxOn) dragAbort();
     else {
       if (page == 2 && abs(touchX1 - touchX0) < 36 && abs(touchY1 - touchY0) < 36) musicTap(touchX0, touchY0);
+      if (page == 3 && abs(touchX1 - touchX0) < 36 && abs(touchY1 - touchY0) < 36) gInstrumentTap(touchX0,touchY0);
       if (page == 1 && abs(touchX1 - touchX0) < 36 && abs(touchY1 - touchY0) < 36) weatherTap();
       dragEnd();
     }

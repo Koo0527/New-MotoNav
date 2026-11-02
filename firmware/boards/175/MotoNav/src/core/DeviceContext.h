@@ -10,6 +10,14 @@
 #include <MotoNavIpcStackGuard.h>
 #include <driver/rtc_io.h>
 #include "../../IdlePowerOff.h"
+#include "../../DeviceControls.h"
+DeviceControls deviceControls;
+bool controlWakeFrame=false;
+int controlBrightness=200;
+uint32_t controlFadeAt=0;
+String pendingPowerStatus;
+String pendingInstrumentStatus;
+String pendingGStreamStatus;
 #include <driver/spi_master.h>
 #include <BLEDevice.h>
 #include <BLEServer.h>
@@ -96,7 +104,7 @@ volatile bool bleConnected = false;
 // ===== 接收队列：蓝牙线程收到的每个数据包原样放进队列，主循环再取出处理 =====
 #define RXQ_SLOTS 48   // v2.0 加大，接收地图大块数据时不丢包
 #define RXQ_MAX   512
-struct RxMsg { uint16_t len; uint8_t data[RXQ_MAX]; };
+struct RxMsg { uint16_t len; uint8_t data[RXQ_MAX]; uint32_t receivedAt,epoch; bool authenticated; };
 RxMsg rxq[RXQ_SLOTS];
 volatile int rxHead = 0, rxTail = 0;
 portMUX_TYPE mux = portMUX_INITIALIZER_UNLOCKED;
@@ -112,6 +120,7 @@ bool staleShown = false;      // 是否正在显示“数据中断”提示
 bool navDirty = false;        // 导航画面需要重画
 
 int speedKmh = -1;            // 车速，-1 表示还没有
+uint32_t speedAt = 0;
 int camLimit = 0, camDist = 0;
 bool hasCam = false;          // 前方是否有测速
 int laneN = 0;                // 车道数，0 表示不显示

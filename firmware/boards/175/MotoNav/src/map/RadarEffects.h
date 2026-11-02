@@ -69,6 +69,9 @@ static inline int bandCov64(int r64, int a, int b) {
   return c <= 0 ? 0 : (c >= 64 ? 64 : c);
 }
 
+static inline uint16_t gameRingTrack() { return themeIdx>=1 && themeIdx<=3 ? GameMapStyle::palette(themeIdx,nightOn).ring : C_TRACK; }
+static inline uint16_t gameRingDone() { return themeIdx>=1 && themeIdx<=3 ? GameMapStyle::palette(themeIdx,nightOn).ringDone : TRIP_DONE_C; }
+static inline uint16_t gameRingLeft() { return themeIdx>=1 && themeIdx<=3 ? GameMapStyle::palette(themeIdx,nightOn).ringLeft : TRIP_LEFT_C; }
 #include "../../RingFastColors.h"
 uint16_t* ringFastColors=nullptr;
 RingFastColors::Key ringFastKey={};
@@ -83,9 +86,10 @@ void prepareRingFastColors() {
   }
   if(!ringFastColors)return;
   RingFastColors::Key key={RP.track,RP.trip>=0,RP.prog>0.002f,RP.over,(int)RP.ph,RP.pcol};
+  key.theme=themeIdx; key.night=nightOn; key.trackColor=gameRingTrack(); key.doneColor=gameRingDone(); key.leftColor=gameRingLeft();
   if(ringFastValid && RingFastColors::same(key,ringFastKey))return;
   for(int phase=0;phase<4;phase++)for(int i=0;i<RingFastColors::Count;i++)
-    ringFastColors[phase*RingFastColors::Count+i]=RingFastColors::color(i+RingFastColors::First,phase,key,RING_R,TRIP_H,C_TRACK,TRIP_DONE_C,TRIP_LEFT_C,C_RED);
+    ringFastColors[phase*RingFastColors::Count+i]=RingFastColors::color(i+RingFastColors::First,phase,key,RING_R,TRIP_H,gameRingTrack(),gameRingDone(),gameRingLeft(),C_RED);
   ringFastKey=key;ringFastValid=true;
 }
 static inline __attribute__((always_inline)) void ringPixel(uint16_t *px, int ix, long iy2, int iy) {
@@ -108,14 +112,14 @@ static inline __attribute__((always_inline)) void ringPixel(uint16_t *px, int ix
   uint16_t c = *px;
   int a = bandCov64(r64, 211, 240);
   if (a) c = a >= 64 ? C_BLACK : blendF(c, C_BLACK, a * 4);
-  if (RP.track) { a = bandCov64(r64, RING_R - 5, RING_R + 5); if (a) c = a >= 64 ? C_TRACK : blendF(c, C_TRACK, a * 4); }
+  if (RP.track) { a = bandCov64(r64, RING_R - (themeIdx==3?2:5), RING_R + (themeIdx==3?2:5)); if (a) c = a >= 64 ? gameRingTrack() : blendF(c, gameRingTrack(), a * 4); }
   if (RP.trip >= 0) {                                  // v7.4 行程环：走过的灰，没走的绿
     a = bandCov64(r64, RING_R - TRIP_H, RING_R + TRIP_H);
     if (a) {
       bool right = ix >= 0;
       bool before = (ix * tripUy - iy * tripUx) >= 0;
       bool done = RP.trip >= 0.9999f ? true : RP.trip <= 0.0001f ? false : (RP.trip <= 0.5f ? (right && before) : (right || before));
-      uint16_t tc = done ? TRIP_DONE_C : TRIP_LEFT_C;
+      uint16_t tc = done ? gameRingDone() : gameRingLeft();
       c = a >= 64 ? tc : blendF(c, tc, a * 4);
     }
   }
@@ -153,14 +157,22 @@ void __attribute__((optimize("O3"))) ringRows(int y0, int y1, int step) {
 
 // 画外圈：黑边 + 进度环底（track）+ 进度条（prog 0~1，粗 thick）+ 超速红圈
 void drawRingLayer(bool track, float prog, int thick, uint16_t pcol, bool over, float trip) {
+  if (themeIdx>=1 && themeIdx<=3) {
+    track=GameMapStyle::baseTrack(themeIdx,track);
+    GameMapStyle::prioritize(over,track,prog,trip);
+  }
   RP.fb = gfx->getFramebuffer();
   if (!RP.fb) return;
   RP.track = track; RP.prog = prog > 1 ? 1 : prog; RP.ph = thick / 2.0f; RP.pcol = pcol; RP.over = over;
   RP.trip = trip; tripUx = sinf(trip * 2 * PI); tripUy = -cosf(trip * 2 * PI);
   if (!ringTablesInit()) {                             // 内存不够：退回老办法
     fillRingBand(0, 1, 211, 240, C_BLACK);
-    if (trip >= 0) drawTripRing(trip);
-    if (track) drawRingTrack();
+    if (track) fillRingBand(0,1,RING_R-(themeIdx==3?2:5),RING_R+(themeIdx==3?2:5),gameRingTrack());
+    if (trip >= 0) {
+      fillRingBand(0,1,RING_R-TRIP_H,RING_R+TRIP_H,gameRingLeft());
+      if (trip>0.002f) fillRingBand(0,trip,RING_R-TRIP_H,RING_R+TRIP_H,gameRingDone());
+      drawTripDot(trip);
+    }
     if (prog > 0.002f) drawRingProgress(prog, thick, pcol);
     if (over) fillRingBand(0, 1, 228, 233, C_RED);
     return;

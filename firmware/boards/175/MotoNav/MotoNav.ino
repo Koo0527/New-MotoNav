@@ -27,8 +27,10 @@
 #include "src/display/RowWorker.h"
 #include "src/map/RasterRenderer.h"
 #include "src/map/RouteRenderer.h"
+#include "src/map/RasterWorkQueue.h"
 #include "src/protocol/BulkReceiver.h"
 #include "src/power/BatteryPolling.h"
+#include "src/power/DeviceControlRuntime.h"
 #include "src/connectivity/Notifications.h"
 #include "src/map/MapPrimitives.h"
 #include "src/map/MapHud.h"
@@ -37,6 +39,7 @@
 #include "src/map/RadarEffects.h"
 #include "src/map/MapFrame.h"
 #include "src/pages/NavigationPage.h"
+#include "DeviceInstruments.h"
 #include "src/protocol/CommandReceiver.h"
 #include "src/connectivity/DeviceName.h"
 #include "src/diagnostics/RenderBenchmarks.h"
@@ -49,6 +52,8 @@ void setup() {
   Serial.printf("Reset reason=%d, sleep wake=%d\n", (int)esp_reset_reason(),
                 (int)esp_sleep_get_wakeup_cause());
   Wire.begin(IIC_SDA, IIC_SCL);
+  pinMode(0,INPUT_PULLUP);
+  deviceControls.bootBegin(digitalRead(0)==LOW,millis());
   touchInit();                                         // v5.2 触摸屏
   batInit();                                           // v6.8 电源芯片（电量）
 
@@ -62,9 +67,12 @@ void setup() {
     bootBrand = BootAnimation::valid(pr.getInt("bootbrand", 0));
     hidMusicMode = pr.getBool("mediahid", false);
     fastFlushOn = pr.getBool("fastf", true);
+    uint32_t powerSettings=pr.getUInt("powersave",(600UL<<16)|120);
+    deviceControls.setPower(powerSettings>>16,powerSettings&0xffff);
     pr.end();
     if (qspiMHz != 40 && qspiMHz != 60 && qspiMHz != 80) qspiMHz = 40;
   }
+  gInstrumentBegin();
   if (!gfx->begin(qspiMHz * 1000000)) Serial.println("gfx->begin() failed!");
   panel->setBrightness(200);
 
@@ -84,10 +92,14 @@ void setup() {
   initDoubleBuffer();                                               // v2.2 双缓冲 + 核心 0 刷屏
   helperInit();                                                     // v5.7 另一个核心帮忙画底图
 
-  if (bootBrand != BootAnimation::Off && gfx->getFramebuffer()) {
+  const bool animateBoot=bootBrand != BootAnimation::Off && gfx->getFramebuffer();
+  if (animateBoot) {
+    bootSoundBegin();
     uint32_t bootAt = millis();
     const uint32_t bootDuration = BootAnimation::duration(bootBrand);
     while (millis() - bootAt < bootDuration) {
+      bootSoundTick();
+      controlBootTick();
       uint32_t frameAt = millis();
       BootAnimation::render(gfx->getFramebuffer(), frameAt - bootAt, bootBrand);
       flushSync();
@@ -145,6 +157,8 @@ void setup() {
       (unsigned long)ipc.bytes[0],(unsigned long)ipc.bytes[1],
       (unsigned long)ipc.freeMinimum[0],(unsigned long)ipc.freeMinimum[1]);
   idlePowerOffReset(&idlePowerOffTimer, millis());
+  if(!animateBoot)bootSoundBegin();
+  controlPowerKeyBegin();
   Serial.println(String("MotoNav ready, firmware ") + FW_VERSION);
 }
 
@@ -153,8 +167,15 @@ void setup() {
 
 // 主循环：接收消息、处理输入、调度页面、绘图和推屏。
 void loop() {
+  bootSoundTick();
+  controlSessionTick();
+  gStreamSessionTick();
+  gInstrumentSerialTick();
+  controlBootTick();
+  controlApplyTheme();
   // New phone/connection must opt in again; old Android/iOS clients are unchanged.
   if(rasterBuildingCarryEpoch!=mediaConnectionEpoch) {
+    cancelPendingRaster();
     rasterBuildingCarryOn=false;rasterBuildingCarryEpoch=mediaConnectionEpoch;
   }
   homeClock.tick(millis());
@@ -213,19 +234,50 @@ void loop() {
     portENTER_CRITICAL(&mux);
     if (rxTail != rxHead) {
       local.len = rxq[rxTail].len;
+      local.receivedAt=rxq[rxTail].receivedAt;local.epoch=rxq[rxTail].epoch;local.authenticated=rxq[rxTail].authenticated;
       memcpy(local.data, rxq[rxTail].data, local.len);
       rxTail = (rxTail + 1) % RXQ_SLOTS;
       got = true;
     }
     portEXIT_CRITICAL(&mux);
     if (!got) break;
+    if(local.len>=4&&!memcmp(local.data,"#GM,",4)) {
+      if(local.len==5) {
+        char command[6];memcpy(command,local.data,5);command[5]=0;
+        gMotion.receiveQueued(command,local.receivedAt,local.authenticated,local.epoch,
+          millis(),bleConnected&&bleAuthed,mediaConnectionEpoch);
+      }
+      continue;
+    }
     handleMessage(local.data, local.len);
   }
 
+  pollRasterWork();
   updateStats();
   if (pendingStat.length()) { pendingStat2 = pendingStat; pendingStat = ""; }
   sendPendingAck();                                    // v2.0 地图收齐的确认 / v2.2 帧率
 
+  controlPowerKeyTick();
+  touchPoll();
+  batPoll();
+  idlePowerPollSupply();
+  const bool navigating = idlePowerOffNavigationActive(
+      bleConnected && bleAuthed, inNav, cruiseOn, navDir == "A");
+  const bool interacting = pairOn || pairReq || callOn || touchDown || dragging || sliding || deviceControls.stableBoot;
+  const bool knownPower = idlePowerSupply.sampled && idlePowerSupply.valid &&
+      uint32_t(millis()-idlePowerSupply.checkedAt)<=1500;
+  const bool hardOffDue=idlePowerOffDue(&idlePowerOffTimer,millis(),navigating,interacting || !knownPower);
+  if(deviceControls.activityWake(navigating,pairOn || pairReq || callOn))controlWake();
+  if(!deviceControls.asleep && knownPower && deviceControls.sleepDue(millis(),idlePowerOffTimer.since,
+      idlePowerSupply.batteryOnly,navigating || interacting))controlSleep();
+  gInstrumentTick(!deviceControls.asleep && (inNav || cruiseOn || page==3));
+  if(!deviceControls.asleep) {
+  gInstrumentPageTick();
+  if(controlWakeFrame) {
+    if(pairOn)drawPairScreen();
+    else if(callOn)drawCallScreen();
+    else renderPage(page,wxDetail);
+  }
   // 3. 进度环动画；小地图模式下连续刷新（v2.2 不再限制帧间隔）
   animateRing();
   // 地图帧原本连续刷新；大箭头画面也按现有帧节奏推进行程环。
@@ -242,8 +294,7 @@ void loop() {
   if (mapNow != wasMap) { wasMap = mapNow; navDirty = true; }   // 进出地图模式时整帧重画
   if (mapNow) navDirty = true;
 
-  touchPoll();                                         // v5.2 按住接听 / v5.3 滑动换页
-  batPoll();                                           // v6.8 电量
+
   // 4. 需要时重画导航画面
   // v6.5 配对：整屏显示配对码，配好 / 失败 / 60 秒 / 断开后回到原来的画面
   if (pairReq) {
@@ -332,28 +383,27 @@ void loop() {
     showLight,inNav,lightNow,trafficLightLab.valid(lightNow),conn,page,sliding,pairOn,callOn,fxOn,staleShown);
   lightShown=showLight;
 
+  controlDrawLock();
   // 6. 有变化才把画布推到屏幕（小地图帧异步推送，其他画面同步推送）
   if (needFlush && !sliding) {
     if (frameIsMap) flushAsync(); else flushSync();
     needFlush = false;
     frameIsMap = false;
   }
-  idlePowerPollSupply();
-  // Idle phone traffic does not count as navigation; external power inhibits off.
-  const bool navigating = idlePowerOffNavigationActive(
-      bleConnected && bleAuthed, inNav, cruiseOn, navDir == "A");
-  const bool interacting = pairOn || pairReq || callOn || touchDown || dragging || sliding;
-  if (idlePowerOffDueOnBattery(&idlePowerOffTimer, millis(), navigating, interacting, &idlePowerSupply)) {
+  if(controlWakeFrame) {
+    flushSync();needFlush=false;controlWakeFrame=false;controlFadeAt=millis()-100;
+  }
+  controlFadeTick();
+  } // Screen asleep: transport, instruments and power timers still run.
+  if(hardOffDue && knownPower && idlePowerSupply.batteryOnly && !gStream.holdsPower(millis(),bleConnected&&bleAuthed)) {
     bool queued;
-    portENTER_CRITICAL(&mux);
-    queued = rxTail != rxHead;
-    portEXIT_CRITICAL(&mux);
-    if (!queued) {
-      // Never decide from the 5-second battery UI cache. Re-read at the deadline.
+    portENTER_CRITICAL(&mux);queued=rxTail!=rxHead;portEXIT_CRITICAL(&mux);
+    if(!queued) {
       idlePowerPollSupply(true);
-      if (idlePowerOffDueOnBattery(&idlePowerOffTimer, millis(), navigating, interacting, &idlePowerSupply))
-        idlePowerOffShutdown();
+      if(idlePowerSupplyAllowsOff(&idlePowerSupply,millis()) &&
+         idlePowerOffDue(&idlePowerOffTimer,millis(),navigating,interacting))idlePowerOffShutdown();
     }
   }
-  delay(mapNow ? 1 : 10);
+  controlSendStatus();
+  delay(!deviceControls.asleep && inNav && mapModeActive() ? 1 : 10);
 }

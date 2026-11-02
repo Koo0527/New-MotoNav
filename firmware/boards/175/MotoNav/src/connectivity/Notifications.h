@@ -2,15 +2,24 @@
 // 配对、地图确认、媒体等蓝牙通知。由 MotoNav.ino 按依赖顺序包含，仅编译一次。
 void sendPendingAck() {
   if (!txChar || !bleConnected || !bleAuthed) return;    // v6.5 没通过验证的手机什么都不发
+  controlSendStatus();
+  if(pendingInstrumentStatus.length()) {
+    txChar->setValue((uint8_t*)pendingInstrumentStatus.c_str(),pendingInstrumentStatus.length());txChar->notify();pendingInstrumentStatus="";
+  }
   // v6.5 告诉手机“验证通过了”：连上后 0.3 / 1.5 / 4 秒各发一次（手机订阅通知可能比加密晚一点）
   static const uint16_t uAt[3] = {300, 1500, 4000};
   if (authNotifies < 3 && millis() - bleAuthAt > uAt[authNotifies]) {
     authNotifies++;
+    txChar->setValue((uint8_t *)"CAP,CTL,1",9);txChar->notify();
+    txChar->setValue((uint8_t *)"CAP,AUD,1",9);txChar->notify();
+    txChar->setValue((uint8_t *)"CAP,IMU,1",9);txChar->notify();
+    txChar->setValue((uint8_t *)"CAP,GLOG,1",10);txChar->notify();
+    txChar->setValue((uint8_t *)"CAP,GMOT,1",10);txChar->notify();
+    deviceControls.dirty=true;controlPowerStatus();
     txChar->setValue((uint8_t *)"U,1", 3);
     txChar->notify();
     txChar->setValue((uint8_t *)"CAP,HID,1", 9); txChar->notify();
     txChar->setValue((uint8_t *)"CAP,LYR,1", 9); txChar->notify();
-    txChar->setValue((uint8_t *)"CAP,ZMAP,1", 10); txChar->notify();
     pendingHidStatus = String("HID,") + (hidMusicMode ? 1 : 0) + "," + (hidMediaReady() ? 1 : 0);
     appleMedia.resend();
     pendingLyricsStatus = String("ML,") + (musicLyrics ? 1 : 0);
@@ -30,7 +39,12 @@ void sendPendingAck() {
   }
   if (pendingBuildingCapability) {
     txChar->setValue((uint8_t *)"CAP,BLD,1", 9); txChar->notify();
-    txChar->setValue((uint8_t *)"CAP,ZMAP,1", 10); txChar->notify();
+    txChar->setValue((uint8_t *)"CAP,CTL,1",9);txChar->notify();
+    txChar->setValue((uint8_t *)"CAP,AUD,1",9);txChar->notify();
+    txChar->setValue((uint8_t *)"CAP,IMU,1",9);txChar->notify();
+    txChar->setValue((uint8_t *)"CAP,GLOG,1",10);txChar->notify();
+    txChar->setValue((uint8_t *)"CAP,GMOT,1",10);txChar->notify();
+    deviceControls.dirty=true;controlPowerStatus();
     pendingBuildingCapability=false;
   }
   if (pendingAck.length()) {
@@ -58,4 +72,8 @@ void sendPendingAck() {
     txChar->notify();
     pendingEvt = "";
   }
+  if(pendingGStreamStatus.length()) {
+    txChar->setValue((uint8_t*)pendingGStreamStatus.c_str(),pendingGStreamStatus.length());txChar->notify();pendingGStreamStatus="";
+  }
+  gInstrumentNotify();
 }

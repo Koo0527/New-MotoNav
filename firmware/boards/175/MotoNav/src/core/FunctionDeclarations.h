@@ -138,6 +138,7 @@ void routePt(float u, float &x, float &y);
 void updateRouteProgress(float cx, float cy);
 void drawRouteCurved(float a, float b, float cx, float cy, float sc, float cs, float sn, float viewR, float w1);
 void drawRouteRange(float a, float b, float cx, float cy, float sc, float cs, float sn, float viewR, float w0, float w1, uint16_t c0, uint16_t c1);
+void drawGameRouteDots(float split,float cx,float cy,float sc,float cs,float sn,float viewR);
 void parseGhost(const uint8_t *p, uint32_t len);
 void drawGhost(float cx, float cy, float sc, float cs, float sn, float viewR, float w);
 void handleBulk(const uint8_t *d, int n);
@@ -202,5 +203,10 @@ void handleMessage(const uint8_t *d, int n);
 void makeBleName();
 void setup();
 void idlePowerOffShutdown();
+void gInstrumentNotify();
+bool controlTouchGate(bool down, uint32_t now);
 void drawTrafficLightLab(uint32_t now);
 void loop();
+
+void cancelPendingRaster();
+void pollRasterWork();

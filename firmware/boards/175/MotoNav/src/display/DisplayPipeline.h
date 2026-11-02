@@ -208,6 +208,7 @@ void flushWait() {
 
 // 异步刷屏：把刚画好的这一块交给核心 0 推到屏幕，画布换到另一块继续画下一帧
 void flushAsync() {
+  if(deviceControls.asleep)return;
   if (!fbBuf[1]) { gfx->flush(); return; }
   flushWait();                                    // 等上一帧推完
   flushSrc = fbBuf[fbCur];
@@ -218,6 +219,7 @@ void flushAsync() {
 
 // 同步刷屏（普通画面用，等推完再返回）
 void flushSync() {
+  if(deviceControls.asleep)return;
   if (!fbBuf[1]) { gfx->flush(); return; }
   flushWait();
   flushSrc = fbBuf[fbCur];

@@ -1,5 +1,61 @@
 #pragma once
 // 音乐页面、手势换页和数据中断提示。由 MotoNav.ino 按依赖顺序包含，仅编译一次。
+#include "../../GInstrumentMath.h"
+#include "../../GInstrumentRuntime.h"
+#include "../../FixedPageLayout.h"
+extern GInstrument::Estimator gEstimator;
+extern GInstrument::Output gOutput;
+extern int gState;
+unsigned gScaleIndex=1;
+float gDisplayScale(){return gScaleIndex==0?0.5f:gScaleIndex==1?1.0f:2.0f;}
+void drawGInstrument() {
+  gfx->fillScreen(C_BLACK);onWaitScreen=false;frameIsMap=false;
+  printCentered("G ESTIMATE",CX,42,3,C_CYAN);
+  const int cy=222,radius=110;const float scale=gDisplayScale();
+  gfx->drawCircle(CX,cy,radius,0x630c);gfx->drawCircle(CX,cy,radius/2,0x4208);
+  gfx->drawFastHLine(CX-radius,cy,2*radius+1,0x4208);
+  gfx->drawFastVLine(CX,cy-radius,2*radius+1,0x4208);
+  auto point=[&](float x,float y,int &px,int &py){
+    float length=sqrtf(x*x+y*y);float k=length>scale?scale/length:1;
+    px=lroundf(CX+x*k*(radius-6)/scale);py=lroundf(cy-y*k*(radius-6)/scale);
+  };
+  bool previous=false;int oldX=0,oldY=0;const uint32_t now=millis();
+  for(unsigned i=0;i<gOutput.count;i++) {
+    const auto &v=gOutput.trail[(gOutput.head+100-gOutput.count+i)%100];
+    if(!v.valid||uint32_t(now-v.at)>=5000){previous=false;continue;}
+    int x,y;point(v.lateral,v.longitudinal,x,y);
+    uint16_t white=blend565(C_WHITE,C_BLACK,int(uint32_t(now-v.at)*180/5000));
+    if(previous)gfx->drawLine(oldX,oldY,x,y,white);
+    oldX=x;oldY=y;previous=true;
+  }
+  char label[40];
+  snprintf(label,sizeof(label),"ACCEL %.2fg",gOutput.accel);printCentered(label,CX,82,2,C_WHITE);
+  snprintf(label,sizeof(label),"BRAKE %.2fg",gOutput.brake);printCentered(label,CX,346,2,C_WHITE);
+  snprintf(label,sizeof(label),"L %.2f",gOutput.left);printCentered(label,63,216,2,C_WHITE);
+  // v7.12.10-pages.175c.9：右侧峰值文字右边界收在 x=431，给右侧纵向分页点(x≥435)让位。
+  snprintf(label,sizeof(label),"R %.2f",gOutput.right);
+  { const int w=(int)strlen(label)*6*2; printCentered(label,431-w/2,216,2,C_WHITE); }
+  snprintf(label,sizeof(label),"SCALE %.1fg       CLEAR",scale);printCentered(label,CX,376,2,C_GREY);
+  if(gOutput.valid) {
+    int x,y;point(gOutput.lateral,gOutput.longitudinal,x,y);aaDisc(x,y,7,C_YELLOW);
+    snprintf(label,sizeof(label),"LAT %+.2f LONG %+.2fg",gOutput.lateral,gOutput.longitudinal);
+    printCentered(label,CX,405,2,C_WHITE);
+  }else {
+    const char *label=gState==0?"CALIBRATE IN APP":gState==3?"KEEP STILL - CALIBRATING":
+      gState==1?"WAITING FOR STATIONARY":gState==4?"CALIBRATION REJECTED":"G DATA UNAVAILABLE";
+    printCentered(label,CX,405,2,C_GREY);
+  }
+  // v7.12.10-pages.175c.9：G 页每次整屏重绘（含 100ms 刷新）都补画右侧纵向分页点，
+  // 下点高亮表示“下方还有一页（G 仪表在首页下方）”；不画底部横向点。
+  FixedPageLayout::drawPageDots(page,wxDetail,inNav);
+  needFlush=true;
+}
+void gInstrumentPageTick() {
+  static uint32_t last=0;
+  if(page!=3||callOn||pairOn||sliding||millis()-last<100)return;
+  last=millis();drawGInstrument();
+}
+
 // ---- v5.5 跟手换页 ----
 // 触摸坐标和画面方向相反时改成 1（拖动时画面往手指反方向走就是反了）
 #define TOUCH_FLIP_X 1      // v5.5.1 实测左右是反的
@@ -90,7 +146,8 @@ void renderPage(int p, int detail) {
   int keepDetail = wxDetail;
   bool ks = sliding;
   page = p; sliding = false;
-  if (p == 2) drawMusic();
+  if (p == 3) drawGInstrument();
+  else if (p == 2) drawMusic();
   else if (p == 1) { wxDetail = detail; drawWeather(); }
   else if (inNav) drawNavFrame();
   else drawWaiting(bleConnected ? WAIT_READY : WAIT_NOLINK);
@@ -198,7 +255,9 @@ void slideCommit() {
   pageAt = millis();
   memcpy(gfx->getFramebuffer(), slideNew, BYTES);
   needFlush = true; frameIsMap = false;
-  if (page == 2) {
+  if (page == 3) {
+    onWaitScreen = false;
+  } else if (page == 2) {
     onWaitScreen = false; musicDirty = true; pendingEvt = "T,M,Q";
   } else if (page == 1) {
     onWaitScreen = false;
@@ -214,7 +273,8 @@ void slideCommit() {
 void slideCancel() {
   sliding = false; dragging = false;
   renderPage(page, wxDetail);
-  if (page == 2) musicDirty = true;
+  if (page == 3) onWaitScreen = false;
+  else if (page == 2) musicDirty = true;
   else if (page == 1) wxDirty = false;
   else if (inNav) navDirty = true;
   else { onWaitScreen = true; catForce = true; }
@@ -289,10 +349,18 @@ void dragEnd() {
 void dragAbort() {
   if (!dragging) return;
   sliding = false; dragging = false;
-  if (page == 2) musicDirty = true; else if (page == 1) wxDirty = true; else if (inNav) navDirty = true;
+  if (page == 3) onWaitScreen = false;
+  else if (page == 2) musicDirty = true; else if (page == 1) wxDirty = true; else if (inNav) navDirty = true;
 }
 
 // 将触摸点换算到画布坐标，按钮使用较大的点按范围。
+void gInstrumentTap(int x,int y) {
+  float dx=x-CX,dy=y-CX;touchVectorToCanvas(dx,dy);x=lroundf(CX+dx);y=lroundf(CX+dy);
+  if(y<360||y>414)return;
+  if(x<CX)gScaleIndex=(gScaleIndex+1)%3;else gOutput.clear();
+  drawGInstrument();
+}
+
 int musicButtonAt(int x, int y) {
   float dx = x - CX, dy = y - CX;
   touchVectorToCanvas(dx, dy);

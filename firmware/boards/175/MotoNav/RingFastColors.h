@@ -2,9 +2,9 @@
 #include <stdint.h>
 namespace RingFastColors {
 static constexpr int First=211*64+32,Last=236*64,Count=Last-First+1;
-struct Key {bool track,trip,prog,over;int halfWidth;uint16_t color;};
+struct Key {bool track,trip,prog,over;int halfWidth;uint16_t color; int theme=0; bool night=false; uint16_t trackColor=0,doneColor=0,leftColor=0;};
 static inline bool same(const Key& a,const Key& b) {
-  return a.track==b.track && a.trip==b.trip && a.prog==b.prog && a.over==b.over && a.halfWidth==b.halfWidth && a.color==b.color;
+  return a.theme==b.theme && a.night==b.night && a.trackColor==b.trackColor && a.doneColor==b.doneColor && a.leftColor==b.leftColor && a.track==b.track && a.trip==b.trip && a.prog==b.prog && a.over==b.over && a.halfWidth==b.halfWidth && a.color==b.color;
 }
 static inline int coverage(int r,int a,int b) {
   int x=r-(a*64-32),y=(b*64+32)-r,c=x<y?x:y;
@@ -18,7 +18,7 @@ static inline uint16_t blend(uint16_t a,uint16_t b,unsigned t) {
 static inline uint16_t color(int r,int phase,const Key& key,int ringRadius,int tripHalf,
     uint16_t track,uint16_t tripDone,uint16_t tripLeft,uint16_t red) {
   uint16_t c=0;int a;
-  if(key.track && (a=coverage(r,ringRadius-5,ringRadius+5)))c=a>=64?track:blend(c,track,a*4);
+  if(key.track && (a=coverage(r,ringRadius-(key.theme==3?2:5),ringRadius+(key.theme==3?2:5))))c=a>=64?track:blend(c,track,a*4);
   if(key.trip && (a=coverage(r,ringRadius-tripHalf,ringRadius+tripHalf))) {
     uint16_t tc=(phase&2)?tripDone:tripLeft;c=a>=64?tc:blend(c,tc,a*4);
   }

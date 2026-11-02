@@ -1,6 +1,7 @@
 #pragma once
 // 导航状态重置、文字命令和总消息入口。由 MotoNav.ino 按依赖顺序包含，仅编译一次。
 void resetNavState() {
+  cancelPendingRaster();
   trafficLightFrame.clear();trafficLightLab.clear();
   if (idlePowerOffNavigationActive(true, inNav, cruiseOn, navDir == "A"))
     idlePowerOffReset(&idlePowerOffTimer, millis());
@@ -10,7 +11,7 @@ void resetNavState() {
   ghostN = 0;                                           // v4.4
   cruiseOn = false;                                     // v4.8
   trafN = 0; rerouteAt = 0; fasterAt = 0; gpsWeak = false;   // v5.0
-  speedKmh = -1;
+  speedKmh = -1; speedAt = 0;
   hasCam = false;
   laneN = 0;
   ringActive = false; ringDir = "";
@@ -26,6 +27,10 @@ int hexVal(char c) {
 
 // 处理文字类消息
 void handleText(const String &m) {
+  if(controlCommand(m))return;
+  String instrumentReply=bootSoundCommand(m);
+  if(!instrumentReply.length())instrumentReply=gInstrumentCommand(m);
+  if(instrumentReply.length()){pendingInstrumentStatus=instrumentReply;return;}
   if(m=="#BC,1" || m=="#BC,0") {setRasterBuildingCarry(m=="#BC,1");return;}
   if(m.startsWith("#TIME,")) {
     if(homeClock.receive(m.c_str(),millis())) {
@@ -123,7 +128,7 @@ void handleText(const String &m) {
   if (m == "P") return;                                 // 心跳
   if (m == "C") { stopArriveFx(); progReset(); resetNavState(); drawWaiting(WAIT_READY); return; }
 
-  if (m.startsWith("#v,")) { speedKmh = m.substring(3).toInt(); navDirty = true; return; }
+  if (m.startsWith("#v,")) { speedKmh = m.substring(3).toInt(); speedAt = millis(); navDirty = true; return; }
   if (m.startsWith("#k")) {
     int c1 = m.indexOf(','), c2 = m.indexOf(',', c1 + 1);
     if (c1 > 0 && c2 > c1) {
@@ -204,6 +209,7 @@ void handleText(const String &m) {
   if (m.startsWith("#t,")) {                             // v2.9 地图配色主题
     int t = m.substring(3).toInt();
     if (t >= 0 && t < THEME_N) {
+      if(t!=themeIdx)cancelPendingRaster();
       // App 8.3.23 adds a third field: each style now owns its map data.
       // Old Android/iOS #t,t commands keep their legacy recoloring behavior.
       if (t != themeIdx && m.indexOf(',',3)>=0) {
@@ -302,7 +308,7 @@ void handleText(const String &m) {
     navDirty = true;
     return;
   }
-  if (m.startsWith("#n,")) { nightOn = m.substring(3).toInt() != 0; navDirty = true; return; }   // v3.0 夜间配色
+  if (m.startsWith("#n,")) { if(!deviceControls.themeSession) {deviceControls.baseNight=m.substring(3).toInt()!=0;controlApplyTheme();} return; }   // v3.0 夜间配色
   if (m == "#o") { ghostN = 0; navDirty = true; return; }   // v4.4 不显示原路线
   if (m == "#WXRESET") { wxHave = false; wxExtra = false; wxDirty = true; return; }
   if (m.startsWith("#WX,")) { parseWeatherExtra(m); return; }
@@ -355,14 +361,7 @@ void handleText(const String &m) {
   }
   if (m.startsWith("#m,")) { mapOn = m.substring(3).toInt() != 0; navDirty = true; return; }
   if (m.startsWith("#b,")) {
-    int b = constrain(m.substring(3).toInt(), 5, 255);
-    if (flushDone) {                                    // v2.2 刷屏任务在用总线时先等它推完
-      xSemaphoreTake(flushDone, portMAX_DELAY);
-      panel->setBrightness(b);
-      xSemaphoreGive(flushDone);
-    } else {
-      panel->setBrightness(b);
-    }
+    if(!deviceControls.themeSession)deviceControls.normal=constrain(m.substring(3).toInt(),5,255);
     return;
   }
 
@@ -379,6 +378,7 @@ void handleText(const String &m) {
     String prevDir = navDir;
     navDir = m.substring(0, comma);
     // v7.1 导航中 → 到达：放特效（重连补发的 "A,0"、圆屏刚开机收到的都不放）
+    if (navDir == "A")cancelPendingRaster();
     if (navDir == "A" && prevDir.length() && prevDir != "A" && page == 0) startArriveFx(false);
     if (prevDir == "A" && navDir != "A") progReset();       // v7.3 到达后又开始新的导航：进度从头算
     else if (navDir != "A" && fxOn) stopArriveFx();

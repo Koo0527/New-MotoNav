@@ -14,7 +14,7 @@ static std::vector<uint8_t> packet(const uint8_t *rle, size_t size, int w, int h
     auto u16=[&](int v){out.push_back(v&255);out.push_back((v>>8)&255);};
     auto i32=[&](int v){for(int i=0;i<4;i++)out.push_back((uint32_t(v)>>(8*i))&255);};
     u16(1);i32(ox*2);i32(-oy*2);u16(w);u16(h);
-    u16(2000 | RASTER_FLAG_BUILDINGS | (delta ? RASTER_FLAG_DELTA : 0));
+    u16(2000 | 0x4000 | (delta ? 0x1000 : 0));
     if(delta){i32(0);i32(0);}
     out.insert(out.end(),rle,rle+size);
     return out;
@@ -41,8 +41,8 @@ static size_t encodeRle(const uint8_t *grid, int n, uint8_t *out) {
 int main() {
     const uint16_t W = 64, H = 64;
     const int N = W * H;
-    uint8_t gridA[N], gridB[N], xorGrid[N];
-    uint8_t rleA[N * 2], rleDelta[N * 2];
+    uint8_t gridA[N], gridB[N];
+    uint8_t rleA[N * 2], rleB[N * 2];
     uint8_t bufA[N / 2], bufB[N / 2];
 
     for (int y = 0; y < H; y++) {
@@ -70,20 +70,25 @@ int main() {
                 uint8_t base = (sx >= 0 && sx < W && sy >= 0 && sy < H) ? gridA[sy * W + sx] : 0;
                 uint8_t actual = (uint8_t)(((x + ox) * 3 + (y + oy) * 5 + ((x & 7) == 0 ? 4 : 0)) & 7);
                 gridB[y * W + x] = actual;
-                xorGrid[y * W + x] = (sx >= 0 && sx < W && sy >= 0 && sy < H) ? (actual ^ base) : actual;
+                (void)base;
             }
         }
-        size_t lenD = encodeRle(xorGrid, N, rleDelta);
-        auto d = packet(rleDelta,lenD,W,H,ox,oy,true);
+        size_t lenD = encodeRle(gridB, N, rleB);
+        auto d = packet(rleB,lenD,W,H,ox,oy);
         RasterHeader delta={};
         assert(rasterCheck(d.data(),d.size(),delta,N,sizeof(bufB)));
-        rasterDecode(d.data(),delta,bufB,bufA);
+        rasterDecode(d.data(),delta,bufB);
         for (int y = 0; y < H; y++) {
             for (int x = 0; x < W; x++) {
                 assert(getPx(bufB, W, x, y) == gridB[y * W + x]);
             }
         }
     }
-    printf("PASS: RasterContinuity full & delta decode\n");
+    auto experimental=packet(rleA,lenA,W,H,0,0,true);
+    RasterHeader rejected={};
+    assert(!rasterCheck(experimental.data(),experimental.size(),rejected,N,sizeof(bufA)));
+    auto compressed=a;compressed[15]|=0x20;
+    assert(!rasterCheck(compressed.data(),compressed.size(),rejected,N,sizeof(bufA)));
+    printf("PASS: RasterContinuity plain RLE and experimental flag rejection\n");
     return 0;
 }

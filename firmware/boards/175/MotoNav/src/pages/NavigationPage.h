@@ -43,7 +43,7 @@ void drawNavFrame() {
   gfx->fillScreen(C_BLACK);
   bool isS = (navDir == "S");
   bool isFar = !isS && navDist > STAGE_FAR_M;
-  bool lanes = laneN > 0 && ringActive;                 // 与地图页一样，跟随转弯倒计时
+  bool lanes = laneN > 0;                              // 与地图页一样，跟随 SDK 显示／隐藏
   bool over = hasCam && camLimit > 0 && speedKmh > camLimit;
   float laneK = lanes ? 0.85f : 1.0f;
   float iconCy = lanes ? ICON_CY_LANE : ICON_CY;

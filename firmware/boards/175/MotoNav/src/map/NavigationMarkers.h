@@ -127,7 +127,7 @@ void drawNorth(float hdgDeg) {
   float nx = CX - sinf(a) * 196, ny = CX - cosf(a) * 196;
   obsAdd(nx - 14, ny - 14, nx + 14, ny + 14);                          // v3.8
   aaDisc(nx, ny, 13, C_BLACK);
-  aaDisc(nx, ny, 11, 0x2945);
+  aaDisc(nx, ny, 11, themeIdx >= 1 && themeIdx <= 3 ? C_BLACK : 0x2945);
   printCentered("N", (int)nx + 1, (int)ny - 7, 2, C_WHITE);
 }
 
@@ -148,6 +148,29 @@ void drawDestBlip(float cx, float cy, float sc, float cs, float sn) {
     obsAdd(px - 21, py - 21, px + 21, py + 21); return;
   }
   if (styleIdx() == ST_COMPASS) { drawCompassBlip(px, py, outside); obsAdd(px - 14, py - 14, px + 14, py + 14); return; }
+  if (themeIdx >= 1 && themeIdx <= 3) {
+    const auto p=GameMapStyle::palette(themeIdx,nightOn);
+    if (outside) {
+      if (!GameMapStyle::placeEdge(atan2f(ey,ex),CX,RMAX,viewHdg*PI/180,px,py,
+        [](float x,float y) { return obsOverlap((int)x-15,(int)y-15,(int)x+15,(int)y+15); })) return;
+    }
+    if (themeIdx==2) {
+      for(int y=-14;y<=14;y++) for(int x=-14;x<=14;x++) {
+        const int layer=GameMapStyle::destinationLayer(2,x,y);
+        const int ix=(int)px+x,iy=(int)py+y;
+        if(layer>=0 && ix>=0 && iy>=0 && ix<LCD_WIDTH && iy<LCD_HEIGHT)
+          gfx->drawPixel(ix,iy,layer==0?C_BLACK:p.destination);
+      }
+      obsAdd(px-15,py-15,px+15,py+15); return;
+    }
+    float xs[16],ys[16];
+    for (int pass=0;pass<3;pass++) {
+      float r=pass==0?14:pass==1?11.5f:9;
+      const int n=GameMapStyle::destinationVertices(themeIdx,px,py,r,xs,ys);
+      mapFillPoly(xs,ys,n,pass==0?C_BLACK:pass==1 && themeIdx!=2?C_WHITE:p.destination);
+    }
+    obsAdd(px-15,py-15,px+15,py+15); return;
+  }
   aaDisc(px, py, outside ? 9 : 11, C_BLACK);
   aaDisc(px, py, outside ? 7 : 9, TH.blip);
   obsAdd(px - 12, py - 12, px + 12, py + 12);                         // v3.8
@@ -207,13 +230,13 @@ void drawNavHints(int bannerY) {
 
 // v3.8 顶部车速/测速牌/车道、底部箭头和行程信息、车头箭头占的地方（这些后画，电子眼图标要提前让开）
 void addHudObstacles() {
-  obsAdd(CX - 15, MAP_PY - 18, CX + 15, MAP_PY + 16);                 // 车头箭头
+  obsAdd(CX - 20, MAP_PY - 20, CX + 20, MAP_PY + 20);                 // 车头箭头
   if (speedKmh >= 0) {
     int sx = hasCam ? CX - 40 : CX;
     obsAdd(sx - 60, 36, sx + 60, 92);                                   // 车速数字 + km/h
     if (hasCam) obsAdd(CX + 52 - 34, 30, CX + 52 + 34, 98);             // 测速牌 + 距离
   }
-  if (laneN > 0 && ringActive) {                                    // 与倒计时及 drawMapLanes 同步
+  if (laneN > 0) {                                                 // 与 drawMapLanes 同步
     const int H = 30, MAXW = 210;
     int lw = (int)(fminf(36.0f * H / 32, (float)MAXW / laneN) * laneN);
     int y = hasCam ? 114 : 100;
