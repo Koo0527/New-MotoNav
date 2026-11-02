@@ -28,6 +28,8 @@ uint8_t *rasterBuf=nullptr,*rasterBackBuf=nullptr;
 RasterHeader rasterBackHeader={};
 int rasBW=0,rasX0=0,rasY0=0,rasW=0,rasH=0,rasterFrame=0;
 float rasMpp=2;unsigned long rasterAt=0;
+int rasterCancellationCount=0;
+void cancelPendingRaster(){++rasterCancellationCount;}
 // Includes the production decoder unchanged. Only hardware/miniz services are stubbed.
 #include "fixture/src/map/RasterDecoder.h"
 static inline uint16_t blendF(uint16_t a,uint16_t,uint32_t){return a;}
@@ -49,13 +51,16 @@ int main(){
  deliver(packet(detail,n,0,0,true));assert(roofCount()>0);
  deliver(packet(base,n));assert(roofCount()==0); // Reproduce old full/base blinking.
  setRasterBuildingCarry(true);assert(rasterBuildingCarryEpoch==mediaConnectionEpoch);
+ int cancelled=rasterCancellationCount;setRasterBuildingCarry(true);assert(rasterCancellationCount==cancelled);
+ auto geometry=packet(base,n);geometry.insert(geometry.end(),{'V','C','E',1,0,0,0,0});
+ deliver(geometry);assert(rasterValid&&roofCount()==0); // Existing failed-VCE fallback retains its ordinary map.
+
  deliver(packet(detail,n,0,0,true));
  for(int i=0;i<6;i++){deliver(packet(base,n));assert(roofCount()==22*22);}
- // The rendered base contains retained roofs, unlike the sender's ground-only reference.
- // Reject XOR against it so the existing NACK path requests a complete frame.
+ // Experimental flags are rejected even when a clean plain map could be a reference.
  auto delta=packet(base,n);delta[15]|=0x10;
  delta.insert(delta.begin()+16,8,0); // reference x0/y0 are both zero here
- assert(!rasterDeltaBaseClean);
+
  assert(!parseRaster(delta.data(),delta.size()) && roofCount()==22*22);
  // New ground/park semantics are kept; new roads and water supersede old roofs.
  std::vector<uint8_t> changed=base;changed[10*n+10]=1;changed[10*n+11]=3;changed[10*n+12]=2;
@@ -66,11 +71,22 @@ int main(){
  const size_t before=roofCount();auto bad=packet(base,n,16,-8);bad.pop_back();
  assert(!parseRaster(bad.data(),bad.size()) && roofCount()==before);
  setRasterBuildingCarry(false);assert(roofCount()==0);
+ {int cancelled=rasterCancellationCount;setRasterBuildingCarry(false);assert(rasterCancellationCount==cancelled&&roofCount()==0);}
  setRasterBuildingCarry(true);deliver(packet(base,n,16,-8));assert(roofCount()==0); // No back-buffer resurrection.
  deliver(packet(detail,n,0,0,true));deliver(packet(base,n,1,0));assert(roofCount()==0); // Half-pixel shift rejected.
  deliver(packet(detail,n,0,0,true));deliver(packet(base,n,0,0,false,2));assert(roofCount()==0);
  deliver(packet(detail,n,0,0,true));deliver(packet(base,n,0,0,false,1,4000));assert(roofCount()==0);
  deliver(packet(detail,n,0,0,true));themeIdx=5;deliver(packet(base,n));assert(roofCount()==0);themeIdx=1;
+ for(int game:{2,3}) {
+  themeIdx=game;setRasterBuildingCarry(true);
+  deliver(packet(detail,n,0,0,true));
+  for(int i=0;i<3;i++){deliver(packet(base,n));assert(roofCount()==22*22);}
+  deliver(packet(changed,n));assert(at(10,10)==1&&at(10,11)>=4&&at(11,10)==3&&at(12,10)==6);
+  setRasterBuildingCarry(false);assert(roofCount()==0);
+ {int cancelled=rasterCancellationCount;setRasterBuildingCarry(false);assert(rasterCancellationCount==cancelled&&roofCount()==0);}
+  setRasterBuildingCarry(true);deliver(packet(base,n));assert(roofCount()==0);
+ }
+ themeIdx=1;
  std::vector<uint8_t> pal(n*n,5);deliver(packet(pal,n,0,0,false,1,2000,true));setRasterBuildingCarry(false);assert(at(0,0)==5);
  // Full-size scrolling test at the real 600 m handoff spacing; checking every
  // pixel ensures retained contours cannot move onto another street.

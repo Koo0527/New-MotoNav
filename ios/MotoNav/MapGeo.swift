@@ -368,7 +368,7 @@ enum MapGeo {
     }
 
     /// AMap highway pavement may be gray; use the measured land colour.
-    static func classifyAmapBase(_ raw:[UInt32],w:Int,h:Int)->[UInt8] {
+    static func classifyAmapBase(_ raw:[UInt32],w:Int,h:Int,style:Int=1)->[UInt8] {
         let bg=backgroundLum(raw)
         var colors:[UInt32:UInt8]=[:]
         var classified=raw.map{c -> UInt8 in
@@ -376,7 +376,56 @@ enum MapGeo {
             let value=classifyPixel(c,bg);colors[c]=value;return value
         }
         recoverGrayRoads(raw, background: bg, into: &classified, w: w, h: h)
+        if (1...3).contains(style) { return smoothGameRaster(classified,w:w,h:h) }
         return dilateRoads(cleanRaster(classified,w:w,h:h),w:w,h:h)
+    }
+
+    // A simple addition preserves 4-connected roads and 8-connected ground,
+    // including separators between branches joined elsewhere by a ramp.
+    private static let simpleRoadAddition: [Bool] = (0..<256).map { mask in
+        let positions = [(-1,-1),(0,-1),(1,-1),(-1,0),(1,0),(-1,1),(0,1),(1,1)]
+        func components(_ road: Bool) -> Int {
+            var remaining = (0..<8).filter { ((mask >> $0) & 1 == 1) == road }
+            var count = 0
+            while let first = remaining.popLast() {
+                count += 1
+                var queue = [first], head = 0
+                while head < queue.count {
+                    let a = positions[queue[head]]; head += 1
+                    for j in remaining.indices.reversed() {
+                        let b = positions[remaining[j]], dx = abs(a.0-b.0), dy = abs(a.1-b.1)
+                        if road ? dx+dy == 1 : max(dx,dy) == 1 { queue.append(remaining.remove(at:j)) }
+                    }
+                }
+            }
+            return count
+        }
+        return components(true) == 1 && components(false) == 1
+    }
+
+    static func smoothGameRaster(_ source: [UInt8], w: Int, h: Int) -> [UInt8] {
+        guard w >= 3, h >= 3, source.count == w*h else { return source }
+        var out = source
+        let offsets = [-w-1,-w,-w+1,-1,1,w-1,w,w+1]
+        // Keep raw roads and materials immutable; only round dents and expand
+        // into ground when the local topology still has one road and one gap.
+        for cleanup in [true, false] {
+        for y in 1..<(h-1) { for x in 1..<(w-1) {
+            let p = y*w+x
+            guard source[p] == PX_BLOCK, out[p] == PX_BLOCK else { continue }
+            if cleanup {
+                var votes = 0
+                for d in offsets where source[p+d] == PX_ROAD { votes += 1 }
+                guard votes >= 5 else { continue }
+            } else {
+                guard source[p-1] == PX_ROAD || source[p+1] == PX_ROAD || source[p-w] == PX_ROAD || source[p+w] == PX_ROAD else { continue }
+            }
+            var mask = 0
+            for j in offsets.indices where out[p+offsets[j]] == PX_ROAD { mask |= 1 << j }
+            if simpleRoadAddition[mask] { out[p] = PX_ROAD }
+        } }
+        }
+        return out
     }
 
     /// Gray roofs and gray pavement cannot be distinguished by colour alone.

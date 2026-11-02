@@ -181,6 +181,12 @@ struct RideDetailView: View {
                     row("轨迹点", "\(ride.fixes.count)")
                 }
 
+                NavigationLink(destination: GHistoryView(rideID: ride.id)) {
+                    Label("查看本次导航的 G 曲线与轨迹", systemImage: "waveform.path.ecg")
+                        .font(.subheadline.weight(.semibold)).frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(16).background(RoundedRectangle(cornerRadius: 18).fill(AppTheme.card))
+                }
+
                 HStack(spacing: 10) {
                     GlassButton(title: "导出 GPX", icon: "square.and.arrow.up", style: .tinted, tint: AppTheme.accent) {
                         do { exportURL = try recorder.export(ride) }

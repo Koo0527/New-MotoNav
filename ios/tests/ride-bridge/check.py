@@ -8,6 +8,7 @@ root = Path(__file__).resolve().parents[2]
 bridge = (root / 'MotoNav/RideBridge.swift').read_text()
 arrival = (root / 'MotoNav/ArrivalPolicy.swift').read_text()
 history = (root / 'MotoNav/MotorPlanHistory.swift').read_text()
+speeds = (root / 'MotoNav/NavigationSpeed.swift').read_text()
 
 stubs = r'''
 import Foundation
@@ -23,14 +24,15 @@ struct MotorRequest: Codable {
     var start: MotorPoint; let end: MotorPoint; var vias: [MotorPoint] = []; var bicycle = false
     static func valid(_ lat: Double, _ lng: Double) -> Bool { lat.isFinite && lng.isFinite && abs(lat) <= 90 && abs(lng) <= 180 }
 }
-enum NavigationSpeed {
-    static let values = [60, 100, 120]
-    static func next(_ value: Int) -> Int { guard let i = values.firstIndex(of: value) else { return values[0] }; return values[(i + 1) % values.count] }
-}
 final class Speech {
     static let shared = Speech()
     var spoken: [String] = []
     func speak(_ text: String) { spoken.append(text) }
+}
+final class Settings {
+    static let shared = Settings()
+    var tunnelResets = 0
+    func resetTunnel() { tunnelResets += 1 }
 }
 final class LocationService {
     static let shared = LocationService()
@@ -278,12 +280,12 @@ tests = r'''
         // 开始模拟导航：保存的 routeGroup 原样交给 SDK；SDK 内置播报关掉
         bridge.plan(toLat: 31.7, lng: 122.0)
         coordinator.rideManager.calcCallback?(makeGroup(), nil)
-        bridge.preferredSimulationSpeed = 100
+        bridge.preferredSimulationSpeed = 30
         bridge.start(emulate: true)
         check(bridge.navigating && bridge.emulating, "emulator navigation is armed")
         check(coordinator.rideManager.startedGroups.count == 1, "navigation starts with the saved route group")
         check(coordinator.rideManager.isUseInternalTTS == false, "SDK built-in announcements stay disabled")
-        check(coordinator.rideManager.emulatorSpeeds.last == 100, "preferred simulation speed is applied (clamped to SDK range)")
+        check(coordinator.rideManager.emulatorSpeeds.last == 30, "preferred bicycle simulation gear is applied without clamping")
         check(LocationService.shared.preciseCalls.isEmpty, "simulation does not require precise location")
 
         // 导航信息 → 界面状态
@@ -308,7 +310,7 @@ tests = r'''
         check(!bridge.emuPaused && coordinator.rideManager.resumeCalls == 1, "resume reaches the SDK")
         let speedBefore = bridge.emuSpeed
         bridge.cycleEmuSpeed()
-        check(bridge.emuSpeed == NavigationSpeed.next(speedBefore), "speed cycles within the SDK range")
+        check(bridge.emuSpeed == NavigationSpeed.next(speedBefore, bicycle: true), "speed cycles the bicycle gears 10/20/30")
 
         // 导航中重算失败：保留当前路线与导航，提供重试；SDK 负责偏航重算
         bridge.testRouteCalculateFailure(NSError(domain: "AMapNavi", code: 2))
@@ -342,7 +344,9 @@ tests = r'''
         coordinator.rideManager.calcCallback?(makeGroup(), nil)
         bridge.start(emulate: true)
         bridge.testNaviInfo(info)
+        let tunnelResetsBeforeStop = Settings.shared.tunnelResets
         bridge.stop()
+        check(Settings.shared.tunnelResets == tunnelResetsBeforeStop + 1, "stop resets tunnel dimming exactly once")
         check(!bridge.navigating && !bridge.showArrived, "stop ends navigation without the arrival banner")
         check(bridge.uiDir.isEmpty, "stop clears turn state")
 
@@ -658,7 +662,7 @@ bridge = bridge.replace('    fileprivate func onYaw()', '    func testYaw() { on
 
 with tempfile.TemporaryDirectory(prefix='motonav-ride-bridge-') as tmp:
     swift = Path(tmp) / 'main.swift'
-    swift.write_text(stubs + arrival + history + bridge + tests)
+    swift.write_text(stubs + speeds + '\n' + arrival + history + bridge + tests)
     env = dict(os.environ, CLANG_MODULE_CACHE_PATH=str(Path(tmp) / 'cache'), SWIFT_MODULE_CACHE_PATH=str(Path(tmp) / 'cache'))
     subprocess.run(['swiftc', '-parse-as-library', str(swift), '-o', str(Path(tmp) / 'check')], check=True, env=env)
     subprocess.run([str(Path(tmp) / 'check')], check=True, env=env)

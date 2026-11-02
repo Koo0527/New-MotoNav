@@ -84,7 +84,7 @@ struct MapTraceBuffer {
     static let capacity=2048
     private(set) var events:[[String:Any]]=[]
     private(set) var dropped=0
-    private static let allowed:Set<String>=["kmh","ready","sentCovered","confirmedCovered","serial","baseReady","needsCoverage","nextBlock","buildings","source","type","id","bytes","seq","parts","attempt","response","commandsQueued","bulkQueued","transferPending","outsideView","size","seconds","components","pixels","maxWrite","payload","elapsed","awaitAck","viewportOffsetM","preparedOffsetM","decodeValid","rate","probe","canWithout","needsResponse","style","beforeBytes"]
+    private static let allowed:Set<String>=["kmh","ready","sentCovered","confirmedCovered","serial","baseReady","needsCoverage","nextBlock","buildings","source","type","id","bytes","seq","parts","attempt","response","commandsQueued","bulkQueued","transferPending","outsideView","size","seconds","components","pixels","maxWrite","payload","elapsed","awaitAck","viewportOffsetM","preparedOffsetM","decodeValid","rate","probe","canWithout","needsResponse","style","beforeBytes","job","mask","checked","index"]
     mutating func append(name:String,fields:[String:Any],seconds:Double) {
         let safeName=name.range(of:"^[a-z][a-z0-9-]{0,39}$",options:.regularExpression) != nil ? name:"event"
         var e:[String:Any]=["event":safeName,"time":max(0,seconds)]

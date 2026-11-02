@@ -79,6 +79,7 @@ final class AmapCaptureHost: NSObject {
     }
     func capture(_ frame: MapGeo.Frame, x: Int, y: Int, size n: Int, satellite: Bool = false, style: Int = 1, completion: @escaping (Result<Shot, Error>) -> Void) {
         precondition(Thread.isMainThread)
+        guard UIApplication.shared.applicationState == .active else {completion(.failure(MapProcessingError.cancelled));return}
         guard pending == nil else { completion(.failure(MapProcessingError.invalid("高德截图正在处理上一块"))); return }
         do {
             let m = try ensureMap(size: CGFloat(AmapCapturePolicy.renderSize(for: n)))

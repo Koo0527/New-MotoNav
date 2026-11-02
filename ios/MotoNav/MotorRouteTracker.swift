@@ -20,7 +20,14 @@ struct MotorRouteTracker {
         } else if RouteShape.metres(point,shape.points[0])<100 {upper=min(total,300)}
         let scale=cos(point.lat * .pi/180)*111320
         var best=Double.infinity,offset=Double.infinity,along=progress
-        for i in 1..<shape.points.count where shape.cum[i]>=lower && shape.cum[i-1]<=upper {
+        func boundary(_ value:Double,strict:Bool)->Int {
+            var lo=0,hi=shape.cum.count
+            while lo<hi {let m=(lo+hi)/2;if strict ? shape.cum[m]<=value : shape.cum[m]<value {lo=m+1}else{hi=m}}
+            return lo
+        }
+        let first=max(1,boundary(lower,strict:false)),last=min(shape.points.count-1,boundary(upper,strict:true))
+        guard first<=last else {return nil}
+        for i in first...last {
             let a=shape.points[i-1],b=shape.points[i],length=shape.cum[i]-shape.cum[i-1]
             if length<0.01{continue}
             let ax=(a.lng-point.lng)*scale,ay=(a.lat-point.lat)*111320,dx=(b.lng-a.lng)*scale,dy=(b.lat-a.lat)*111320

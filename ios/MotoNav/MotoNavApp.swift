@@ -35,6 +35,7 @@ struct MotoNavApp: App {
 
         // 圆屏发来的通知
         BleLink.shared.onNotify = { msg in
+            if Settings.shared.deviceReply(msg) { return }
             let p = msg.split(separator: ",").map(String.init)
             if p.first == "BOOT", p.count >= 2, let id = Int(p[1]) { Settings.shared.bootReply(id); return }
             if p.count >= 3, p[0] == "T", p[1] == "M" { MusicBridge.shared.handle(p[2]); return }
@@ -57,7 +58,13 @@ struct MotoNavApp: App {
             ContentView()
                 .background(AmapCaptureSurface().frame(width: 1, height: 1))
                 .preferredColorScheme(AppearanceMode(rawValue:appearance)?.scheme)
+                .onReceive(NotificationCenter.default.publisher(for:UIApplication.didEnterBackgroundNotification)) { _ in GRecorder.shared.background() }
+                .onReceive(NotificationCenter.default.publisher(for:UIApplication.willResignActiveNotification)){_ in
+                    MapFeeder.shared.setRenderingAvailable(false)
+                }
                 .onReceive(NotificationCenter.default.publisher(for:UIApplication.didBecomeActiveNotification)){_ in
+                    MapFeeder.shared.setRenderingAvailable(true)
+                    GRecorder.shared.foreground()
                     BleLink.shared.syncPhoneClock(force:true)
                     MusicBridge.shared.pollMetadata(force:true)
                 }

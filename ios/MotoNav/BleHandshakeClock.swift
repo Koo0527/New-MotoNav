@@ -4,7 +4,7 @@ import Foundation
 /// A lost U,1 must not leave the phone waiting forever while capabilities arrive.
 enum BleAuthenticatedReply {
     static func accepts(_ message: String) -> Bool {
-        ["U,1","CAP,HID,1","CAP,LYR,1","CAP,BLD,1"].contains(message)
+        ["U,1","CAP,HID,1","CAP,LYR,1","CAP,BLD,1","CAP,CTL,1","CAP,AUD,1","CAP,IMU,1","CAP,GLOG,1","CAP,GMOT,1"].contains(message)
     }
 }
 

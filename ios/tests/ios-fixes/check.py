@@ -20,6 +20,38 @@ def run(name, code):
     subprocess.run([str(folder / "test")], check=True, env=env)
 
 
+# Run the actual management callback with Favorites' real mutation/persistence.
+content = (root / "MotoNav/ContentView.swift").read_text()
+deletion = content[content.index('.onDelete { indexSet in'):].split('indexSet in', 1)[1].split('\n                    }', 1)[0]
+favorites = (root / "MotoNav/RideTools.swift").read_text().split('final class Favorites:', 1)[1].split('/// WGS84 fixes only.', 1)[0]
+run("favorites-deletion", r'''
+import Foundation
+import Combine
+let domain = "motonav-delete-test-" + UUID().uuidString
+let testDefaults = UserDefaults(suiteName: domain)!
+defer { testDefaults.removePersistentDomain(forName: domain) }
+enum SearchService { struct Place { let name: String; let address: String; let lat: Double; let lng: Double } }
+enum NaviBridge { static func distM(_ a: Double, _ b: Double, _ c: Double, _ d: Double) -> Double { 100 } }
+final class Favorites:
+''' + favorites.replace('UserDefaults.standard', 'testDefaults') + r'''
+let initial = (0..<4).map { Favorites.Place(name: String($0), address: "", lat: Double($0), lng: 0) }
+func delete(_ indexSet: IndexSet) {
+    let favorites = Favorites.shared
+''' + deletion + r'''
+}
+testDefaults.set(try JSONEncoder().encode(initial), forKey: "favorite_places")
+delete(IndexSet([0, 2, 3]))
+precondition(Favorites.shared.places.map(\.name) == ["1"], "multi-delete must remove exactly the selected favorites")
+let saved = try JSONDecoder().decode([Favorites.Place].self, from: testDefaults.data(forKey: "favorite_places")!)
+precondition(saved.map(\.name) == ["1"], "saved favorites must match the surviving selection")
+delete(IndexSet())
+precondition(Favorites.shared.places.count == 1)
+delete(IndexSet(integer: 0))
+precondition(Favorites.shared.places.isEmpty)
+print("PASS favorites: multi-delete, persisted survivors, empty and final item")
+''')
+
+
 search = (root / "MotoNav/SearchService.swift").read_text()
 search = search[search.index("final class SearchService:"):search.index("/// iOS v0.4 最近去过")]
 run("search", r'''
@@ -133,6 +165,7 @@ if "private init() {" in rides:
     rides = rides.replace("private init() {", "init(directory: URL) {\n        root = directory")
     rides = rides.replace("static let shared = RideRecorder()", "static let shared = RideRecorder(directory: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString))")
 run("rides", r'''
+final class GRecorder { static let shared=GRecorder(); func rideStarted(_ id:UUID) {}; func rideFinished(_ id:UUID) {}; func unlinkRide(_ id:UUID) {} }
 import Foundation
 import CoreLocation
 import Combine
@@ -211,6 +244,7 @@ func check(_ condition:Bool,_ message:String) {
     if !condition { print("FAIL: \(message)");exit(1) }
 }
 protocol UIViewRepresentable { typealias Context = Void }
+final class UIImage {}
 struct UIEdgeInsets: Equatable {
     var top:CGFloat,left:CGFloat,bottom:CGFloat,right:CGFloat
     static let zero=Self(top:0,left:0,bottom:0,right:0)
@@ -432,6 +466,7 @@ enum MapGeo {
 }
 final class NaviBridge {
     let arrival=ArrivalPolicy(),manager=AMapNaviDriveManager()
+    var uiLaneImage:Int?,uiCrossImage:Int?
     var navigating=false,cruising=false,emulating=false,emuPaused=false,showArrived=false
     var myLat=Double.nan,myLng=Double.nan
     var arriveSeq=0,info="",shownDir="",shownDist = -1,lastSent=""
@@ -523,4 +558,82 @@ cancelled.stop()
 check(cancelled.myPosition()==nil,"without a real fix report unavailable instead of the simulated destination")
 check(cancelled.lastLocation==nil,"unknown real position stays unknown")
 print("PASS navigation position: simulator completion/cancel, stale callbacks, live movement, next GPS trip and no-fix fallback")
+''')
+
+# A delayed clear must precede the new lanes and must not be coalesced with a turn.
+ble = (root / "MotoNav/BleLink.swift").read_text()
+key_of = ble[ble.index("    private func keyOf("):ble.index("    /// 发一条文字消息")]
+send = ble[ble.index("    func send(_ msg:"):ble.index("    /// 只发一次")]
+send_once = ble[ble.index("    func sendOnce("):ble.index("    /// 圆屏屏幕数据线速度")]
+enqueue = ble[ble.index("    private func enqueue("):ble.index("    private func header(")]
+run("ble-navigation-state", r'''
+import Foundation
+func check(_ value: Bool, _ message: String) {
+    if !value { print("FAIL: \(message)"); exit(1) }
+}
+final class BleLink {
+    struct Out { let key: String?; var data: Data }
+    var queue: [Out] = []
+    var lastState: [String: String] = [:]
+    var stateOrder: [String] = []
+    var lastImg: [Int: (w: Int, h: Int, data: Data)] = [:]
+    // Only CoreBluetooth's write-credit boundary is blocked; queue and cache logic are production code.
+    func pump() {}
+    func sendClock(_ message: String) {}
+    var writes: [String] { queue.map { String(data: $0.data, encoding: .utf8)! } }
+    var replay: [String] { stateOrder.compactMap { lastState[$0] } }
+''' + key_of + send + send_once + enqueue + r'''
+}
+let link = BleLink()
+link.send("#b,200")
+link.send("#j,0033")
+link.send("#v,60")
+link.queue.append(BleLink.Out(key: "B0:1:0", data: Data([0])))
+link.lastImg[0] = (1, 1, Data([0]))
+link.send("C")
+link.send("#j,1100")
+check(link.writes == ["#b,200", "C", "#j,1100"],
+      "clear drops old navigation and bitmaps before queuing the new lanes")
+check(link.lastImg.isEmpty, "clear cannot replay an old road bitmap")
+link.send("R,90")
+check(link.writes == ["#b,200", "C", "#j,1100", "R,90"],
+      "the first new turn cannot overwrite a pending clear")
+check(link.replay == ["#b,200", "C", "#j,1100", "R,90"],
+      "reconnect cache also preserves clear before the current lanes and turn")
+
+link.send("#j")
+check(link.writes == ["#b,200", "C", "#j", "R,90"],
+      "an explicit SDK hide replaces pending lanes")
+link.send("#j,1100")
+check(link.writes == ["#b,200", "C", "#j,1100", "R,90"],
+      "the same lanes can return after a hide without losing the clear")
+link.send("L,50")
+check(link.writes == ["#b,200", "C", "#j,1100", "L,50"],
+      "ordinary turns still coalesce to the latest guidance")
+
+link.send("A,0")
+link.send("#O1500/5/60")
+link.send("C")
+check(link.writes == ["#b,200", "C"] && link.replay == ["#b,200", "C"],
+      "another clear discards old arrival, trip and lane state in both queue and cache")
+link.send("#j,3300")
+link.send("S,400")
+check(link.writes == ["#b,200", "C", "#j,3300", "S,400"],
+      "a later trip preserves clear, lane and guidance ordering")
+
+let controls = BleLink()
+controls.sendOnce("#q,80")
+controls.sendOnce("#f,1")
+controls.send("#ML,1")
+controls.send("#j,0033")
+controls.send("C")
+controls.send("#j,1100")
+check(controls.writes == ["#q,80", "#f,1", "#ML,1", "C", "#j,1100"],
+      "clearing navigation preserves pending hardware calibration and media controls")
+let deviceCommands = ["#TM,FFFF,255,70,0,1", "#CTL", "#PS", "#PS,600,120", "#BS", "#BS,1,20", "#GC,2,359", "#GQ"]
+for command in deviceCommands { controls.send(command) }
+check(controls.replay.allSatisfy { !deviceCommands.contains($0) }, "device commands never enter reconnect cache")
+controls.send("C")
+check(controls.replay.allSatisfy { !deviceCommands.contains($0) }, "navigation clear cannot resurrect device commands")
+print("PASS BLE navigation state: backpressure, clear/lane/turn order, reconnect cache, hide/show and arrival cleanup")
 ''')

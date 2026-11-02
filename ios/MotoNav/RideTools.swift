@@ -80,6 +80,7 @@ final class RideRecorder: ObservableObject {
         finish()
         let ride = Ride(started: Date(), mode: mode)
         active = ride; error = ""
+        GRecorder.shared.rideStarted(ride.id)
         worker.async {
             do {
                 try self.write(ride)
@@ -114,6 +115,7 @@ final class RideRecorder: ObservableObject {
     }
     func finish() {
         guard var ride = active else { return }; ride.ended = Date(); active = nil
+        GRecorder.shared.rideFinished(ride.id)
         let completed = ride
         worker.async {
             do {
@@ -128,7 +130,7 @@ final class RideRecorder: ObservableObject {
         worker.async {
             do {
                 try FileManager.default.removeItem(at: self.root.appendingPathComponent(ride.id.uuidString + ".json"))
-                DispatchQueue.main.async { self.rides.removeAll { $0.id == ride.id } }
+                DispatchQueue.main.async { self.rides.removeAll { $0.id == ride.id }; GRecorder.shared.unlinkRide(ride.id) }
             } catch { self.storageError(error) }
         }
     }

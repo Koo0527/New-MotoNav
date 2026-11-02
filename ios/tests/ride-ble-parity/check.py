@@ -21,11 +21,12 @@ geo = read('MapGeo.swift')
 tunnel = read('TunnelDimming.swift')
 idle = read('CruiseIdleTimer.swift')
 clock = read('PhoneClockSync.swift')
+speeds = read('NavigationSpeed.swift')
 history = read('MotorPlanHistory.swift')
 shape = read('RouteGeometry.swift')
-tracker = read('MotorRouteTracker.swift')
+tracker = read('MotorRouteTracker.swift') + read('MotorReroutePolicy.swift')
 drive_callbacks = read('NaviSessionCallbacks.swift')
-drive = read('NaviBridge.swift')
+drive = read('NaviBridge.swift').replace('import UIKit\n', '')
 ride = read('RideBridge.swift')
 
 webmotor = read('WebMotor.swift')
@@ -37,6 +38,8 @@ import Foundation
 import CoreLocation
 import Combine
 import ObjectiveC
+final class UIImage: NSObject {}
+func CreateLaneInfoImageWithLaneInfo(_ back: String, _ select: String) -> UIImage? { UIImage() }
 func check(_ condition: Bool, _ message: String) {
     if !condition { print("FAIL: \(message)"); exit(1) }
 }
@@ -531,7 +534,7 @@ tests = r'''
         let rideFrom = ble.sent.count
         let rideCompareAt = Date()
         ride.testNaviInfo(infoFixture(segment: 100, remain: 100, remainS: 0, road: "测试路", next: "", icon: .straight))
-        ride.testNaviLocation(locationFixture(60, 30.00005, 104.00005))
+        ride.testNaviLocation(locationFixture(20, 30.00005, 104.00005))   // 自行车模拟档默认 20
         ride.testGps(2); ride.testGps(0)     // #x 只在变化时发：先弱后恢复
         let rideMsgs = Array(ble.sent[rideFrom...])
         ride.stop()
@@ -547,8 +550,9 @@ tests = r'''
               "the independent engine emits the turn as dir,metres for a straight 100 m step")
         check(turnFamily(rideMsgs).contains("S,100"),
               "ride emits the byte-identical turn for the equivalent straight step")
-        check(speedFamily(rideMsgs).contains("#v,60") && speedFamily(indMsgs).contains("#v,60"),
-              "ride and the independent engine emit the byte-identical #v,60 for the same speed")
+        check(session.speed == 20, "independent bicycle simulation normalizes to the 20 km/h bicycle gear")
+        check(speedFamily(rideMsgs).contains("#v,20") && speedFamily(indMsgs).contains("#v,20"),
+              "ride and the independent engine emit the byte-identical #v,20 for the bicycle gear")
         check(rideMsgs.contains("#x,1") && rideMsgs.contains("#x,0") && indMsgs.contains("#x,0"),
               "ride and the independent engine emit the byte-identical #x gps marks")
         let indTrips = tripFamily(indMsgs)
@@ -605,7 +609,7 @@ func =~ (lhs: String, rhs: String) -> Bool {
 
 with tempfile.TemporaryDirectory(prefix='motonav-ride-ble-parity-') as tmp:
     swift = Path(tmp) / 'main.swift'
-    swift.write_text(stubs + arrival + geo + tunnel + idle + clock + history + shape + tracker
+    swift.write_text('enum MapPipelineTrace {static func event(_ name:String,_ fields:[String:Any]=[:]){}}\n' + stubs + arrival + geo + tunnel + idle + clock + speeds + '\n' + history + shape + tracker
                      + drive_callbacks + drive + ride + core + session + helpers + tests)
     env = dict(os.environ, CLANG_MODULE_CACHE_PATH=str(Path(tmp) / 'cache'), SWIFT_MODULECACHE_PATH=str(Path(tmp) / 'cache'))
     subprocess.run(['swiftc', '-parse-as-library', str(swift), '-o', str(Path(tmp) / 'check')], check=True, env=env)

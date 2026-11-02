@@ -4,6 +4,8 @@ import CoreLocation
 enum TravelMode: String, CaseIterable, Identifiable {
     case driving="驾车", motorcycle="摩托车", bicycle="自行车"
     var id: String { rawValue }
+    /// 模拟档位按「自行车 / 机动车」分族：驾车与摩托车共用档位，两者之间切换不重置
+    var usesBicycleGears: Bool { self == .bicycle }
 }
 
 /// 本次规划实际执行的后端。出行方式与实际引擎分别记录：
@@ -13,7 +15,17 @@ enum PlanBackend: String {
 }
 
 final class RoutePlanner: ObservableObject {
-    @Published var mode: TravelMode = .driving { didSet { inputsChanged() } }
+    @Published var mode: TravelMode = .driving {
+        didSet {
+            // 自行车与机动车之间切换恢复对应默认档；驾车与摩托车之间切换保留所选档位
+            if oldValue.usesBicycleGears != mode.usesBicycleGears {
+                simulationSpeed = NavigationSpeed.defaultSpeed(bicycle: mode.usesBicycleGears)
+            }
+            inputsChanged()
+        }
+    }
+    /// 模拟导航档位：按出行方式显示，开始模拟时交给对应引擎（与途中循环调速同一策略）
+    @Published var simulationSpeed = NavigationSpeed.motorDefault
     @Published var start: MotorPoint? { didSet { inputsChanged() } }
     @Published var end: MotorPoint? { didSet { inputsChanged() } }
     @Published var vias: [MotorPoint]=[] { didSet { inputsChanged() } }
@@ -162,7 +174,8 @@ struct RoutePlannerView: View {
     @State private var login=false
     @State private var waypoints=false
     @State private var showHistory=false
-    @State private var simulationSpeed=60
+    @State private var showSimulationSettings=false
+    @State private var showRouteOptions=false
     @Environment(\.dismiss) private var dismiss
     var body: some View {
         NavigationView {
@@ -181,13 +194,7 @@ struct RoutePlannerView: View {
                             }
                         }
                         if model.mode == .bicycle && !model.vias.isEmpty {Text("自行车暂不支持途经点，请移除后规划，或切换方式。").font(.caption).foregroundColor(.orange)}
-                        if model.usesDriving {
-                            Toggle("不走高速",isOn:$settings.avoidHighway).onChange(of:settings.avoidHighway){_ in model.inputsChanged()}
-                        }
-                        if model.mode == .bicycle && model.share == nil {
-                            // 普通自行车路线默认官方骑行引擎；关闭后走网页兼容路线（显式选择，不静默切换）
-                            Toggle("官方骑行引擎（SDK）",isOn:$model.officialRide)
-                        }
+                        routeOptions
                         PillButton(title:model.busy || navi.calculating || ride.calculating ? "正在规划…" : "规划\(model.mode.rawValue)路线",color:ContentView.pink,enabled:!model.busy && !navi.calculating && !ride.calculating && model.end != nil){model.plan()}
                     }
                     if model.mode != .driving {Button("路线历史"){showHistory=true}.foregroundColor(ContentView.cyan)}
@@ -195,11 +202,8 @@ struct RoutePlannerView: View {
                     if model.share != nil {Text("已载入高德分享路线；更改输入或方式将重新规划。").font(.caption).foregroundColor(.orange)}
                     if model.mode == .motorcycle && !model.usesDriving {Button("高德登录／验证"){login=true}.font(.footnote).foregroundColor(ContentView.cyan)}
                     routeResults
-                    Picker("模拟速度",selection:$simulationSpeed){ForEach(NavigationSpeed.values,id:\.self){Text("\($0) km/h").tag($0)}}.pickerStyle(.segmented)
-                    HStack {
-                        PillButton(title:"开始导航",color:ContentView.pink,enabled:ready){begin(false)}
-                        PillButton(title:"模拟导航",color:AppTheme.accent,enabled:ready){begin(true)}
-                    }
+                    PillButton(title:"开始导航",color:ContentView.pink,enabled:ready){begin(false)}
+                    simulationSettings
                     Text(footerHint)
                         .font(.caption).foregroundColor(ContentView.sub)
                     if settings.tunnelAuto {
@@ -223,6 +227,39 @@ struct RoutePlannerView: View {
 
     }
     private var selectedRoute: MotorRoute? {model.routes.indices.contains(model.selected) ? model.routes[model.selected] : nil}
+    /// 路线选项：驾车策略与骑行引擎选择集中在此；失败时明确提示，不自动更换引擎
+    private var routeOptions: some View {
+        DisclosureGroup(isExpanded:$showRouteOptions) {
+            VStack(alignment:.leading,spacing:10) {
+                if model.usesDriving {
+                Toggle("不走高速",isOn:$settings.avoidHighway).onChange(of:settings.avoidHighway){_ in model.inputsChanged()}
+                }
+                if model.mode == .bicycle && model.share == nil {
+                    // 普通自行车路线默认官方骑行引擎；关闭后走网页兼容路线（显式选择，不静默切换）
+                    Toggle("官方骑行引擎（SDK）",isOn:$model.officialRide)
+                }
+            }.padding(.top,4)
+        } label: {
+            Text("路线选项").font(.subheadline.weight(.semibold)).foregroundColor(AppTheme.text)
+                .frame(maxWidth:.infinity,minHeight:44,alignment:.leading).contentShape(Rectangle())
+        }.tint(ContentView.pink)
+    }
+    /// 模拟设置为次操作：档位按出行方式显示（自行车 10/20/30，机动车 60/100/120），
+    /// 与开始模拟、途中循环调速共用 NavigationSpeed 同一策略。
+    private var simulationSettings: some View {
+        DisclosureGroup(isExpanded:$showSimulationSettings) {
+            VStack(alignment:.leading,spacing:10) {
+                Text("速度档位（\(model.mode.rawValue)）").font(.caption).foregroundColor(ContentView.sub)
+                Picker("模拟速度",selection:$model.simulationSpeed){
+                    ForEach(NavigationSpeed.values(bicycle:model.mode.usesBicycleGears),id:\.self){Text("\($0) km/h").tag($0)}
+                }.pickerStyle(.segmented)
+                PillButton(title:"模拟导航",color:AppTheme.accent,enabled:ready){begin(true)}
+            }.padding(.top,4)
+        } label: {
+            Text("模拟设置").font(.subheadline.weight(.semibold)).foregroundColor(AppTheme.text)
+                .frame(maxWidth:.infinity,minHeight:44,alignment:.leading).contentShape(Rectangle())
+        }.tint(ContentView.pink)
+    }
     /// 规划结果区：驾车 SDK / 官方骑行 SDK（Task 1）/ 网页路线 三选一展示
     @ViewBuilder private var routeResults: some View {
         if model.usesDriving && model.drivingPlanned {
@@ -300,9 +337,9 @@ struct RoutePlannerView: View {
         guard ready else{model.message="请先结束当前导航或规划当前路线";return}
         if let end=model.end {History.shared.add(SearchService.Place(name:end.name,address:"",lat:end.lat,lng:end.lng))}
         if navi.cruising {navi.stopCruise()}
-        if model.usesDriving {navi.preferredSimulationSpeed=simulationSpeed;navi.start(emulate:simulate)}
-        else if model.usesOfficialRide {ride.preferredSimulationSpeed=simulationSpeed;ride.start(emulate:simulate)}
-        else if let route=selectedRoute {MotorPlanHistory.shared.save(route);guide.start(route,simulate:simulate,simulationSpeed:simulationSpeed)}
+        if model.usesDriving {navi.preferredSimulationSpeed=NavigationSpeed.normalized(model.simulationSpeed, bicycle: false);navi.start(emulate:simulate)}
+        else if model.usesOfficialRide {ride.preferredSimulationSpeed=NavigationSpeed.normalized(model.simulationSpeed, bicycle: true);ride.start(emulate:simulate)}
+        else if let route=selectedRoute {MotorPlanHistory.shared.save(route);guide.start(route,simulate:simulate,simulationSpeed:model.simulationSpeed)}
     }
 }
 
@@ -415,7 +452,7 @@ struct IndependentNavigationView: View {
                                   onOverview: { guide.overview.toggle() }, onMute: toggleMute,
                                   onSettings: { dismiss() }, onEnd: exitNavi,
                                   onPause: { guide.paused.toggle() },
-                                  onCycleSpeed: { guide.speed = NavigationSpeed.next(guide.speed) },
+                                  onCycleSpeed: { guide.speed = NavigationSpeed.next(guide.speed, bicycle: guide.route?.request.bicycle ?? false) },
                                   onLayout: { panelHeights = $0 }) {
                     if !guide.ridePlanNotice.isEmpty {
                         Text(guide.ridePlanNotice).font(.caption2).foregroundColor(.orange)

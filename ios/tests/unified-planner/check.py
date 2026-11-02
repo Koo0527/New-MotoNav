@@ -183,7 +183,7 @@ tests = r'''
 '''
 with tempfile.TemporaryDirectory(prefix='motonav-planner-') as tmp:
     swift = Path(tmp) / 'main.swift'
-    swift.write_text(stubs + model + tests)
+    swift.write_text(stubs + (root / 'MotoNav/NavigationSpeed.swift').read_text() + '\n' + model + tests)
     env=dict(os.environ, CLANG_MODULE_CACHE_PATH=str(Path(tmp)/'cache'), SWIFT_MODULECACHE_PATH=str(Path(tmp)/'cache'))
     subprocess.run(['swiftc', '-parse-as-library', str(swift), '-o', str(Path(tmp)/'check')], check=True, env=env)
     subprocess.run([str(Path(tmp)/'check')], check=True, env=env)

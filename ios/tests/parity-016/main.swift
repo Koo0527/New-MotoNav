@@ -21,9 +21,11 @@ precondition(BleAuthenticatedReply.accepts("U,1") && BleAuthenticatedReply.accep
 precondition(!BleAuthenticatedReply.accepts("U,0") && !BleAuthenticatedReply.accepts("CAP,HID,0"))
 var reconnected=PhoneClockSync()
 precondition(reconnected.message(wall:epoch+700,uptime:170,offset:28800) == "#TIME,1793434300,28800")
-precondition(NavigationSpeed.values == [60,100,120])
-precondition(NavigationSpeed.next(60)==100 && NavigationSpeed.next(100)==120 && NavigationSpeed.next(120)==60)
-print("PASS initial clock retries, UTC wire, firmware ranges, lost-U capability evidence, periodic sync, timezone, reconnect and speeds")
+precondition(NavigationSpeed.motorValues == [60,100,120] && NavigationSpeed.bicycleValues == [10,20,30])
+precondition(NavigationSpeed.defaultSpeed(bicycle:false)==60 && NavigationSpeed.defaultSpeed(bicycle:true)==20)
+precondition(NavigationSpeed.next(60,bicycle:false)==100 && NavigationSpeed.next(100,bicycle:false)==120 && NavigationSpeed.next(120,bicycle:false)==60)
+precondition(NavigationSpeed.next(10,bicycle:true)==20 && NavigationSpeed.next(20,bicycle:true)==30 && NavigationSpeed.next(30,bicycle:true)==10)
+print("PASS initial clock retries, UTC wire, firmware ranges, lost-U capability evidence, periodic sync, timezone, reconnect and per-mode speeds")
 
 let suite="MotoNavTests-"+UUID().uuidString
 let defaults=UserDefaults(suiteName:suite)!

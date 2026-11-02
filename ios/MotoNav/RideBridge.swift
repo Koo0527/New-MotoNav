@@ -41,11 +41,11 @@ final class RideBridge: NSObject, ObservableObject {
     @Published var uiSpeed = 0
     @Published var uiRemainM = 0
     @Published var uiRemainS = 0
-    // 模拟导航：暂停 / 继续，车速 60 → 100 → 120 循环（SDK 上限 120）
+    // 模拟导航：暂停 / 继续，自行车档位 10 → 20 → 30 循环（NavigationSpeed 统一策略，SDK 上限 120）
     @Published private(set) var emulating = false
     @Published private(set) var emuPaused = false
-    @Published private(set) var emuSpeed = 60
-    @Published var preferredSimulationSpeed = 60
+    @Published private(set) var emuSpeed = NavigationSpeed.bicycleDefault
+    @Published var preferredSimulationSpeed = NavigationSpeed.bicycleDefault
     @Published var showArrived = false            // 刚到达：显示“已到达”4 秒再收尾
     @Published var rerouteFailed = false          // 导航中重算失败：保留当前路线，可重试
 
@@ -365,8 +365,8 @@ final class RideBridge: NSObject, ObservableObject {
         emulating = emulate
         emuPaused = false
         if emulate {
-            emuSpeed = min(120, max(10, NavigationSpeed.values.contains(preferredSimulationSpeed) ? preferredSimulationSpeed : 60))
-            m.setEmulatorNaviSpeed(Int32(emuSpeed))        // SDK 骑行模拟速度范围 [10,120]
+            emuSpeed = NavigationSpeed.normalized(preferredSimulationSpeed, bicycle: true)
+            m.setEmulatorNaviSpeed(Int32(emuSpeed))        // SDK 骑行模拟速度范围 [10,120]，自行车档位全部在内
         }
         let ok = emulate ? m.startEmulatorNavi(group) : m.startGPSNavi(group)
         if ok && arrival.acceptsGuidance(token) {
@@ -388,10 +388,10 @@ final class RideBridge: NSObject, ObservableObject {
         if emuPaused { m.pauseNavi() } else { m.resumeNavi() }
     }
 
-    /// 模拟导航车速：60 → 100 → 120 km/h 循环（SDK 上限 120）
+    /// 模拟导航车速：自行车档位 10 → 20 → 30 km/h 循环（官方骑行始终自行车档）
     func cycleEmuSpeed() {
         guard navigating, emulating, let m = manager else { return }
-        emuSpeed = NavigationSpeed.next(emuSpeed)
+        emuSpeed = NavigationSpeed.next(emuSpeed, bicycle: true)
         m.setEmulatorNaviSpeed(Int32(emuSpeed))
     }
 
@@ -419,6 +419,7 @@ final class RideBridge: NSObject, ObservableObject {
         }
         emulating = false
         emuPaused = false
+        Settings.shared.resetTunnel()
         RideRecorder.shared.finish()                       // 真实导航结束轨迹（没在记录时是空操作）
         LocationService.shared.setPrecise(false)           // 模拟结束立即恢复真实定位来源
         MapFeeder.shared.onNaviEnd()

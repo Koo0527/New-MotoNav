@@ -13,6 +13,8 @@ struct NavigationReadout {
     var paused: Bool
     var simulationSpeed: Int
     var arrived: Bool
+    var laneImage: UIImage? = nil
+    var crossImage: UIImage? = nil
 
     var turn: (symbol: String, label: String) {
         switch direction {
@@ -77,6 +79,7 @@ enum NaviHudLayout {
 /// interface entry live in the more menu; the long-press end action stays separate.
 struct NavigationOverlay<Extra: View>: View {
     @ObservedObject private var settings = Settings.shared
+    @Environment(\.verticalSizeClass) private var verticalSizeClass
     let readout: NavigationReadout
     let muted: Bool
     let onOverview: () -> Void
@@ -139,28 +142,37 @@ struct NavigationOverlay<Extra: View>: View {
     /// 顶部单张紧凑卡片：方向图标、下次动作与距离、道路名、剩余里程和 ETA
     private var topCard: some View {
         VStack(spacing: 8) {
-            HStack(spacing: 14) {
-                Image(systemName: readout.turn.symbol).font(.largeTitle.weight(.bold))
-                    .foregroundColor(ContentView.pink).frame(minWidth: 44)
-                    .accessibilityLabel(readout.turn.label)
-                VStack(alignment: .leading, spacing: 4) {
-                    HStack(alignment: .firstTextBaseline, spacing: 8) {
-                        Text(readout.turnDistanceText)
-                            .font(.title2.weight(.heavy)).lineLimit(1).minimumScaleFactor(0.6)
-                        Text(readout.turn.label).font(.subheadline.weight(.semibold)).foregroundColor(AppTheme.hudSub)
-                    }
-                    Text(readout.instruction.isEmpty ? "沿路线前进" : readout.instruction)
-                        .font(.subheadline).lineLimit(2)
+            HStack(alignment: .top, spacing: 8) {
+                VStack(spacing: 8) {
                     HStack(spacing: 14) {
-                        Label(readout.remainingText, systemImage: "point.topleft.down.curvedto.point.bottomright.up")
-                        Label(readout.etaText, systemImage: "clock")
+                        Image(systemName: readout.turn.symbol).font(.largeTitle.weight(.bold))
+                            .foregroundColor(ContentView.pink).frame(minWidth: 44)
+                            .accessibilityLabel(readout.turn.label)
+                        VStack(alignment: .leading, spacing: 4) {
+                            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                                Text(readout.turnDistanceText)
+                                    .font(.title2.weight(.heavy)).lineLimit(1).minimumScaleFactor(0.6)
+                                Text(readout.turn.label).font(.subheadline.weight(.semibold)).foregroundColor(AppTheme.hudSub)
+                            }
+                            Text(readout.instruction.isEmpty ? "沿路线前进" : readout.instruction)
+                                .font(.subheadline).lineLimit(2)
+                            HStack(spacing: 14) {
+                                Label(readout.remainingText, systemImage: "point.topleft.down.curvedto.point.bottomright.up")
+                                Label(readout.etaText, systemImage: "clock")
+                            }
+                            .font(.caption).foregroundColor(AppTheme.hudSub)
+                        }
+                        Spacer(minLength: 0)
                     }
-                    .font(.caption).foregroundColor(AppTheme.hudSub)
+                    .padding(16)
+                    .background(RoundedRectangle(cornerRadius: 20).fill(AppTheme.hudCard))
+                    if verticalSizeClass != .compact { guidanceImages }
                 }
-                Spacer(minLength: 0)
+                if verticalSizeClass == .compact,
+                   readout.laneImage != nil || readout.crossImage != nil {
+                    guidanceImages.frame(maxWidth: 150)
+                }
             }
-            .padding(16)
-            .background(RoundedRectangle(cornerRadius: 20).fill(AppTheme.hudCard))
             // 简短状态条：弱定位、重算、模拟中等真实状态（只显示实际状态，不虚构提示）
             if !readout.status.isEmpty {
                 HStack(spacing: 6) {
@@ -178,6 +190,24 @@ struct NavigationOverlay<Extra: View>: View {
             Color.clear.preference(key: NavigationPanelHeightKey.self,
                                    value: NavigationPanelHeights(top: geometry.size.height))
         })
+    }
+
+    @ViewBuilder private var guidanceImages: some View {
+        VStack(spacing: 8) {
+            if let laneImage = readout.laneImage {
+                Image(uiImage: laneImage).resizable().scaledToFit()
+                    .frame(maxHeight: verticalSizeClass == .compact ? 28 : 52)
+                    .padding(10).frame(maxWidth: .infinity)
+                    .background(RoundedRectangle(cornerRadius: 14).fill(AppTheme.hudCard))
+                    .accessibilityLabel("前方车道，亮色箭头为推荐方向")
+            }
+            if let crossImage = readout.crossImage {
+                Image(uiImage: crossImage).resizable().scaledToFit()
+                    .frame(maxHeight: verticalSizeClass == .compact ? 64 : 130)
+                    .clipShape(RoundedRectangle(cornerRadius: 14))
+                    .accessibilityLabel("前方路口放大图")
+            }
+        }
     }
 
     /// 底部轻量玻璃控制栏：附加状态条（更快路线、重算重试、兼容提示）、速度、全览／跟随、
@@ -458,7 +488,8 @@ struct NaviScreen: View {
                           status: navi.info.hasPrefix("图标 ") ? (navi.emulating ? "模拟导航" : "导航中") : navi.info,
                           speed: navi.uiSpeed, remaining: navi.uiRemainM,
                           remainingSeconds: navi.uiRemainS, simulation: navi.emulating, paused: navi.emuPaused,
-                          simulationSpeed: navi.emuSpeed, arrived: navi.showArrived)
+                          simulationSpeed: navi.emuSpeed, arrived: navi.showArrived,
+                          laneImage: navi.uiLaneImage, crossImage: navi.uiCrossImage)
     }
     private func toggleMute() {
         settings.voiceMuted.toggle()

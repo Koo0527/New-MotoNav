@@ -17,11 +17,3 @@ struct PhoneClockSync {
         return "#TIME,\(Int64(wall.rounded(.down))),\(offset)"
     }
 }
-
-enum NavigationSpeed {
-    static let values=[60,100,120]
-    static func next(_ value: Int) -> Int {
-        guard let i=values.firstIndex(of:value) else{return values[0]}
-        return values[(i+1)%values.count]
-    }
-}

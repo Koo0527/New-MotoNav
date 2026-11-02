@@ -118,6 +118,7 @@ case nil:
 print("PASS bicycle SDK request: segment geometry, actions and duration")
 '''
 tests+='\n'+(root/'tests/parity-015/main.swift').read_text()
+core+=(root/'MotoNav/NavigationSpeed.swift').read_text()+'\n'
 core+=(root/'MotoNav/PhoneClockSync.swift').read_text()+'\n'
 core+=(root/'MotoNav/MotorPlanHistory.swift').read_text()+'\n'
 tests+='\n'+(root/'tests/parity-016/main.swift').read_text()

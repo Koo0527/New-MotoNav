@@ -1,6 +1,7 @@
 import Foundation
 import ObjectiveC
 import CoreLocation
+import UIKit
 
 /// 版本：跟随 App 版本（见 Config.swift）
 ///
@@ -40,14 +41,15 @@ final class NaviBridge: NSObject, ObservableObject {
     @Published var uiRemainM = 0                    // iOS v0.6 剩余里程（米）、剩余时间（秒），首页显示
     @Published var uiRemainS = 0
     @Published var planFailed = false               // iOS v0.6 规划失败 / 超时：界面上显示“重新规划”
-    // iOS v0.6 模拟导航：暂停 / 继续、车速 40 → 60 → 100 → 150 循环
+    // iOS v0.6 模拟导航：暂停 / 继续、机动车档位 60 → 100 → 120 循环（NavigationSpeed 统一策略）
     @Published private(set) var emulating = false
     @Published private(set) var emuPaused = false
-    @Published private(set) var emuSpeed = 60
-    private static let EMU_SPEEDS = NavigationSpeed.values
-    @Published var preferredSimulationSpeed=60
+    @Published private(set) var emuSpeed = NavigationSpeed.motorDefault
+    @Published var preferredSimulationSpeed = NavigationSpeed.motorDefault
     // 调试信息
     @Published var laneRaw = "（还没收到车道信息）"
+    @Published private(set) var uiLaneImage: UIImage?
+    @Published private(set) var uiCrossImage: UIImage?
     @Published var camRaw = "（还没收到电子眼信息）"
     @Published var extraInfo = ""
     @Published var showArrived = false              // 刚到达目的地（手机和圆屏显示“已到达”4 秒）
@@ -445,7 +447,7 @@ final class NaviBridge: NSObject, ObservableObject {
         ShareGuide.shared.start(shareRoute, avoidHighway: Settings.shared.avoidHighway, emulate: emulate,
                                 myLat: me?.lat ?? .nan, myLng: me?.lng ?? .nan)          // 偏航跟随原路线 + 圆屏原路线细线
         emulating = emulate; emuPaused = false
-        if emulate { emuSpeed = NavigationSpeed.values.contains(preferredSimulationSpeed) ? preferredSimulationSpeed : 60; manager.setEmulatorNaviSpeed(Int32(emuSpeed)) }
+        if emulate { emuSpeed = NavigationSpeed.normalized(preferredSimulationSpeed, bicycle: false); manager.setEmulatorNaviSpeed(Int32(emuSpeed)) }
         let ok = emulate ? manager.startEmulatorNavi() : manager.startGPSNavi()
         if ok && arrival.acceptsGuidance(token) {
             if !emulate { RideRecorder.shared.start("导航"); LocationService.shared.setPrecise(true) }
@@ -467,11 +469,10 @@ final class NaviBridge: NSObject, ObservableObject {
         if emuPaused { manager.pauseNavi(); speedMps = 0 } else { manager.resumeNavi() }   // 暂停时不再按车速往前推算距离
     }
 
-    /// 模拟导航车速：40 → 60 → 100 → 150 km/h 循环
+    /// 模拟导航车速：机动车档位 60 → 100 → 120 km/h 循环（驾车引擎始终机动车档）
     func cycleEmuSpeed() {
         guard navigating, emulating else { return }
-        let all = NaviBridge.EMU_SPEEDS
-        emuSpeed = all[((all.firstIndex(of: emuSpeed) ?? 0) + 1) % all.count]
+        emuSpeed = NavigationSpeed.next(emuSpeed, bicycle: false)
         manager.setEmulatorNaviSpeed(Int32(emuSpeed))
     }
 
@@ -538,6 +539,7 @@ final class NaviBridge: NSObject, ObservableObject {
         lastCamMsg = ""; lastCamAt = .distantPast; camLimit = 0; camMinDist = Int.max; lastCamMapMsg = ""
         camPts = []; cruiseCamPts = []; facPts = [:]; navFacPts = []; routeFacKey = ""; uiRemainM = 0; uiRemainS = 0
         lastLaneMsg = ""; lastTrafficMsg = ""; lastTrafficAt = .distantPast; gpsWeakSent = false
+        uiLaneImage = nil; uiCrossImage = nil
         suggestRoute = nil; uiSuggestMin = 0; suggestTimer?.invalidate()
         uiDir = ""; uiDist = -1; uiRoad = ""; extraInfo = ""
     }
@@ -827,7 +829,10 @@ final class NaviBridge: NSObject, ObservableObject {
         }
         let m = n > 0 ? "#j,\(sb)" : "#j"
         laneRaw = "车道 \(n) 条：背景 \(back)，推荐 \(select)（编码 \(sb)）"
-        if m != lastLaneMsg { lastLaneMsg = m; BleLink.shared.send(m) }
+        uiLaneImage = n > 0 ? CreateLaneInfoImageWithLaneInfo(back, select) : nil
+        if m != lastLaneMsg {
+            lastLaneMsg = m; BleLink.shared.send(m)
+        }
     }
 
     // MARK: - 路况、重新规划、GPS、更快路线
@@ -1299,7 +1304,19 @@ extension NaviBridge {
 
     @objc(driveManagerHideLaneInfo:)
     func mnLaneHide(_ m: AMapNaviDriveManager) {
+        uiLaneImage = nil
         if lastLaneMsg != "#j" { lastLaneMsg = "#j"; BleLink.shared.send("#j") }
+    }
+
+    @objc(driveManager:showCrossImage:)
+    func mnCrossShow(_ m: AMapNaviDriveManager, image: UIImage?) {
+        // Native UI can consume this image and emit nil; only an explicit hide clears it.
+        if let image = image { uiCrossImage = image }
+    }
+
+    @objc(driveManagerHideCrossImage:)
+    func mnCrossHide(_ m: AMapNaviDriveManager) {
+        uiCrossImage = nil
     }
 
     // 巡航：道路设施（可能也带摄像头）、前方电子眼、巡航信息

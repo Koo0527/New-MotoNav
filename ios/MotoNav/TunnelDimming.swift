@@ -107,3 +107,32 @@ struct TunnelRoute {
         return .unknown
     }
 }
+
+/// Physical BOOT revisions arbitrate reconnects; acknowledged duplicates never replay a phone target.
+struct DeviceTunnelSync {
+    private(set) var revision: UInt16?
+    private var lastCommand: String?
+    private var physicalPending = false
+    private var physicalTunnel = false
+    mutating func receive(_ fields: [String]) -> Bool? {
+        guard fields.count == 6, fields[0] == "CTL", fields[1].count == 4,
+              let revision = UInt16(fields[1], radix: 16),
+              fields[2...5].allSatisfy({ $0 == "0" || $0 == "1" }) else { return nil }
+        if let current = self.revision, revision != current, revision &- current > 32767 { return nil }
+        let adopt = self.revision != revision
+        if adopt { physicalPending = fields[5] == "1"; physicalTunnel = fields[2] == "1" }
+        else if fields[5] == "0" { physicalPending = false }
+        self.revision = revision
+        return adopt ? fields[2] == "1" : nil
+    }
+    mutating func command(normal: Int, dim: Int, night: Bool, tunnel: Bool) -> String? {
+        guard let revision else { return nil }
+        // Acknowledge the physical state before a later phone target can replace its queued command.
+        let target = physicalPending ? physicalTunnel : tunnel
+        let text = String(format: "#TM,%04X,%d,%d,%d,%d", Int(revision),
+                          min(255, max(5, normal)), min(255, max(5, dim)), night ? 1 : 0, target ? 1 : 0)
+        guard text != lastCommand else { return nil }
+        lastCommand = text
+        return text
+    }
+}

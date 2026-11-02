@@ -15,7 +15,6 @@ struct ContentView: View {
     @ObservedObject var search = SearchService.shared
     @ObservedObject var settings = Settings.shared
     @ObservedObject var weather = Weather.shared
-    @ObservedObject var map = MapFeeder.shared
     @ObservedObject var history = History.shared
     @ObservedObject var favorites = Favorites.shared
     @ObservedObject private var rides=RideRecorder.shared
@@ -29,9 +28,9 @@ struct ContentView: View {
     @StateObject private var planner = RoutePlanner()
     @State private var showRides = false
     @State private var showScreens=false
+    @State private var showDestManage=false
     @State private var confirmForgetPhones=false
     @State private var clockRequested=false
-    @State private var showMapReport=false
     @AppStorage("voice_rate") private var voiceRate = Double(AVSpeechUtteranceDefaultSpeechRate)
     @AppStorage("voice_pitch") private var voicePitch = 1.0
     @AppStorage("voice_id") private var voiceID = ""
@@ -65,12 +64,12 @@ struct ContentView: View {
                         bottomBar
                     }
                 }.background(Self.bg.ignoresSafeArea()).navigationBarHidden(true)
-            }.navigationViewStyle(.stack).id(page)
+            }.navigationViewStyle(.stack)
         }
         .fullScreenCover(isPresented: $showWebMotor) { WebMotorView(model:planner) }
         .sheet(isPresented: $showRides) { NavigationView { RideHistoryView() } }
         .sheet(isPresented:$showScreens) { screenPicker }
-        .sheet(isPresented:$showMapReport){MapSampleReportView()}
+        .sheet(isPresented:$showDestManage) { destinationManageSheet }
         .confirmationDialog("让圆屏忘掉其他手机？",isPresented:$confirmForgetPhones,titleVisibility:.visible) {
             Button("忘掉其他手机",role:.destructive){ble.forgetOtherPhones()}
             Button("取消",role:.cancel){}
@@ -154,14 +153,6 @@ struct ContentView: View {
             Text(ble.connectionSummary).font(.footnote).foregroundColor(ContentView.sub)
             Button("换一块圆屏"){showScreens=true}.foregroundColor(Self.cyan)
             Button("忘掉其他手机",role:.destructive){confirmForgetPhones=true}.disabled(!ble.isReady || !ble.verified)
-            if navi.navigating {
-                Text("导航中：\(navi.uiDir) \(navi.uiDist) 米 · \(navi.uiSpeed) km/h").font(.footnote).foregroundColor(ContentView.cyan)
-                if navi.uiRemainM > 0 {
-                    Text("剩余 \(NaviBridge.distText(navi.uiRemainM)) · 约 \(NaviBridge.durText(navi.uiRemainS)) · \(ContentView.etaText(navi.uiRemainS)) 到达")
-                        .font(.footnote).foregroundColor(AppTheme.text)
-                }
-                Button("回到导航画面") { showWebMotor = true }.foregroundColor(ContentView.pink)
-            }
         }
     }
 
@@ -169,28 +160,28 @@ struct ContentView: View {
         ScrollView {
             Group {
                 if page == 0 && wide {
-                    // Duo / 宽屏：左主（规划）右辅（连接摘要 + 轨迹快切）
+                    // Duo / 宽屏：左主（搜索、收藏与最近、路线与分享、巡航）右辅（连接摘要 + 轨迹快切）
                     HStack(alignment: .top, spacing: 16) {
                         VStack(alignment: .leading, spacing: 16) {
                             header
-                            cruiseCard
-                            routeButtons
                             destCard
+                            favoritesRecentCard
+                            routeEntries
+                            cruiseCard
                         }
                         VStack(alignment: .leading, spacing: 16) {
                             statusCard
-                            favoritesCard
                             GlassChip(title: "导航轨迹", icon: "location.north.line", tint: Self.cyan) { page = 1 }
-                            GlassChip(title: "常用地点", icon: "star", tint: Self.pink, compact: true) { page = 1 }
                         }
                     }
                 } else {
                     VStack(alignment: .leading, spacing: 16) {
                         if page == 0 {
                             header
-                            cruiseCard
-                            routeButtons
                             destCard
+                            favoritesRecentCard
+                            routeEntries
+                            cruiseCard
                         } else if page == 1 {
                             ridesTabContent
                         } else if page == 2 {
@@ -267,9 +258,6 @@ struct ContentView: View {
                 }
                 .background(RoundedRectangle(cornerRadius: 18).fill(AppTheme.card))
             }
-
-            favoritesCard
-            historyCard
         }
     }
 
@@ -283,18 +271,23 @@ struct ContentView: View {
 
     private var deviceTabContent: some View {
         VStack(alignment: .leading, spacing: 16) {
-            HStack {
-                Text("圆屏")
-                    .font(.system(size: 28, weight: .heavy, design: .rounded))
-                    .foregroundColor(AppTheme.text)
-                Spacer()
+            sectionTitle("圆屏", subtitle: "连接状态 · 分类设置")
+            DeviceConnectionCard()
+            ScreenSettingsList { group in
+                secondaryPage(title: group.title) { screenGroupPage(group) }
             }
-            .padding(.top, 8)
-            DeviceConnectionCard(
-                displayDestination: { secondaryPage(title: "圆屏显示") { displayCard } },
-                systemDestination: { secondaryPage(title: "圆屏设置") { settingsCard } }
-            )
-            connectionManagementCard
+        }
+    }
+
+    /// 六组圆屏设置的二级页：每项设置只在一处编辑（连接管理含弹窗状态，留在本文件）
+    @ViewBuilder private func screenGroupPage(_ group: ScreenSettingGroup) -> some View {
+        switch group {
+        case .display: ScreenDisplaySettings()
+        case .keysPower: ScreenKeysPowerSettings()
+        case .boot: ScreenBootSettings()
+        case .music: ScreenMusicSettings()
+        case .gauge: ScreenGaugeSettings()
+        case .connection: connectionManagementCard
         }
     }
 
@@ -368,12 +361,6 @@ struct ContentView: View {
         .padding(.top, 8)
     }
 
-    private var routeButtons: some View {
-        Button { showWebMotor=true } label: {
-            Label("路线规划 · 驾车 / 摩托车 / 自行车",systemImage:"map")
-        }.foregroundColor(Self.cyan)
-    }
-
     private var header: some View {
         VStack(alignment: .leading, spacing: 2) {
             Text("MotoNav")
@@ -382,35 +369,6 @@ struct ContentView: View {
             Text("圆屏导航 · \(APP_VERSION)").font(.caption).foregroundColor(ContentView.sub)
         }
         .padding(.top, 8)
-    }
-
-    private var historyCard: some View {
-        CardView {
-            Text("最近去过").foregroundColor(AppTheme.text).bold()
-            if history.places.isEmpty {
-                Text("搜索并选择目的地后会出现在这里").foregroundColor(Self.sub)
-            } else {
-                ForEach(history.places.prefix(12)) { p in
-                    Button {
-                        page = 0
-                        choose(p)
-                    } label: {
-                        HStack(alignment: .center, spacing: 8) {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(p.name).foregroundColor(AppTheme.text)
-                                if !p.address.isEmpty { Text(p.address).font(.caption).foregroundColor(ContentView.sub).lineLimit(1) }
-                            }
-                            Spacer(minLength: 4)
-                            if let d = distanceTo(p) { Text(d).font(.caption).foregroundColor(ContentView.cyan) }
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.vertical, 4)
-                    }
-                    Divider().background(ContentView.stroke)
-                }
-                GlassChip(title: "清除记录", foreground: ContentView.sub, compact: true) { history.clear() }
-            }
-        }
     }
 
     private var appearanceCard: some View {
@@ -451,6 +409,7 @@ struct ContentView: View {
     }
 
     // MARK: 去哪儿
+    /// 搜索目的地：搜索与结果；收藏、最近目的地和分享导入同样进入统一规划页
     private var destCard: some View {
         CardView {
             Text("去哪儿").foregroundColor(AppTheme.text).bold()
@@ -470,18 +429,6 @@ struct ContentView: View {
                     .padding(.horizontal, 16).padding(.vertical, 12)
                     .background(RoundedRectangle(cornerRadius: 12).fill(ContentView.pink))
             }
-            // iOS v0.3 导入高德 App 分享的路线（比如高德里规划好的摩托车路线）
-            Button { pasteShare() } label: {
-                HStack(spacing: 6) {
-                    Image(systemName: "doc.on.clipboard")
-                    Text(shareBusy ? "正在读取分享的路线…" : "粘贴高德分享的路线")
-                }
-                .font(.subheadline).foregroundColor(Color.orange)
-            }
-            .disabled(shareBusy)
-            Text("在高德里规划好路线 → 分享 → 选 MotoNav；或者复制链接后点上面这行").font(.caption2).foregroundColor(ContentView.sub)
-            if !shareStatus.isEmpty { Text(Self.userMessage(shareStatus)).font(.footnote).foregroundColor(ContentView.sub) }
-            if !pendingShare.isEmpty && !shareBusy {Button("网页验证后重试"){showShareVerification=true}.foregroundColor(Self.cyan)}
             if !search.status.isEmpty { Text(search.status).font(.footnote).foregroundColor(ContentView.sub) }
             ForEach(search.results.prefix(8)) { p in
                 Button { choose(p) } label: {
@@ -498,11 +445,45 @@ struct ContentView: View {
                 }
                 Divider().background(ContentView.stroke)
             }
-            // 最近目的地也进入统一规划页
-            if search.results.isEmpty && !history.places.isEmpty {
-                Text("最近去过").font(.caption).foregroundColor(ContentView.sub).padding(.top, 4)
-                ForEach(history.places.prefix(8)) { p in
-                    Button { choose(p) } label: {
+        }
+    }
+
+    /// 收藏与最近目的地：首页最近最多 5 条，通过「全部」查看和管理
+    private var favoritesRecentCard: some View {
+        CardView {
+            HStack(alignment: .center) {
+                Text("收藏与最近目的地").foregroundColor(AppTheme.text).bold()
+                Spacer()
+                GlassChip(title: "全部", icon: "list.bullet", tint: Self.cyan, compact: true) { showDestManage = true }
+            }
+            if favorites.places.isEmpty && history.places.isEmpty {
+                Text("选择目的地后点收藏；搜索并选择的目的地会自动进入最近记录")
+                    .foregroundColor(Self.sub)
+            }
+            ForEach(favorites.places) { place in
+                HStack(alignment: .center, spacing: 8) {
+                    Button {
+                        page = 0
+                        choose(place.searchPlace)
+                    } label: {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Label(place.name, systemImage: "star.fill").foregroundColor(Self.cyan)
+                                .font(.subheadline)
+                            if !place.address.isEmpty { Text(place.address).font(.caption).foregroundColor(ContentView.sub).lineLimit(1) }
+                        }
+                    }
+                    Spacer(minLength: 4)
+                    if let d = distanceTo(place.searchPlace) { Text(d).font(.caption).foregroundColor(ContentView.cyan) }
+                    Button("移除") { favorites.remove(place) }.foregroundColor(Self.sub)
+                }
+                .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                .padding(.vertical, 2)
+                Divider().background(ContentView.stroke)
+            }
+            if !history.places.isEmpty {
+                Text("最近去过").font(.caption).foregroundColor(ContentView.sub).padding(.top, 2)
+                ForEach(history.places.prefix(5)) { p in
+                    Button { page = 0; choose(p) } label: {
                         HStack(alignment: .center, spacing: 8) {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(p.name).foregroundColor(AppTheme.text)
@@ -511,14 +492,85 @@ struct ContentView: View {
                             Spacer(minLength: 4)
                             if let d = distanceTo(p) { Text(d).font(.caption).foregroundColor(ContentView.cyan) }
                         }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.vertical, 4)
+                        .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                        .padding(.vertical, 2)
                     }
                     Divider().background(ContentView.stroke)
                 }
-                Button("清除记录") { history.clear() }.font(.caption).foregroundColor(ContentView.sub)
             }
+        }
+    }
 
+    /// 「全部」管理页：完整收藏（可移除）与最近目的地（可清除）
+    private var destinationManageSheet: some View {
+        NavigationView {
+            List {
+                Section("常用目的地") {
+                    if favorites.places.isEmpty { Text("选择目的地后点收藏").foregroundColor(Self.sub) }
+                    ForEach(favorites.places) { place in
+                        Button {
+                            showDestManage = false
+                            page = 0
+                            choose(place.searchPlace)
+                        } label: {
+                            HStack {
+                                Label(place.name, systemImage: "star.fill").foregroundColor(Self.cyan)
+                                Spacer()
+                            }
+                        }
+                        .foregroundColor(AppTheme.text)
+                    }
+                    .onDelete { indexSet in
+                        for index in indexSet.sorted(by: >) { favorites.remove(favorites.places[index]) }
+                    }
+                }
+                Section("最近去过") {
+                    if history.places.isEmpty { Text("搜索并选择目的地后会出现在这里").foregroundColor(Self.sub) }
+                    ForEach(history.places) { p in
+                        Button {
+                            showDestManage = false
+                            page = 0
+                            choose(p)
+                        } label: {
+                            HStack {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(p.name).foregroundColor(AppTheme.text)
+                                    if !p.address.isEmpty { Text(p.address).font(.caption).foregroundColor(ContentView.sub) }
+                                }
+                                Spacer()
+                            }
+                        }
+                    }
+                    if !history.places.isEmpty {
+                        Button("清除最近记录", role: .destructive) { history.clear() }
+                    }
+                }
+            }.navigationTitle("目的地")
+                .toolbar { ToolbarItem(placement: .cancellationAction) { Button("完成") { showDestManage = false } } }
+        }
+    }
+
+    /// 路线规划与分享导入：与搜索、收藏、最近目的地进入同一个规划流程
+    private var routeEntries: some View {
+        CardView {
+            Text("路线与分享").foregroundColor(AppTheme.text).bold()
+            Button { showWebMotor=true } label: {
+                Label("路线规划 · 驾车 / 摩托车 / 自行车",systemImage:"map")
+                    .frame(minHeight: 44, alignment: .leading)
+            }.foregroundColor(Self.cyan)
+            // iOS v0.3 导入高德 App 分享的路线（比如高德里规划好的摩托车路线）
+            Button { pasteShare() } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "doc.on.clipboard")
+                    Text(shareBusy ? "正在读取分享的路线…" : "粘贴高德分享的路线")
+                }
+                .font(.subheadline).foregroundColor(Color.orange)
+                .frame(minHeight: 44, alignment: .leading)
+            }
+            .disabled(shareBusy)
+            Text("在高德里规划好路线 → 分享 → 选 MotoNav；或者复制链接后点上面这行").font(.caption2).foregroundColor(ContentView.sub)
+            if !shareStatus.isEmpty { Text(Self.userMessage(shareStatus)).font(.footnote).foregroundColor(ContentView.sub) }
+            if !pendingShare.isEmpty && !shareBusy {Button("网页验证后重试"){showShareVerification=true}.foregroundColor(Self.cyan)}
         }
     }
 
@@ -573,7 +625,8 @@ struct ContentView: View {
             do {
                 let route=try await AmapWebSession.loadShare(t)
                 guard shareImportID==sequence else{return}
-                guard !navi.navigating,!independent.running else{shareStatus="导航已开始，请结束后重新导入";return}
+                // 统一导航活动判断（覆盖官方骑行）：加载期间任何导航已开始，迟到的分享结果不写入规划器
+                guard !NavigationCoordinator.shared.navigationActive else{shareStatus="导航已开始，请结束后重新导入";return}
                 shareStatus="已读取：\(route.kind)路线" + (route.restored ? "":"（高德未确认原样还原，请核对地图）")
                 pendingShare=""
                 let name=route.endName.isEmpty ? "分享的目的地":route.endName
@@ -612,127 +665,7 @@ struct ContentView: View {
         }
     }
 
-    // MARK: 圆屏设置
-    private var settingsCard: some View {
-        CardView {
-            Text("圆屏设置").foregroundColor(AppTheme.text).bold()
-            Toggle("隧道自动调暗", isOn: $settings.tunnelAuto).foregroundColor(AppTheme.text).tint(ContentView.pink)
-            Text("自动识别仅支持驾车导航；其他方式可使用导航中的临时隧道快捷操作。").font(.caption).foregroundColor(ContentView.sub)
-            Picker("开机动画", selection: $settings.bootBrand) {
-                ForEach(Settings.bootBrands.indices, id: \.self) { i in Text(Settings.bootBrands[i]).tag(i) }
-            }.tint(ContentView.cyan)
-            Text(settings.bootStatus).font(.caption).foregroundColor(ContentView.sub)
-            Toggle("音乐控制", isOn: $settings.musicHID).foregroundColor(AppTheme.text).tint(ContentView.pink)
-            if settings.musicHID {
-                Text(ble.mediaHIDSupported
-                     ? (ble.mediaHIDReady && ble.mediaHIDMode ? "媒体按键已就绪" : ble.mediaAMSControls > 0 && ble.mediaHIDMode ? "音乐控制已就绪" : "请在 iPhone 设置 → 蓝牙中配对 MotoNav；按圆屏配对码提示完成")
-                     : "请连接圆屏并更新到支持音乐控制的固件")
-                    .font(.caption).foregroundColor(ContentView.sub)
-                if !ble.mediaSongInfo.isEmpty {
-                    Text(ble.mediaSongInfo).font(.caption).foregroundColor(ContentView.cyan)
-                }
-                Toggle("显示逐句歌词", isOn: $settings.musicLyrics).foregroundColor(AppTheme.text).tint(ContentView.pink)
-                Text("开启后自动匹配歌词，未匹配到时显示歌名和歌手。")
-                    .font(.caption).foregroundColor(ContentView.sub)
-                if !settings.musicLyrics && ble.mediaLyricsActive { Text("正在关闭圆屏歌词…").font(.caption).foregroundColor(ContentView.sub) }
-                if settings.musicLyrics {
-                    Text(ble.mediaLyricsSupported ? "播放音乐后自动匹配歌词" : "请更新圆屏固件以显示歌词")
-                        .font(.caption).foregroundColor(ContentView.cyan)
-                }
-                Text("先在音乐 App 中播放，再用圆屏切歌或暂停。歌名和歌手由播放器提供。")
-                    .font(.caption).foregroundColor(ContentView.sub)
-            } else {
-                Button("授权 Apple Music 圆屏控制") { MusicBridge.shared.authorize() }
-                    .foregroundColor(ContentView.cyan)
-            }
-            Text("巡航连续停车 10 分钟后自动结束。")
-                .font(.caption).foregroundColor(ContentView.sub)
-            Text("圆屏方向").foregroundColor(AppTheme.text).padding(.top, 6)
-            RotationDial(degrees: $settings.rotationDeg)      // iOS v0.5.1 按住圆盘转动调角度
-            Text("拖动圆盘调整方向，粉色指针代表画面上方。")
-                .font(.caption2).foregroundColor(ContentView.sub)
-            Toggle("亮度跟着昼夜自动调", isOn: $settings.brightAuto).foregroundColor(AppTheme.text).tint(ContentView.pink)
-            if settings.brightAuto {
-                HStack {
-                    Text("白天").foregroundColor(AppTheme.text)
-                    Slider(value: $settings.brightDay, in: 5...255, step: 5).tint(ContentView.pink)
-                    Text("\(Int(settings.brightDay))").font(.caption).foregroundColor(ContentView.sub).frame(width: 34)
-                }
-                HStack {
-                    Text("夜间").foregroundColor(AppTheme.text)
-                    Slider(value: $settings.brightNight, in: 5...255, step: 5).tint(ContentView.pink)
-                    Text("\(Int(settings.brightNight))").font(.caption).foregroundColor(ContentView.sub).frame(width: 34)
-                }
-                if !settings.brightDesc.isEmpty { Text(settings.brightDesc).font(.caption2).foregroundColor(ContentView.sub) }
-            } else {
-                HStack {
-                    Text("亮度").foregroundColor(AppTheme.text)
-                    Slider(value: $settings.brightness, in: 5...255, step: 5).tint(ContentView.pink)
-                    Text("\(Int(settings.brightness))").font(.caption).foregroundColor(ContentView.sub).frame(width: 34)
-                }
-            }
-        }
-    }
-
-    private var displayCard: some View {
-        CardView {
-            Text("圆屏显示").foregroundColor(AppTheme.text).bold()
-            Toggle("路程进度环", isOn: $settings.progressRing).foregroundColor(AppTheme.text).tint(Self.pink)
-            Picker("预判", selection: $settings.leadMs) {
-                Text("关闭").tag(0); Text("0.3秒").tag(300); Text("0.6秒").tag(600)
-            }.pickerStyle(.segmented)
-            HStack {
-                Text("风格").foregroundColor(AppTheme.text)
-                Spacer()
-                Picker("风格", selection: $settings.theme) {
-                    ForEach(Settings.themeOrder, id: \.self) { t in Text(Settings.themeName(t)).tag(t) }
-                }
-                .tint(ContentView.cyan)
-            }
-            Text(Settings.themeDesc(settings.theme)).font(.caption2).foregroundColor(ContentView.sub)
-            Toggle("小地图", isOn: $settings.mapOn).foregroundColor(AppTheme.text).tint(ContentView.pink)
-            if settings.mapOn {
-                if settings.mapSource == MapFeeder.SRC_AMAP && settings.theme == 1 {
-                    Toggle("俯视建筑轮廓", isOn: $settings.buildings).foregroundColor(AppTheme.text).tint(ContentView.pink)
-                    if ble.isReady && !ble.buildingsSupported {
-                        Text("当前圆屏暂不支持建筑轮廓，将显示普通地图。")
-                            .font(.caption).foregroundColor(Self.sub)
-                    }
-                }
-                Text(Self.userMessage(map.offlineStatus)).font(.caption).foregroundColor(ContentView.sub)
-                Text("选定路线后，前台自动下载沿途地图；锁屏使用已保存地图包。请等下载完成再出发。")
-                    .font(.caption2).foregroundColor(ContentView.sub)
-                Text("走过的路线").foregroundColor(AppTheme.text)
-                Picker("走过的路线", selection: $settings.trail) {
-                    Text("变灰").tag(1); Text("擦除").tag(2)
-                }
-                .pickerStyle(.segmented)
-                Toggle("清爽模式", isOn: $settings.clean).foregroundColor(AppTheme.text).tint(ContentView.pink)
-                Text("仅保留地图和路线，隐藏其他提示").font(.caption2).foregroundColor(ContentView.sub)
-                Button("地图显示问题"){showMapReport=true}
-            }
-            Text("夜间配色").foregroundColor(AppTheme.text)
-            Picker("夜间配色", selection: $settings.nightMode) {
-                Text("自动（日出日落）").tag(0); Text("白天").tag(1); Text("夜间").tag(2)
-            }
-            .pickerStyle(.segmented)
-            if !settings.nightDesc.isEmpty { Text(settings.nightDesc).font(.caption2).foregroundColor(ContentView.sub) }
-            Toggle("弯道急缓上色", isOn: $settings.curve).foregroundColor(AppTheme.text).tint(ContentView.pink)
-        }
-    }
-    private var favoritesCard: some View {
-        CardView {
-            Text("常用目的地").foregroundColor(AppTheme.text).bold()
-            if favorites.places.isEmpty { Text("选择目的地后点收藏").foregroundColor(Self.sub) }
-            ForEach(favorites.places) { place in
-                HStack {
-                    Button(place.name) { page=0; choose(place.searchPlace) }.foregroundColor(Self.cyan)
-                    Spacer()
-                    Button("移除") { favorites.remove(place) }.foregroundColor(Self.sub)
-                }
-            }
-        }
-    }
+    // MARK: 圆屏设置（六组入口见 ScreenSettings.swift；连接管理卡留在本文件）
     private var voiceCard: some View {
         CardView {
             Text("导航语音").foregroundColor(AppTheme.text).bold()

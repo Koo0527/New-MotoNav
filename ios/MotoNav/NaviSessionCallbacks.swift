@@ -1,5 +1,8 @@
 import Foundation
 import ObjectiveC
+#if canImport(UIKit)
+import UIKit
+#endif
 
 /// SDK callbacks belong to the navigation/planning/cruise session that registered them.
 /// Retained old delegates and callbacks already queued on the main thread are ignored.
@@ -104,6 +107,16 @@ final class NaviSessionCallbacks: NSObject {
     @objc(driveManagerHideLaneInfo:)
     func mnLaneHide(_ m: AMapNaviDriveManager) {
         deliver { bridge in bridge.mnLaneHide(m) }
+    }
+
+    @objc(driveManager:showCrossImage:)
+    func mnCrossShow(_ m: AMapNaviDriveManager, image: UIImage?) {
+        deliver { bridge in bridge.mnCrossShow(m, image: image) }
+    }
+
+    @objc(driveManagerHideCrossImage:)
+    func mnCrossHide(_ m: AMapNaviDriveManager) {
+        deliver { bridge in bridge.mnCrossHide(m) }
     }
 
     @objc(driveManager:updateTrafficFacilities:)

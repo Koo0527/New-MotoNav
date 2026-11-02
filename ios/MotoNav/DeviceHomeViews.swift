@@ -1,14 +1,11 @@
 import SwiftUI
 
-/// 圆屏 Tab：连接卡（产品正视 PNG）+ 圆屏显示 / 圆屏设置入口 + 胎压全字段。
-struct DeviceConnectionCard<DisplayDest: View, SystemDest: View>: View {
+/// 圆屏 Tab：连接状态与电量卡（产品正视 PNG）。
+/// 导航状态由四个标签上方的统一「回到导航」状态条展示，卡片不再重复。
+struct DeviceConnectionCard: View {
     @ObservedObject var ble = BleLink.shared
-    @ObservedObject var navi = NaviBridge.shared
-    @ObservedObject var map = MapFeeder.shared
     @ObservedObject var settings = Settings.shared
     @ObservedObject private var connectAnim = ConnectAnimationCoordinator.shared
-    @ViewBuilder var displayDestination: () -> DisplayDest
-    @ViewBuilder var systemDestination: () -> SystemDest
 
     var body: some View {
         CardView {
@@ -71,38 +68,8 @@ struct DeviceConnectionCard<DisplayDest: View, SystemDest: View>: View {
                 .frame(width: 156, height: 186)
             }
 
-            if navi.navigating {
-                Text("导航中：\(navi.uiDir) \(navi.uiDist) 米 · \(navi.uiSpeed) km/h")
-                    .font(.footnote)
-                    .foregroundColor(AppTheme.accent)
-            }
             Text(Settings.themeName(settings.theme)).font(.caption2).foregroundColor(AppTheme.sub)
-
-            Divider().opacity(0.35)
-
-            HStack(spacing: 0) {
-                NavigationLink(destination: displayDestination()) {
-                    deviceQuickLinkLabel("圆屏显示", "sun.max")
-                }
-                .buttonStyle(.plain)
-                Divider().frame(height: 28).opacity(0.35)
-                NavigationLink(destination: systemDestination()) {
-                    deviceQuickLinkLabel("圆屏设置", "gearshape")
-                }
-                .buttonStyle(.plain)
-            }
         }
-    }
-
-    private func deviceQuickLinkLabel(_ title: String, _ icon: String) -> some View {
-        HStack(spacing: 6) {
-            Image(systemName: icon).font(.system(size: 14, weight: .semibold))
-            Text(title).font(.subheadline.weight(.medium))
-        }
-        .foregroundColor(AppTheme.accent)
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 6)
-        .contentShape(Rectangle())
     }
 }
 

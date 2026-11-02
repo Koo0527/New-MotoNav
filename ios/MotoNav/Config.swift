@@ -46,6 +46,8 @@ import Foundation
 //   iOS v0.7.1 Bundle ID 从示例用的 com.example.motonav 换成 com.example.motonav（分享扩展 com.example.motonav.share）。
 //             手机上会变成一个新 App：设置、Key、最近去过都要重新来；高德 key 要绑新的 Bundle ID
 //   iOS v0.7.2 搜索失败时把高德的错误代码翻译成大白话：key 和 Bundle ID 对不上（1008/1009）、key 无效、次数用完、没权限
+//   iOS v0.16.0 build23 后台省电：锁屏且链路空闲（无导航/巡航/录制/音乐显示/传图）心跳 2 秒放慢到 25 秒，
+//             持续满 3 分钟断开圆屏连接（App 可被系统挂起），回到 App 自动重连；圆屏设置里有“锁屏空闲省电”开关（默认开）。
 let APP_VERSION = "iOS v0.16.0"
 
 // 高德 key 不再写在代码里（iOS v0.7 起）：用户在 App 的「Key 设置」里填，存在手机上，见 Settings.swift

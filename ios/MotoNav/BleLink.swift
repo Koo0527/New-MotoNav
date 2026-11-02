@@ -40,7 +40,12 @@ final class BleLink: NSObject, ObservableObject {
     private var buildingQueries: Int { buildingProbe.attempts }
     private var txNotifyReady = false
     @Published private(set) var buildingsSupported = false
-    @Published var isReady = false
+    @Published var isReady = false {
+        didSet {
+            if !isReady { resetGMotion() }
+            if oldValue && !isReady { Settings.shared.deviceDisconnected(); GRecorder.shared.linkLost() }
+        }
+    }
     @Published var sentCount = 0
     @Published var lastSent = ""
     @Published var screenStats = ""
@@ -77,7 +82,20 @@ final class BleLink: NSObject, ObservableObject {
     private var phoneClock=PhoneClockSync()
     private var clockWriteID=0
     private var clockObserver:NSObjectProtocol?
+    private var motionObservers: [NSObjectProtocol] = []
+    private lazy var gMotion = GMotionReporter(active: UIApplication.shared.applicationState == .active,
+        sample: { LocationService.shared.gMotionFix }, send: { [weak self] message in
+            guard let self, self.isReady, self.verified else { return }
+            self.sendOnce(message)
+        })
     private var heartbeat: Timer?
+    private var heartbeatInterval: TimeInterval = 0
+    /// 后台省电（方案 A+B）：锁屏空闲放慢心跳 / 满足条件后空闲断开，见下方心跳区块与 BleIdlePolicy
+    private var idlePolicy = BleIdlePolicy(idleAfter: 0)
+    /// 已因锁屏空闲断开：回前台（didBecomeActive）自动重连
+    private var idleSuspended = false
+    /// 方案 B 的固定等待时长（用户确认：默认开、固定 3 分钟，设置里只有开关）
+    static let idleDisconnectSeconds: TimeInterval = 180
     private var lastWriteAt = Date.distantPast
     private var writePacer = BleWritePacer()
     private var pumpScheduled = false
@@ -93,16 +111,71 @@ final class BleLink: NSObject, ObservableObject {
         central = CBCentralManager(delegate: self, queue: .main,
                                    options: [CBCentralManagerOptionRestoreIdentifierKey: "motonav.central"])
         clockObserver=NotificationCenter.default.addObserver(forName:UIApplication.significantTimeChangeNotification,object:nil,queue:.main){[weak self] _ in self?.syncPhoneClock(force:true)}
-        heartbeat = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] _ in
-            self?.syncPhoneClock()
-            self?.checkConnectionSetup()
-            self?.requestBuildingCapability()
-            MusicBridge.shared.syncLyrics()
-            MusicBridge.shared.pollMetadata()
-            guard let self = self, self.isReady, self.queue.isEmpty, !self.bulkQ.hasData,
-                  Date().timeIntervalSince(self.lastWriteAt) > 1.5 else { return }
-            self.send("P")
+        for name in [UIApplication.willResignActiveNotification, UIApplication.didEnterBackgroundNotification] {
+            motionObservers.append(NotificationCenter.default.addObserver(forName:name,object:nil,queue:.main) { [weak self] _ in self?.gMotion.setActive(false) })
         }
+        motionObservers.append(NotificationCenter.default.addObserver(forName:UIApplication.didBecomeActiveNotification,object:nil,queue:.main) { [weak self] _ in
+            self?.gMotion.setActive(true)
+            if let self = self, self.idleSuspended { self.idleSuspended = false; self.connect() }   // 空闲断开后回前台自动重连
+        })
+        setHeartbeat(BleIdlePolicy.fastTick)
+    }
+
+    // MARK: - 心跳与后台省电
+
+    /// 链路忙碌 = 有任何依赖蓝牙连接的活动：导航（驾车 / 官方骑行 / 网页）、巡航、
+    /// G 录制（含手动录制）、地图大块数据未传完、圆屏音乐 HID 模式。
+    /// 忙碌时保持 2 秒快心跳（导航中 "P" 照旧，圆屏“数据中断”提示行为不变），也绝不空闲断开。
+    var linkBusy: Bool {
+        NavigationCoordinator.shared.navigationActive || NaviBridge.shared.cruising
+        || GRecorder.shared.recording || bulkPending
+        || (Settings.shared.musicHID && mediaHIDMode)
+    }
+
+    /// 按间隔重建心跳 Timer（间隔没变且 Timer 还活着就不动；Timer 被停掉后同间隔也会重建）
+    private func setHeartbeat(_ interval: TimeInterval) {
+        if heartbeat != nil, interval == heartbeatInterval { return }
+        heartbeat?.invalidate()
+        heartbeatInterval = interval
+        heartbeat = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] _ in
+            self?.heartbeatTick()
+        }
+    }
+
+    /// 心跳：原有维护工作照做，再按 BleIdlePolicy 决策后台省电（纯逻辑，ios/tests/ble-idle-policy 有回归）。
+    private func heartbeatTick() {
+        syncPhoneClock()
+        checkConnectionSetup()
+        requestBuildingCapability()
+        MusicBridge.shared.syncLyrics()
+        MusicBridge.shared.pollMetadata()
+        if isReady, queue.isEmpty, !bulkQ.hasData,
+           Date().timeIntervalSince(lastWriteAt) > 1.5 {
+            send("P")
+        }
+        idlePowerSaving()
+    }
+
+    /// 后台省电决策：锁屏空闲把心跳放慢到 25 秒；开了“锁屏空闲省电”且空闲满 3 分钟 → 断开。
+    private func idlePowerSaving() {
+        let limit = Settings.shared.idleLinkSave ? Self.idleDisconnectSeconds : 0
+        if idlePolicy.idleAfter != limit { idlePolicy = BleIdlePolicy(idleAfter: limit) }
+        let background = UIApplication.shared.applicationState != .active
+        let busy = linkBusy
+        if idlePolicy.tick(now: ProcessInfo.processInfo.systemUptime, background: background, linkActive: busy) {
+            suspendLinkForIdle()
+            return
+        }
+        setHeartbeat(idlePolicy.interval(background: background, linkActive: busy))
+    }
+
+    /// 方案 B：锁屏空闲断开。停掉心跳让系统能真正挂起 App；didBecomeActive 时自动重连。
+    /// 圆屏不在身边时同样生效（停掉后台扫描重试循环）。
+    private func suspendLinkForIdle() {
+        idleSuspended = true
+        heartbeat?.invalidate(); heartbeat = nil
+        status = "锁屏空闲省电已断开，回到 App 自动重连"
+        disconnect()
     }
 
     var bluetoothAvailable:Bool {central.state == .poweredOn}
@@ -157,6 +230,8 @@ final class BleLink: NSObject, ObservableObject {
     func connect() {
         connectionRetries=0;retryAfter=0
         wantConnected = true
+        idleSuspended = false
+        setHeartbeat(BleIdlePolicy.fastTick)          // 空闲断开停过心跳：重连时重建（后台空闲下个心跳会再放慢）
         guard central.state == .poweredOn else { status = "蓝牙没打开"; return }
         if let p = peripheral,p.state == .connected {
             if !isReady { discover(p) };return
@@ -175,6 +250,7 @@ final class BleLink: NSObject, ObservableObject {
     }
 
     func disconnect() {
+        resetGMotion()
         wantConnected = false
         handshake.begin(.idle,now:ProcessInfo.processInfo.systemUptime)
         central.stopScan()
@@ -218,6 +294,11 @@ final class BleLink: NSObject, ObservableObject {
         }
     }
 
+    private func resetGMotion() {
+        gMotion.reset()
+        queue.removeAll { $0.key == "#GM" }
+    }
+
     private func requestBuildingCapability() {
         guard buildingProbe.next(ready: isReady && txNotifyReady, supported: buildingsSupported, now: Date().timeIntervalSinceReferenceDate) else { return }
         sendOnce("#GB?")
@@ -253,21 +334,29 @@ final class BleLink: NSObject, ObservableObject {
     // MARK: - 发送
 
     private func keyOf(_ msg: String) -> String {
+        // 清屏必须先于新导航发送，不能被转向消息合并掉。
+        if msg == "C" { return "RESET" }
         if msg.hasPrefix("#") { return String(msg.split(separator: ",", maxSplits: 1).first ?? "") }
         if msg == "P" { return "P" }
-        return "NAV"                                    // 导航方向、到达 A、清屏 C
+        return "NAV"                                    // 导航方向、到达 A
     }
 
     /// 发一条文字消息（同类型只留最新）
     func send(_ msg: String) {
         if msg.hasPrefix("#TIME,"){sendClock(msg);return}
+        let oneShot = ["#GM", "#TM", "#CTL", "#PS", "#BS", "#GC", "#GQ", "#GS"]
+        if oneShot.contains(keyOf(msg)) { sendOnce(msg); return }
         let k = keyOf(msg)
         if msg == "C" {                                 // 清屏：状态全部忘掉（亮度、风格、方向这些设置除外）
             let keep: Set<String> = ["#b", "#t", "#BC", "#R", "#Q", "#n", "#m", "#r", "#w"]
             lastState = lastState.filter { keep.contains($0.key) }
             stateOrder = stateOrder.filter { keep.contains($0) }
             lastImg.removeAll()
-            queue.removeAll { $0.key?.hasPrefix("B") == true }
+            let navigation: Set<String> = ["NAV", "RESET", "#j", "#v", "#k", "#c", "#g", "#u", "#e", "#p", "#z", "#y", "#x", "#h", "#J"]
+            queue.removeAll {
+                guard let key = $0.key else { return false }
+                return key.hasPrefix("B") || key.hasPrefix("#O") || navigation.contains(key)
+            }
         }
         if k != "P" {
             if lastState[k] == nil { stateOrder.append(k) }
@@ -275,6 +364,13 @@ final class BleLink: NSObject, ObservableObject {
         }
         enqueue(k, Data(msg.utf8))
         pump()
+    }
+
+    func discardLegacyDisplayCommands() {
+        let keys: Set<String> = ["#b", "#n"]
+        queue.removeAll { keys.contains($0.key ?? "") }
+        lastState = lastState.filter { !keys.contains($0.key) }
+        stateOrder.removeAll { keys.contains($0) }
     }
 
     /// 只发一次、不记下来重连后补发（屏幕速度 #q、快速刷屏 #f：圆屏收到会存起来并重启，补发会造成反复重启）
@@ -463,7 +559,11 @@ final class BleLink: NSObject, ObservableObject {
                 }
             } else {
                 lastWasCommand=choice == .command
-                let o = queue.remove(at: choice == .command ? command! : 0)
+                var o = queue.remove(at: choice == .command ? command! : 0)
+                if o.key == "#GM" {
+                    guard verified, let message=gMotion.message else { continue }
+                    o.data=Data(message.utf8)
+                }
                 p.writeValue(o.data, for: rx, type: .withoutResponse)
                 sentCount += 1
                 if o.key?.hasPrefix("B") != true, o.key != "P" { lastSent = String(data: o.data, encoding: .utf8) ?? "" }
@@ -522,8 +622,8 @@ final class BleLink: NSObject, ObservableObject {
         phoneClock=PhoneClockSync()
         bulkQ.reset(); bulkBarrier.reset(); bulkWriteSerial += 1
         mapReceipt.reset();mapMeter.reset();lastWasCommand=false
-        if let b = lastState["#b"] { enqueue("#b", Data(b.utf8)) }
-        for k in stateOrder where k != "#b" { if let v = lastState[k] { enqueue(k, Data(v.utf8)) } }
+        Settings.shared.deviceDisconnected()
+        for k in stateOrder where k != "#b" && k != "#n" { if let v = lastState[k] { enqueue(k, Data(v.utf8)) } }
         for (slot, img) in lastImg { enqueueImage(slot: slot, w: img.w, h: img.h, data: img.data) }
         pump()
         Settings.shared.pushAll()
@@ -651,12 +751,16 @@ extension BleLink: CBCentralManagerDelegate, CBPeripheralDelegate {
     func peripheral(_ p: CBPeripheral, didUpdateValueFor ch: CBCharacteristic, error: Error?) {
         guard p === peripheral else { return }
         guard ch === txChar,error == nil, let d = ch.value else { return }
+        if d.first == 0xa7 { GRecorder.shared.receive(d); return }
         if d.first == 0xa6 { MusicBridge.shared.receiveAMS(d); return }
         guard let raw = String(data: d, encoding: .utf8) else { return }
         let s = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         if BleAuthenticatedReply.accepts(s), !verified {
-            verified = true; syncPhoneClock(force:true); buildingProbe.reset(); requestBuildingCapability(); Settings.shared.pushAll(); MapFeeder.shared.resendAll()
+            verified = true; Settings.shared.deviceAuthenticated(); syncPhoneClock(force:true); buildingProbe.reset(); requestBuildingCapability(); Settings.shared.pushAll(); MapFeeder.shared.resendAll()
         }
+        if s == "CAP,GMOT,1" { gMotion.setCapability(); return }
+        if s == "CAP,GLOG,1" { GRecorder.shared.setCapability(); return }
+        if s.hasPrefix("GS,") { GRecorder.shared.receiveAck(s); return }
         if s == "U,1" {return}
         if s == "CAP,HID,1" {
             mediaHIDSupported = true

@@ -18,4 +18,9 @@ check(probe.next(ready: true, supported: false, now: 10), "Allow manual or late-
 probe.reset()
 check(!probe.next(ready: false, supported: false, now: 10), "Disconnect resets probe without writing")
 check(probe.next(ready: true, supported: false, now: 11), "New connection probes immediately")
+for message in ["CAP,CTL,1", "CAP,AUD,1", "CAP,IMU,1", "CAP,GMOT,1"] {
+    check(BleAuthenticatedReply.accepts(message), "Device capability authenticates a restored notification link")
+}
+check(!BleAuthenticatedReply.accepts("CAP,CTL,0"), "Unsupported capability does not authenticate")
+check(!BleAuthenticatedReply.accepts("CAP,GMOT,0"), "Unsupported motion capability cannot authenticate")
 print("BLE capability: \(checks) checks passed")

@@ -24,10 +24,6 @@ func check(_ condition: Bool, _ message: String) {
 }
 func wait(_ seconds: Double) { RunLoop.current.run(until: Date().addingTimeInterval(seconds)) }
 enum AmapShare { struct Fail: Error { let message: String; init(_ m: String) { message = m } } }
-enum NavigationSpeed {
-    static let values = [60, 100, 120, 150]
-    static func next(_ value: Int) -> Int { guard let i = values.firstIndex(of: value) else { return values[0] }; return values[(i + 1) % values.count] }
-}
 enum MapGeo { static func wgsToGcj(_ lat: Double, _ lng: Double) -> (lat: Double, lng: Double) { (lat, lng) } }
 final class UIApplication { static let shared = UIApplication(); var isIdleTimerDisabled = false }
 final class MapFeeder {
@@ -169,8 +165,10 @@ tests = r'''
 
 with tempfile.TemporaryDirectory(prefix='motonav-ride-preempt-') as tmp:
     swift = Path(tmp) / 'main.swift'
-    swift.write_text(stubs + core + (root / 'MotoNav/RouteGeometry.swift').read_text() + '\n'
-                     + (root / 'MotoNav/MotorRouteTracker.swift').read_text() + '\n' + session + cruise_harness + tests)
-    env = dict(os.environ, CLANG_MODULE_CACHE_PATH=str(Path(tmp) / 'cache'), SWIFT_MODULE_CACHE_PATH=str(Path(tmp) / 'cache'))
+    speeds = (root / 'MotoNav/NavigationSpeed.swift').read_text()
+    swift.write_text('enum MapPipelineTrace {static func event(_ name:String,_ fields:[String:Any]=[:]){}}\n' + stubs + speeds + '\n' + core + (root / 'MotoNav/RouteGeometry.swift').read_text() + '\n'
+                     + (root / 'MotoNav/MotorRouteTracker.swift').read_text() + '\n'
+                     + (root / 'MotoNav/MotorReroutePolicy.swift').read_text() + '\n' + session + cruise_harness + tests)
+    env = dict(os.environ, CLANG_MODULE_CACHE_PATH=str(Path(tmp) / 'cache'), SWIFT_MODULECACHE_PATH=str(Path(tmp) / 'cache'))
     subprocess.run(['swiftc', '-parse-as-library', str(swift), '-o', str(Path(tmp) / 'check')], check=True, env=env)
     subprocess.run([str(Path(tmp) / 'check')], check=True, env=env)

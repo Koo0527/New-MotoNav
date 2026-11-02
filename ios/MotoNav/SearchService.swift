@@ -170,6 +170,15 @@ final class LocationService: NSObject, ObservableObject, CLLocationManagerDelega
     private let lm = CLLocationManager()
     @Published var location: CLLocation?
 
+    var gMotionFix: GMotionFix? {
+        guard CLLocationManager.locationServicesEnabled(),
+              lm.authorizationStatus == .authorizedWhenInUse || lm.authorizationStatus == .authorizedAlways,
+              let location else { return nil }
+        if #available(iOS 15.0, macOS 12.0, *), location.sourceInformation?.isSimulatedBySoftware == true { return nil }
+        return GMotionFix(timestamp:location.timestamp.timeIntervalSince1970,
+            horizontalAccuracy:location.horizontalAccuracy,speed:location.speed,speedAccuracy:location.speedAccuracy)
+    }
+
     override init() {
         super.init()
         lm.delegate = self

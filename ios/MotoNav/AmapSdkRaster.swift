@@ -4,14 +4,14 @@ import Foundation
 enum AmapSdkRaster {
     private static let lease = NSLock()
     static func build(_ f: MapGeo.Frame, cx: Double, cy: Double, includeBuildings: Bool,
-                      shouldCancel: @escaping () -> Bool, onBaseReady: ((Data) -> Void)? = nil, onBuildingStatus: ((String) -> Void)? = nil, satellite: Bool = false, style: Int = 1, preparedBase:Data? = nil) throws -> RasterResult {
+                      shouldCancel: @escaping () -> Bool, onBaseReady: ((Data) -> Void)? = nil, onBuildingStatus: ((String) -> Void)? = nil, satellite: Bool = false, style: Int = 1, preparedBase:Data? = nil, buildingView: BuildingView? = nil, onBuildingReady: ((BuildingUpdate) -> Void)? = nil, shouldYield: (() -> Bool)? = nil, cache: RouteMapCache = .shared) throws -> RasterResult {
         precondition(!Thread.isMainThread)
         func check() throws { if shouldCancel() { throw MapProcessingError.cancelled } }
-        while !lease.try() { try check(); Thread.sleep(forTimeInterval: 0.1) }
-        defer { lease.unlock() }
-        let job = UUID().uuidString
+        let job = Int.random(in: 1...Int(Int32.max))
         MapPipelineTrace.event("capture-start", ["job": job, "buildings": includeBuildings])
         func take(x: Int, y: Int, n: Int) throws -> [UInt32] {
+            while !lease.try() { try check(); Thread.sleep(forTimeInterval: 0.1) }
+            defer { lease.unlock() }
             try check()
             let started = Date()
             MapPipelineTrace.event("tile-start", ["job": job, "size": n])
@@ -43,10 +43,25 @@ enum AmapSdkRaster {
         }
         let half = satellite ? 700.0 : 1200.0
         let n = satellite ? 400 : 1200, x = Int((cx - half).rounded()), y = Int((cy + half).rounded())
+        let node = RouteMapPlan.Node(x: cx, y: cy, distance: 0)
+        let cachedUpdate = includeBuildings && !satellite && AmapCapturePolicy.supportsBuildings(style)
+            ? cache.buildingUpdate(frame:f,source:3,node:node,style:style) : nil
+        try check()
+        if let cached = cachedUpdate, cached.coverage.isComplete {
+            MapPipelineTrace.event("buildings-cache-hit", ["job":job,"checked":cached.coverage.checkedMask,"bytes":cached.bytes.count])
+            if cached.coverage.qualityVersion == FastBuildings.qualityVersion {
+                onBaseReady?(MapDeliveryPolicy.compactBase(cached.bytes))
+            }
+            onBuildingReady?(cached)
+            return RasterResult(bytes:cached.bytes,tiles:0,fromCache:1,coverage:cached.coverage)
+        }
+        let availableBase = preparedBase ?? cachedUpdate.flatMap {
+            $0.coverage.qualityVersion == FastBuildings.qualityVersion ? MapDeliveryPolicy.compactBase($0.bytes) : nil
+        }
         let roads:[UInt8],base:Data
-        if includeBuildings,!satellite,style==1,let cached=preparedBase,
+        if includeBuildings,!satellite,AmapCapturePolicy.supportsBuildings(style),let cached=availableBase,
            RasterPacket.valid(cached,frame:f.id,x:x,y:y),!RasterPacket.isBuilding(cached),
-           MapStyleTransfer.matches(cached,style:1),let decoded=RasterPacket.decode(cached) {
+           MapStyleTransfer.matches(cached,style:style),let decoded=RasterPacket.decode(cached) {
             roads=decoded;base=cached
         } else {
         let raw = try take(x: x, y: y, n: n)
@@ -66,7 +81,7 @@ enum AmapSdkRaster {
             guard RasterPacket.valid(packet) else { throw MapProcessingError.invalid("黑白道路数据无效") }
             onBaseReady?(packet); return RasterResult(bytes: packet, tiles: 1, fromCache: 0)
         }
-        roads=MapGeo.classifyAmapBase(raw,w:n,h:n)
+        roads=MapGeo.classifyAmapBase(raw,w:n,h:n,style:style)
         base=MapGeo.encodeRaster(frameId:f.id,x0:x,y0:y,w:n,h:n,mmPerPx:2000,idx:roads)
         MapSampleReport.shared.capture(raw:raw,indices:roads,packet:base,w:n,h:n,style:style)
         guard MapGeo.materialPixelCount(roads)>=MapGeo.minMaterialPixels(w:n,h:n) else {
@@ -80,27 +95,65 @@ enum AmapSdkRaster {
         onBaseReady?(base)
         guard includeBuildings else { return RasterResult(bytes: base, tiles: 1, fromCache: 0) }
         onBuildingStatus?("正在从高德近景截图提取建筑轮廓…")
+        var checkpoint = cache.buildingCheckpoint(frame: f, source: 3, node: node)
+        var captures = 0
+        var publishedFirst = false
+        func current() -> BuildingUpdate {
+            BuildingUpdate(bytes: FastBuildings.packet(base: base, patches: checkpoint.patches), coverage: checkpoint.coverage)
+        }
         do {
-            var roofs = [UInt32](repeating:0xfff8f9fa,count:n*n)
-            for ty in 0...1 { for tx in 0...1 {
-                try check()
-                let tile = try take(x: x + tx * 1200, y: y - ty * 1200, n: 600)
-                for j in 0..<600 { for i in 0..<600 where AmapBuildings.marked(tile[j * 600 + i]) {
-                    roofs[(ty * 600 + j) * n + tx * 600 + i] = 0xffff00ff
-                } }
-            } }
-            let buildings = try AmapBuildings.apply(roofs, base: roads, w: n, h: n)
-            MapPipelineTrace.event("buildings-ready", ["job": job, "components": buildings.buildings, "pixels": buildings.roofPixels])
-            guard AmapCapturePolicy.completed(buildings) else {
-                onBuildingStatus?("未取得建筑轮廓，保留普通底图并稍后重试")
-                return RasterResult(bytes: base, tiles: 5, fromCache: 0)
+            if checkpoint.patches.values.contains(where: { $0.contains(1) }) {
+                let update = current()
+                if RasterPacket.isBuilding(update.bytes) {
+                    onBuildingReady?(update)
+                    publishedFirst = true
+                    MapPipelineTrace.event("buildings-cache-hit", ["job":job,"checked":update.coverage.checkedMask,"bytes":update.bytes.count])
+                }
             }
-            onBuildingStatus?("高德建筑：\(buildings.buildings) 片轮廓，\(buildings.roofPixels) 个建筑像素")
-            let packet = MapGeo.encodeRaster(frameId: f.id, x0: x, y0: y, w: n, h: n, mmPerPx: 2000 | RasterPacket.flag, idx: buildings.pixels)
-            guard RasterPacket.valid(packet) else { onBuildingStatus?("建筑地图数据超出限制，保留普通底图"); return RasterResult(bytes: base, tiles: 1, fromCache: 0) }
-            return RasterResult(bytes: packet, tiles: 5, fromCache: 0)
-        } catch MapProcessingError.cancelled { throw MapProcessingError.cancelled }
-        catch { onBuildingStatus?("建筑提取未完成：\(error.localizedDescription)"); return RasterResult(bytes: base, tiles: 1, fromCache: 0) }
+            for index in FastBuildings.order(cx: cx, cy: cy, view: buildingView) {
+                try check()
+                if checkpoint.coverage.checkedMask & (1 << index) != 0 { continue }
+                if shouldYield?() == true {
+                    MapPipelineTrace.event("buildings-yield", ["job": job, "checked": checkpoint.coverage.checkedMask])
+                    let update = current()
+                    try cache.storeBuildingUpdate(update,frame:f,source:3,node:node)
+                    return RasterResult(bytes: update.bytes, tiles: captures + 1, fromCache: 0, coverage: update.coverage)
+                }
+                let tile = try take(x: x + (index % 2) * 1200, y: y - (index / 2) * 1200, n: 600)
+                captures += 1
+                try check()
+                let extractionStart = ProcessInfo.processInfo.systemUptime
+                let patch = try FastBuildings.simplify(tile)
+                MapPipelineTrace.event("building-patch-ready", ["job":job,"index":index,"seconds":ProcessInfo.processInfo.systemUptime-extractionStart])
+                try cache.storeBuildingPatch(patch, index: index, frame: f, source: 3, node: node)
+                checkpoint = cache.buildingCheckpoint(frame: f, source: 3, node: node)
+                if !publishedFirst && !checkpoint.coverage.isComplete && patch.contains(1) {
+                    let update = current()
+                    if RasterPacket.isBuilding(update.bytes) {
+                        try cache.storeBuildingUpdate(update, frame: f, source: 3, node: node)
+                        try check()
+                        onBuildingReady?(update)
+                        publishedFirst = true
+                        MapPipelineTrace.event("buildings-first-ready", ["job": job, "bytes": update.bytes.count])
+                    }
+                }
+            }
+            try check()
+            let update = current()
+            try cache.storeBuildingUpdate(update, frame: f, source: 3, node: node)
+            try check()
+            onBuildingReady?(update)
+            MapPipelineTrace.event("buildings-full-ready", ["job": job, "bytes": update.bytes.count])
+            return RasterResult(bytes: update.bytes, tiles: captures + 1, fromCache: 0, coverage: update.coverage)
+        } catch MapProcessingError.cancelled {
+            MapPipelineTrace.event("buildings-cancel", ["job": job])
+            throw MapProcessingError.cancelled
+        } catch {
+            onBuildingStatus?("建筑提取未完成：\(error.localizedDescription)")
+            let update = current()
+            try? cache.storeBuildingUpdate(update,frame:f,source:3,node:node)
+            return RasterResult(bytes: update.bytes, tiles: captures + 1, fromCache: 0, coverage: update.coverage)
+        }
     }
 }
 

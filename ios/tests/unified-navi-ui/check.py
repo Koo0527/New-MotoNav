@@ -119,5 +119,20 @@ check("rideManagerIfActive()" in coord_ride_detach and "removeDataRepresentative
 
 if failures:
     raise SystemExit(1)
+
+# 10. 分享异步回归：加载完成后必须用统一的导航活动判断重新检查（覆盖官方骑行），
+#     已有导航开始后迟到的分享结果不得写入规划器；不得退回拆分的旧判断。
+content = (root / "MotoNav/ContentView.swift").read_text()
+import_share = body(content, "private func importShare")
+check("NavigationCoordinator.shared.navigationActive" in import_share,
+      "share import re-checks the unified navigation activity after loading (covers official ride)")
+check("!navi.navigating,!independent.running" not in import_share,
+      "share import must not fall back to the split navigation check that misses official ride")
+check("planner.importShare(route)" in import_share,
+      "an accepted share result is the only path that writes into the planner")
+
+if failures:
+    raise SystemExit(1)
 print("PASS unified navigation UI: shared card/bar/more-menu, three map containers, "
-      "hidden SDK entries for compat, ride arrival hand-off and manual tunnel quick action")
+      "hidden SDK entries for compat, ride arrival hand-off, manual tunnel quick action "
+      "and unified late-share rejection")

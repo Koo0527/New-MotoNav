@@ -1,6 +1,12 @@
 import Foundation
 
-struct RasterResult { let bytes: Data; let tiles: Int; let fromCache: Int }
+struct RasterResult {
+    let bytes: Data; let tiles: Int; let fromCache: Int
+    let coverage: BuildingCoverage?
+    init(bytes: Data, tiles: Int, fromCache: Int, coverage: BuildingCoverage? = nil) {
+        self.bytes = bytes; self.tiles = tiles; self.fromCache = fromCache; self.coverage = coverage
+    }
+}
 enum SatelliteRaster {
     static let SAT_MPP=3.5
     static func encode(_ f: MapGeo.Frame,cx: Double,cy: Double,half: Double,raw: [UInt32],

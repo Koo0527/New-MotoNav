@@ -1,4 +1,5 @@
 import Foundation
+final class UIImage: NSObject {}
 
 @objc protocol AMapNaviDriveManagerDelegate {}
 @objc protocol AMapNaviDriveDataRepresentable {}
@@ -38,6 +39,8 @@ final class NaviBridge {
     func mnCameras(_ m: AMapNaviDriveManager, cams: [AMapNaviCameraInfo]?) { calls.append("mnCameras") }
     func mnLaneShow(_ m: AMapNaviDriveManager, back: String?, select: String?) { calls.append("mnLaneShow") }
     func mnLaneHide(_ m: AMapNaviDriveManager) { calls.append("mnLaneHide") }
+    func mnCrossShow(_ m: AMapNaviDriveManager, image: UIImage?) { calls.append("mnCrossShow") }
+    func mnCrossHide(_ m: AMapNaviDriveManager) { calls.append("mnCrossHide") }
     func mnFacilities(_ m: AMapNaviDriveManager, list: [AMapNaviTrafficFacilityInfo]?) { calls.append("mnFacilities") }
     func mnCruiseCams(_ m: AMapNaviDriveManager, list: [AMapNaviTrafficFacilityInfo]?) { calls.append("mnCruiseCams") }
     func mnCruiseInfo(_ m: AMapNaviDriveManager, info c: AMapNaviCruiseInfo?) { calls.append("mnCruiseInfo") }
