@@ -1,0 +1,4 @@
+#include "../boards/175/MotoNav/GameMapStyle.h"
+#include "../boards/175/MotoNav/RingFastColors.h"
+#include <cassert>
+int main(){ bool track=true; float prog=.5f,trip=.5f; GameMapStyle::prioritize(true,track,prog,trip); assert(!track && prog==0 && trip<0); track=true;prog=.5f;trip=.5f;GameMapStyle::prioritize(false,track,prog,trip);assert(track && prog==.5f && trip<0); RingFastColors::Key thin={}; thin.track=true; thin.theme=3; assert(RingFastColors::color(226*64,0,thin,222,2,0xFFFF,1,2,3)==0);using namespace GameMapStyle; assert(palette(1,false).base==rgb(0xE6E5E2));assert(palette(2,false).road==rgb(0xA6A8A8));assert(palette(3,false).route==rgb(0xF4F6B0));for(int i=1;i<=3;i++){assert(palette(i,false).base!=palette(i,true).base);assert(palette(i,false).route==palette(i,true).route);} RingFastColors::Key a={},b={}; assert(RingFastColors::same(a,b));b.theme=1;assert(!RingFastColors::same(a,b));}
