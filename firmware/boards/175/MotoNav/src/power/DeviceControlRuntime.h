@@ -15,9 +15,11 @@ void controlWake() {
   navDirty=true;wxDirty=true;musicDirty=true;
   controlCancelGestures();
   // Keep the panel black until the current page has been composed and flushed.
-  if(flushDone)xSemaphoreTake(flushDone,portMAX_DELAY);
+  // v7.x 刷屏卡住时不再无限等：限时等待，超时也继续唤醒（面板总线驱动自身会串行化）
+  const bool panelGot = !flushDone || xSemaphoreTake(flushDone, pdMS_TO_TICKS(100)) == pdTRUE;
+  if (!panelGot) Serial.println("ctl wake: flushDone busy; panel op proceeds");
   panel->displayOn();panel->setBrightness(0);controlBrightness=0;
-  if(flushDone)xSemaphoreGive(flushDone);
+  if (panelGot && flushDone)xSemaphoreGive(flushDone);
 }
 bool controlTouchGate(bool down,uint32_t now) {
   const int action=deviceControls.touchGate(down,now);
@@ -36,7 +38,7 @@ void controlBootTick() {
 }
 void controlSleep() {
   controlCancelGestures();
-  if(flushDone)xSemaphoreTake(flushDone,portMAX_DELAY);
+  if(flushDone && xSemaphoreTake(flushDone,pdMS_TO_TICKS(100))!=pdTRUE)return;   // v7.x 刷屏卡住：本轮跳过，下一轮重试
   deviceControls.asleep=true;deviceControls.dirty=true;
   panel->setBrightness(0);panel->displayOff();controlBrightness=0;
   if(flushDone)xSemaphoreGive(flushDone);
@@ -71,7 +73,7 @@ void controlFadeTick() {
   if(deviceControls.asleep || controlWakeFrame || millis()-controlFadeAt<100)return;
   const int next=DeviceControls::fadeStep(controlBrightness,deviceControls.targetBrightness());
   if(next==controlBrightness)return;
-  if(flushDone)xSemaphoreTake(flushDone,portMAX_DELAY);
+  if(flushDone && xSemaphoreTake(flushDone,pdMS_TO_TICKS(100))!=pdTRUE)return;   // v7.x 刷屏卡住：这一步亮度跳过（≤100ms 后自然重试）
   panel->setBrightness(next);controlBrightness=next;controlFadeAt=millis();
   if(flushDone)xSemaphoreGive(flushDone);
 }

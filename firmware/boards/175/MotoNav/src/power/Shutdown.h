@@ -1,9 +1,11 @@
 #pragma once
+#include <esp_task_wdt.h>
 // 五分钟闲置关机和深睡回退。由 MotoNav.ino 按依赖顺序包含，仅编译一次。
 // Power down before destroying BLE objects: the host can still dispatch events
 // referencing those objects. Shutdown does not need to reclaim their memory.
 void idlePowerOffShutdown() {
   powerOffPending = true;
+  esp_task_wdt_delete(nullptr);   // v7.x 关机序列含最长约 5.5 秒的等待：先退出主循环看门狗订阅，避免关机途中被 TWDT 重启
   Serial.println("No navigation for 5 minutes: powering off");
   const bool displayReady = !flushDone ||
       xSemaphoreTake(flushDone, pdMS_TO_TICKS(3000)) == pdTRUE;

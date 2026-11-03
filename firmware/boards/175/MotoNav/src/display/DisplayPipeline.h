@@ -23,6 +23,11 @@ int16_t rotSpan[LCD_HEIGHT];              // v6.4 每一行圆里面的半宽（
 
 // v6.4 设定圆屏角度。save = true：稍后存进板子
 void setScreenDeg(int d, bool save) {
+  // v7.x 等在飞的异步刷屏帧读完旋转参数再改，防止一帧里新旧角度混用（撕裂帧）。
+  // 刷屏请求只由主循环（即调用本函数的任务）发起，确认完到返回前不会有新帧开始；
+  // 100ms 还没推完就照常改——旋转命令不能被卡住，最多容忍一帧。
+  if (flushDone && xSemaphoreTake(flushDone, pdMS_TO_TICKS(100)) == pdTRUE)
+    xSemaphoreGive(flushDone);   // 取了就还：维持"flushDone 可用 = 没有在飞的帧"的约定
   d = ((d % 360) + 360) % 360;
   screenDeg = d;
   rotFree = (d % 90) != 0;
@@ -203,7 +208,13 @@ void flushTask(void *arg) {
 void flushWait() {
   if (xSemaphoreTake(flushDone, pdMS_TO_TICKS(3000)) == pdTRUE) return;
   if (fastFlushOn) saveAndRestart("fastf", 0, true);
-  xSemaphoreTake(flushDone, portMAX_DELAY);
+  // v7.x 兜底不再无限死等：再等 2 秒后放弃并降级，之后的帧走库的同步推屏路径。
+  // 不在这里自己推屏（卡住的刷屏任务可能还占着数据线）；flushDone 保持"占用"，
+  // 若该任务最终恢复会自动补还信号量，后续帧自然恢复节奏。
+  if (xSemaphoreTake(flushDone, pdMS_TO_TICKS(2000)) != pdTRUE) {
+    Serial.println("flush stalled 5s; disabling fastPush, continuing degraded");
+    fastDev = nullptr;
+  }
 }
 
 // 异步刷屏：把刚画好的这一块交给核心 0 推到屏幕，画布换到另一块继续画下一帧

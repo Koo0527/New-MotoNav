@@ -21,30 +21,31 @@ float *tmpX = nullptr, *tmpY = nullptr;
 void mapInit() {
   mapCircleRows.init(CX,212.0f);
   routeSegmentCache.clear();
-  bulks[1].cap = MAP_MAX;   bulks[1].buf = (uint8_t *)ps_malloc(MAP_MAX);
-  bulks[2].cap = ROUTE_MAX; bulks[2].buf = (uint8_t *)ps_malloc(ROUTE_MAX);
-  bulks[3].cap = RASTER_MAX_BYTES; bulks[3].buf = (uint8_t *)ps_malloc(RASTER_MAX_BYTES);
-  bulks[4].cap = GHOST_MAX; bulks[4].buf = (uint8_t *)ps_malloc(GHOST_MAX);          // v4.4
-  ghostX = (int32_t *)ps_malloc(sizeof(int32_t) * GHOST_PTS);
-  ghostY = (int32_t *)ps_malloc(sizeof(int32_t) * GHOST_PTS);
-  gbBox  = (int32_t *)ps_malloc(sizeof(int32_t) * 4 * (GHOST_PTS / RB_STEP + 2));
-  rasterBuf = (uint8_t *)ps_malloc(RASTER_BUF_BYTES);
+  // v7.x 每个分配都做 NULL 检查：失败时打印内存现场并重启（替代 NULL+offset 野写）
+  bulks[1].cap = MAP_MAX;   bulks[1].buf = (uint8_t *)psMallocHalt("bulks1", MAP_MAX);
+  bulks[2].cap = ROUTE_MAX; bulks[2].buf = (uint8_t *)psMallocHalt("bulks2", ROUTE_MAX);
+  bulks[3].cap = RASTER_MAX_BYTES; bulks[3].buf = (uint8_t *)psMallocHalt("bulks3", RASTER_MAX_BYTES);
+  bulks[4].cap = GHOST_MAX; bulks[4].buf = (uint8_t *)psMallocHalt("bulks4", GHOST_MAX);          // v4.4
+  ghostX = (int32_t *)psMallocHalt("ghostX", sizeof(int32_t) * GHOST_PTS);
+  ghostY = (int32_t *)psMallocHalt("ghostY", sizeof(int32_t) * GHOST_PTS);
+  gbBox  = (int32_t *)psMallocHalt("gbBox", sizeof(int32_t) * 4 * (GHOST_PTS / RB_STEP + 2));
+  rasterBuf = (uint8_t *)psMallocHalt("rasterBuf", RASTER_BUF_BYTES);
   for (int t = 1; t <= 4; t++) { bulks[t].id = -1; bulks[t].done = false; }
-  mapShow = (uint8_t *)ps_malloc(MAP_MAX);
-  featOff = (uint32_t *)ps_malloc(sizeof(uint32_t) * FEAT_MAX);
-  featNp  = (uint16_t *)ps_malloc(sizeof(uint16_t) * FEAT_MAX);
-  featCls = (uint8_t *)ps_malloc(FEAT_MAX);
-  featBox = (int16_t *)ps_malloc(sizeof(int16_t) * 4 * FEAT_MAX);
-  routeX = (int32_t *)ps_malloc(sizeof(int32_t) * ROUTE_PTS);
-  routeY = (int32_t *)ps_malloc(sizeof(int32_t) * ROUTE_PTS);
-  rbBox  = (int32_t *)ps_malloc(sizeof(int32_t) * 4 * (ROUTE_PTS / RB_STEP + 2));
-  routeCum = (float *)ps_malloc(sizeof(float) * ROUTE_PTS);                         // v5.0
-  routeCurv = (uint8_t *)ps_malloc(ROUTE_PTS);                                        // v6.1
-  lightX = (int32_t *)ps_malloc(sizeof(int32_t) * LIGHT_MAX);
-  lightY = (int32_t *)ps_malloc(sizeof(int32_t) * LIGHT_MAX);
-  lightU = (float *)ps_malloc(sizeof(float) * LIGHT_MAX);
-  tmpX = (float *)malloc(sizeof(float) * POLY_PTS);
-  tmpY = (float *)malloc(sizeof(float) * POLY_PTS);
+  mapShow = (uint8_t *)psMallocHalt("mapShow", MAP_MAX);
+  featOff = (uint32_t *)psMallocHalt("featOff", sizeof(uint32_t) * FEAT_MAX);
+  featNp  = (uint16_t *)psMallocHalt("featNp", sizeof(uint16_t) * FEAT_MAX);
+  featCls = (uint8_t *)psMallocHalt("featCls", FEAT_MAX);
+  featBox = (int16_t *)psMallocHalt("featBox", sizeof(int16_t) * 4 * FEAT_MAX);
+  routeX = (int32_t *)psMallocHalt("routeX", sizeof(int32_t) * ROUTE_PTS);
+  routeY = (int32_t *)psMallocHalt("routeY", sizeof(int32_t) * ROUTE_PTS);
+  rbBox  = (int32_t *)psMallocHalt("rbBox", sizeof(int32_t) * 4 * (ROUTE_PTS / RB_STEP + 2));
+  routeCum = (float *)psMallocHalt("routeCum", sizeof(float) * ROUTE_PTS);                         // v5.0
+  routeCurv = (uint8_t *)psMallocHalt("routeCurv", ROUTE_PTS);                                        // v6.1
+  lightX = (int32_t *)psMallocHalt("lightX", sizeof(int32_t) * LIGHT_MAX);
+  lightY = (int32_t *)psMallocHalt("lightY", sizeof(int32_t) * LIGHT_MAX);
+  lightU = (float *)psMallocHalt("lightU", sizeof(float) * LIGHT_MAX);
+  tmpX = (float *)mallocHalt("tmpX", sizeof(float) * POLY_PTS);
+  tmpY = (float *)mallocHalt("tmpY", sizeof(float) * POLY_PTS);
 }
 
 // 解析刚收齐的地图块，建立索引

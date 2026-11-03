@@ -4,6 +4,7 @@
 // 实现头文件只由此入口包含，保持原编译顺序和内联优化。
 #include "src/core/FirmwareConfig.h"
 #include <Arduino.h>
+#include <esp_task_wdt.h>   // v7.x 主循环订阅任务看门狗：卡死从"静默冻屏"变成可自愈重启
 #include "src/core/DeviceContext.h"
 #include "src/core/FunctionDeclarations.h"
 #include "src/connectivity/Bluetooth.h"
@@ -76,12 +77,15 @@ void setup() {
   if (!gfx->begin(qspiMHz * 1000000)) Serial.println("gfx->begin() failed!");
   panel->setBrightness(200);
 
-  iconBuf = (uint16_t *)ps_malloc(ICON_BUF_W * ICON_BUF_H * 2);   // v1.8.1 图标缓存
+  iconBuf = (uint16_t *)psMallocHalt("iconBuf", (size_t)ICON_BUF_W * ICON_BUF_H * 2);   // v1.8.1 图标缓存（v7.x 加 NULL 检查）
   buildRingLut();                                                   // v1.8.3 抗锯齿圆环查找表
   mapInit();                                                        // v2.0 小地图缓冲
   for (int i = 0; i < IMG_SLOTS; i++) {
-    imgs[i].show = (uint8_t *)ps_malloc(IMG_MAX);
-    imgs[i].recv = (uint8_t *)ps_malloc(IMG_MAX);
+    char nm[14];                                                    // v7.x 分配失败时串口能定位到哪一栏
+    snprintf(nm, sizeof(nm), "img%d.show", i);
+    imgs[i].show = (uint8_t *)psMallocHalt(nm, IMG_MAX);
+    snprintf(nm, sizeof(nm), "img%d.recv", i);
+    imgs[i].recv = (uint8_t *)psMallocHalt(nm, IMG_MAX);
     imgs[i].showW = 0; imgs[i].showH = 0; imgs[i].recvId = -1;
   }
 
@@ -159,6 +163,7 @@ void setup() {
   idlePowerOffReset(&idlePowerOffTimer, millis());
   if(!animateBoot)bootSoundBegin();
   controlPowerKeyBegin();
+  esp_task_wdt_add(xTaskGetCurrentTaskHandle());   // v7.x 订阅 TWDT（5s/panic，sdkconfig 已启用）：loop 每轮 delay 喂狗；Shutdown 入口会退出订阅
   Serial.println(String("MotoNav ready, firmware ") + FW_VERSION);
 }
 
