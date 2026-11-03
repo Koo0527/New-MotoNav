@@ -25,12 +25,8 @@
 #define I2S_WS_IO 45
 #define I2S_DO_IO 8
 
-
-#define MCLKPIN             42
-#define BCLKPIN              9
-#define WSPIN               45
-#define DOPIN               10
-#define DIPIN                8
+// v7.x 删除了与上面 I2S_* 引脚冲突且无任何代码引用的裸引脚块
+// （MCLKPIN 42 / BCLKPIN 9 / WSPIN 45 / DOPIN 10 / DIPIN 8）——接音频前先统一用 I2S_* 这组。
 #define PA                  46
 
 // SD
