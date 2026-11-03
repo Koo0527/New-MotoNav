@@ -118,7 +118,8 @@ int rasW = 0, rasH = 0;
 float rasMpp = 2.0f;                    // 每像素多少米
 unsigned long rasterAt = 0, vectorAt = 0;
 bool pendingBuildingCapability = false;
-String pendingAck = "";     // 待发给手机的确认
+#include "../protocol/AckFifo.h"
+AckFifo pendingAck;         // v7.x 待发给手机的确认（4 槽 FIFO：同一轮多个批次完成时不再互相覆盖）
 
 // ---- 地图块（正在显示的）----
 uint8_t *mapShow = nullptr;

@@ -19,6 +19,7 @@ void handleBitmap(const uint8_t *d, int n) {
       lyricImageGeneration != appleMedia.generation || lyricImageTitleRevision != appleMedia.values[0].revision || lyricImageArtistRevision != appleMedia.values[1].revision)) return;
   int total = ((w + 1) / 2) * h;
   if (total > IMG_MAX || parts > 32) return;
+  if (!bitmapPartInRange(part, parts)) return;       // v7.x 越界 part 会设错 mask 位（1UL<<part 对 ≥32 是 UB）
   if (id != im.recvId) {                          // 新的一张图：重新开始接收
     im.recvId = id; im.recvW = w; im.recvH = h; im.recvParts = parts; im.recvMask = 0;
   }

@@ -7,6 +7,7 @@
 #include <Preferences.h>
 #include <esp_sleep.h>
 #include <esp_system.h>
+#include <esp_heap_caps.h>    // v7.x allocFailHalt 诊断：打印剩余/最大连续块
 #include <MotoNavIpcStackGuard.h>
 #include <driver/rtc_io.h>
 #include "../../IdlePowerOff.h"
@@ -38,6 +39,31 @@ String pendingBootAck;
 #include "host/ble_gap.h"     // v4.5 蓝牙 2M 模式
 #include "host/ble_store.h"   // v6.5 记住的手机
 #endif
+
+// ===== v7.x 启动期分配失败的诊断兜底 =====
+// 打印内存现场（含最大连续块——预测下一次分配能否成功的数字）后重启，
+// 替代原来的 NULL+offset 野写（现场 crash/boot loop 且无任何线索）。
+void allocFailHalt(const char *name, size_t size) {
+  Serial.printf("ALLOC FAIL %s (%u B): free_int=%u largest_int=%u free_ps=%u largest_ps=%u -> restart\n",
+                name, (unsigned)size,
+                (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL),
+                (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL),
+                (unsigned)heap_caps_get_free_size(MALLOC_CAP_SPIRAM),
+                (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_SPIRAM));
+  Serial.flush();
+  delay(200);
+  ESP.restart();
+}
+static void *psMallocHalt(const char *name, size_t size) {
+  void *p = ps_malloc(size);
+  if (!p) allocFailHalt(name, size);
+  return p;
+}
+static void *mallocHalt(const char *name, size_t size) {
+  void *p = malloc(size);
+  if (!p) allocFailHalt(name, size);
+  return p;
+}
 
 // ===== 屏幕（和官方 HelloWorld 示例一样的初始化方式）=====
 // v2.6 第 7 个参数 true = 总线可共享（快速刷屏要和它轮流使用数据线）
@@ -102,12 +128,13 @@ BLECharacteristic *txChar = nullptr;
 volatile bool bleConnected = false;
 
 // ===== 接收队列：蓝牙线程收到的每个数据包原样放进队列，主循环再取出处理 =====
+#include "../protocol/ReceivePolicy.h"   // v7.x RXQ_MAX + 超长写丢弃策略（512→514 原因见该文件）
 #define RXQ_SLOTS 48   // v2.0 加大，接收地图大块数据时不丢包
-#define RXQ_MAX   512
 struct RxMsg { uint16_t len; uint8_t data[RXQ_MAX]; uint32_t receivedAt,epoch; bool authenticated; };
 RxMsg rxq[RXQ_SLOTS];
 volatile int rxHead = 0, rxTail = 0;
 portMUX_TYPE mux = portMUX_INITIALIZER_UNLOCKED;
+volatile uint32_t rxqDroppedOversize = 0;   // 超长写整包丢弃计数（诊断用，不改协议）
 
 // ===== 导航与行车状态 =====
 bool shownConn = false;       // 屏幕上反映的连接状态

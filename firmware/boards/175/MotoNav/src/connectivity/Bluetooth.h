@@ -141,6 +141,7 @@ class ServerCB : public BLEServerCallbacks {
 
 // v2.6 保险：屏幕相关设置在蓝牙线程里直接处理（即使主循环被卡住也能改回来）
 void saveAndRestart(const char *key, int val, bool isBool) {
+  Serial.printf("saveAndRestart: %s=%d (rebooting)\n", key, val);   // v7.x 手机端只会看到断连：至少串口留下原因
   Preferences pr;
   pr.begin("motonav", false);
   if (isBool) pr.putBool(key, val != 0); else pr.putInt(key, val);
@@ -165,14 +166,19 @@ class RxCB : public BLECharacteristicCallbacks {
       if (d0[1] == 'q' && (v == 40 || v == 60 || v == 80) && v != qspiMHz) saveAndRestart("qspi", v, false);
       return;
     }
-    if (n > RXQ_MAX) n = RXQ_MAX;
+    const size_t keep = rxqAcceptLen(n);   // v7.x 超长写整包丢弃：截断会让分片"看起来收齐"但内部有洞
+    if (keep == 0) {
+      if (rxqDroppedOversize == 0) Serial.printf("BLE rx drop: %u bytes > RXQ_MAX %d\n", (unsigned)n, RXQ_MAX);
+      ++rxqDroppedOversize;
+      return;
+    }
     portENTER_CRITICAL(&mux);
     int next = (rxHead + 1) % RXQ_SLOTS;
     if (next == rxTail) rxTail = (rxTail + 1) % RXQ_SLOTS;   // 队列满：丢掉最旧的一条
-    rxq[rxHead].len = n;
+    rxq[rxHead].len = keep;
     rxq[rxHead].receivedAt=millis();rxq[rxHead].epoch=mediaConnectionEpoch;
     rxq[rxHead].authenticated=bleConnected&&bleAuthed;
-    memcpy(rxq[rxHead].data, c->getData(), n);
+    memcpy(rxq[rxHead].data, c->getData(), keep);
     rxHead = next;
     portEXIT_CRITICAL(&mux);
   }

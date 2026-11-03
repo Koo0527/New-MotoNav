@@ -15,6 +15,7 @@ void sendPendingAck() {
     txChar->setValue((uint8_t *)"CAP,IMU,1",9);txChar->notify();
     txChar->setValue((uint8_t *)"CAP,GLOG,1",10);txChar->notify();
     txChar->setValue((uint8_t *)"CAP,GMOT,1",10);txChar->notify();
+    txChar->setValue((uint8_t *)"CAP,MPAL,1",10);txChar->notify();
     deviceControls.dirty=true;controlPowerStatus();
     txChar->setValue((uint8_t *)"U,1", 3);
     txChar->notify();
@@ -44,13 +45,14 @@ void sendPendingAck() {
     txChar->setValue((uint8_t *)"CAP,IMU,1",9);txChar->notify();
     txChar->setValue((uint8_t *)"CAP,GLOG,1",10);txChar->notify();
     txChar->setValue((uint8_t *)"CAP,GMOT,1",10);txChar->notify();
+    txChar->setValue((uint8_t *)"CAP,MPAL,1",10);txChar->notify();
     deviceControls.dirty=true;controlPowerStatus();
     pendingBuildingCapability=false;
   }
-  if (pendingAck.length()) {
-    txChar->setValue((uint8_t *)pendingAck.c_str(), pendingAck.length());
+  char ackBuf[AckFifo::SLOT_LEN];                       // v7.x drain-all：积压的确认逐条发完
+  while (pendingAck.pop(ackBuf)) {
+    txChar->setValue((uint8_t *)ackBuf, strlen(ackBuf));
     txChar->notify();
-    pendingAck = "";
   }
   if (pendingStat2.length()) {
     txChar->setValue((uint8_t *)pendingStat2.c_str(), pendingStat2.length());

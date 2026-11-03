@@ -14,7 +14,7 @@ void handleBulk(const uint8_t *d, int n) {
     b.id = id; b.total = total; b.parts = parts; b.got = 0; b.done = false;
     memset(b.mask, 0, sizeof(b.mask));
   }
-  if (b.done) { pendingAck = "K," + String(type) + "," + String(id); return; }   // 重复的：再确认一次
+  if (b.done) { pendingAck.pushf("K,%d,%d", type, id); return; }   // 重复的：再确认一次
   if(type==3 && pendingRasterWork.active)return; // A duplicate tail must not acknowledge unfinished work.
   uint32_t len = n - 15;
   if (off >= total) return;
@@ -38,13 +38,13 @@ void handleBulk(const uint8_t *d, int n) {
       if (!queueRasterWork(b.buf,total,id)) {
         // 没有成功解码就不回“已确认”，并允许相同编号完整重发。
         b.done=false; b.got=0; memset(b.mask,0,sizeof(b.mask));
-        pendingAck = "N," + String(type) + "," + String(id);
+        pendingAck.pushf("N,%d,%d", type, id);
         return;
       }
       if(pendingRasterWork.active)return;
       b.done=true;
     }
-    pendingAck = "K," + String(type) + "," + String(id);
+    pendingAck.pushf("K,%d,%d", type, id);
     navDirty = true;
   }
 }
