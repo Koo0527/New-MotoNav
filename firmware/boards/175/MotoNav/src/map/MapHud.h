@@ -1,5 +1,6 @@
 #pragma once
 // 地图上的车速、车道和行程信息。由 MotoNav.ino 按依赖顺序包含，仅编译一次。
+#include "src/graphics/HudText.h"   // v7.x W6 热路径栈缓冲格式化（宿主可测）
 // ---- v2.7 上下弧形面板：和黑色外圈连成一体 ----
 #define CAP_R      213      // 面板填到这个半径（和外圈黑边接上）
 #define TOPCAP_Y   98       // 上面板下沿（有测速时 112）
@@ -37,6 +38,15 @@ void printOutlined(const String &t, int x, int y, int size, uint16_t col) {
   printCentered(t, x, y, size, col);
 }
 
+// v7.x W6 热路径重载：直接吃 const char*，避免隐式构造 String（输出逐字节同上）
+void printOutlined(const char *t, int x, int y, int size, uint16_t col) {
+  int o = size >= 3 ? 2 : 1;
+  for (int dy = -o; dy <= o; dy++)
+    for (int dx = -o; dx <= o; dx++)
+      if ((dx || dy) && (o < 2 || abs(dx) == o || abs(dy) == o)) printCentered(t, x + dx, y + dy, size, C_BLACK);
+  printCentered(t, x, y, size, col);
+}
+
 // 把一块区域调暗（半透明深色底），a = 保留多少原来的亮度（0~255）
 void dimRect(int x, int y, int w, int h, int r, int keep) {
   uint16_t *fb = gfx->getFramebuffer();
@@ -56,17 +66,22 @@ void dimRect(int x, int y, int w, int h, int r, int keep) {
 void drawMapSpeed(bool over) {
   if (speedKmh < 0) return;
   int sx = hasCam ? CX - 40 : CX;
-  printOutlined(String(speedKmh), sx, 44, 4, over ? C_RED : TH.hud);
+  char spd[8];                                    // v7.x W6：栈缓冲，不再每帧构造 String
+  snprintf(spd, sizeof(spd), "%d", speedKmh);
+  printOutlined(spd, sx, 44, 4, over ? C_RED : TH.hud);
   printOutlined("km/h", sx, 80, 1, over ? 0xFC10 : TH.hud);
   if (hasCam) {
     const int bx = CX + 52, by = 60;
     aaDisc(bx, by, 27, C_BLACK);
     aaDisc(bx, by, 25, C_SIGNRED);
     aaDisc(bx, by, 19, C_WHITE);
-    String lim = String(camLimit);
-    int sz = lim.length() >= 3 ? 2 : 3;
+    char lim[8];
+    snprintf(lim, sizeof(lim), "%d", camLimit);
+    int sz = strlen(lim) >= 3 ? 2 : 3;
     printCentered(lim, bx, by - 4 * sz, sz, C_BLACK);
-    printOutlined(distText(camDist), bx, by + 31, 2, over ? 0xFC10 : C_WHITE);
+    char dist[12];
+    hudDistText(dist, sizeof(dist), camDist);
+    printOutlined(dist, bx, by + 31, 2, over ? 0xFC10 : C_WHITE);
   }
 }
 
@@ -82,24 +97,25 @@ void drawTrafficLight(float cx, float cy, float h) {
 
 // v3.1 底部一行行程信息：到达时间 · 剩余里程 · 红绿灯数（半透明深色底）
 void drawTripLine(int y) {
-  char eta[8];
-  snprintf(eta, sizeof(eta), "%02d:%02d", (tripEta / 100) % 24, tripEta % 100);
-  String a = String(eta);
-  String b = tripRemainM >= 100000 ? String(tripRemainM / 1000) + "km" : distText(tripRemainM);
-  String c = String(tripLights);
+  char a[8], b[16], c[8];                        // v7.x W6：全程栈缓冲
+  snprintf(a, sizeof(a), "%02d:%02d", (tripEta / 100) % 24, tripEta % 100);
+  if (tripRemainM >= 100000) snprintf(b, sizeof(b), "%dkm", tripRemainM / 1000);
+  else                      hudDistText(b, sizeof(b), tripRemainM);
+  snprintf(c, sizeof(c), "%d", tripLights);
+  const int la = strlen(a), lb = strlen(b), lc = strlen(c);
   const int CW = 12, GAP = 14, ICON = 10;
   bool lights = tripLights > 0;
-  int w = (a.length() + b.length()) * CW + GAP + (lights ? GAP + ICON + 3 + c.length() * CW : 0);
+  int w = (la + lb) * CW + GAP + (lights ? GAP + ICON + 3 + lc * CW : 0);
   int x = CX - w / 2;
   dimRect(x - 10, y - 5, w + 20, 26, 12, 75);
-  printCentered(a, x + a.length() * CW / 2, y, 2, TH.hud);
-  x += a.length() * CW + GAP;
-  printCentered(b, x + b.length() * CW / 2, y, 2, C_WHITE);
-  x += b.length() * CW + GAP;
+  printCentered(a, x + la * CW / 2, y, 2, TH.hud);
+  x += la * CW + GAP;
+  printCentered(b, x + lb * CW / 2, y, 2, C_WHITE);
+  x += lb * CW + GAP;
   if (lights) {
     drawTrafficLight(x + ICON / 2, y + 7, 18);
     x += ICON + 3;
-    printCentered(c, x + c.length() * CW / 2, y, 2, C_WHITE);
+    printCentered(c, x + lc * CW / 2, y, 2, C_WHITE);
   }
 }
 

@@ -76,8 +76,9 @@ void drawOneCam(int i, float x, float y) {
     aaDisc(x, y, 15, C_BLACK);
     aaDisc(x, y, 13.6f, C_SIGNRED);
     aaDisc(x, y, 10.2f, C_WHITE);
-    String t = String(mapCamSpd[i]);
-    printCentered(t, (int)x + (t.length() == 3 ? 0 : 1), (int)y - 3, 1, C_BLACK);
+    char t[8];                                        // v7.x W6：栈缓冲，不再每帧构造 String
+    snprintf(t, sizeof(t), "%d", mapCamSpd[i]);
+    printCentered(t, (int)x + (strlen(t) == 3 ? 0 : 1), (int)y - 3, 1, C_BLACK);
   } else {
     blitCamIcon(mapCamTyp[i], (int)lroundf(x), (int)lroundf(y));
   }

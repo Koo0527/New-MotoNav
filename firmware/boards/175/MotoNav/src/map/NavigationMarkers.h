@@ -1,5 +1,6 @@
 #pragma once
 // 信号灯标记、转向提示、北向和目的地。由 MotoNav.ino 按依赖顺序包含，仅编译一次。
+#include "src/graphics/HudText.h"   // v7.x W6 热路径栈缓冲格式化（宿主可测）
 // v3.2 红绿灯直接画在地图上的实际位置（图标始终竖直）；已经开过的不画；
 //      下一个红绿灯在 300 米内时，旁边标出距离
 void drawMapLights(float cx, float cy, float sc, float cs, float sn) {
@@ -16,9 +17,10 @@ void drawMapLights(float cx, float cy, float sc, float cs, float sn) {
     drawTrafficLight(px, py - 17, 30);
     obsAdd(px - 9, py - 34, px + 9, py);                                // v3.8 电子眼图标别压住红绿灯
     if (isNext && lightDist >= 0) {
-      String t = String(lightDist) + "m";
+      char t[12];                                      // v7.x W6：栈缓冲，不再每帧构造 String
+      snprintf(t, sizeof(t), "%dm", lightDist);
       printOutlined(t, (int)px + 36, (int)py - 25, 2, C_WHITE);
-      float tw = t.length() * 12;
+      float tw = strlen(t) * 12;
       obsAdd(px + 36 - tw / 2 - 3, py - 27, px + 36 + tw / 2 + 3, py - 7);
     }
   }
@@ -35,18 +37,20 @@ void drawMapBadge() {
   bool nearJ = !isS && navDist <= MAP_NEAR_M;
   bool veryNear = !isS && navDist <= STAGE_NEAR_M;
   uint16_t col = veryNear ? C_ORANGE : C_WHITE;
-  String dt = distText(navDist);
+  char dt[12];                                         // v7.x W6：栈缓冲，不再每帧构造 String
+  hudDistText(dt, sizeof(dt), navDist);
+  int dtLen = strlen(dt);
   iconHalo = true;
   if (!nearJ) {
     int up = tripOn ? 24 : 0;                          // v3.1 有行程信息时整体上移，下面留一行
     drawBigIconAt((isS || far) ? String("S") : navDir, C_WHITE, 395 - up, 1.0f, CX - 48, 368 - up, 418 - up, 60);
-    int sz = dt.length() <= 4 ? 4 : 3;
+    int sz = dtLen <= 4 ? 4 : 3;
     printOutlined(dt, CX + 46, (sz == 4 ? 378 : 382) - up, sz, C_WHITE);
     if (tripOn) drawTripLine(404);
   } else {
     const int top = 344;                               // v3.3 车道移到了上面，底部只放箭头和距离
     drawBigIconAt(navDir, col, top + 30, 1.0f, CX - 58, top, top + 60, 84);
-    printOutlined(dt, CX + 54, top + 14, dt.length() <= 4 ? 5 : 4, col);
+    printOutlined(dt, CX + 54, top + 14, dtLen <= 4 ? 5 : 4, col);
   }
   iconHalo = false;
 }
@@ -200,10 +204,13 @@ void drawTraffic(float cx, float cy, float sc, float cs, float sn, float viewR, 
 }
 
 // v5.0 地图上方/下方的提示条：半透明深色底 + 文字
-void drawBanner(const String &t, int y, uint16_t col) {
-  int w = t.length() * 12 + 24;
+void drawBanner(const char *t, int y, uint16_t col) {   // v7.x W6：char* 直出，不再构造 String
+  int w = strlen(t) * 12 + 24;
   dimRect(CX - w / 2, y - 6, w, 28, 13, 60);
   printCentered(t, CX, y, 2, col);
+}
+void drawBanner(const String &t, int y, uint16_t col) { // 既有 String 调用点走这里（委托，输出不变）
+  drawBanner(t.c_str(), y, col);
 }
 
 // v5.0 重新规划中 / 更快路线 / GPS 信号弱（地图模式和大箭头模式都用）
@@ -212,10 +219,16 @@ void drawNavHints(int bannerY) {
   if (rerouteAt && now - rerouteAt > 20000) rerouteAt = 0;        // 最多显示 20 秒
   if (fasterAt && now - fasterAt > 30000) fasterAt = 0;           // 更快路线提示 30 秒
   if (rerouteAt) {
-    String dots = String("...").substring(0, 1 + (now / 400) % 3);
-    drawBanner("REROUTING" + dots, bannerY, C_ORANGE);
+    char msg[16];                                     // v7.x W6：栈上拼 "REROUTING" + 动态点
+    int nd = 1 + (int)((now / 400) % 3);
+    memcpy(msg, "REROUTING", 9);
+    memset(msg + 9, '.', nd);
+    msg[9 + nd] = 0;
+    drawBanner(msg, bannerY, C_ORANGE);
   } else if (fasterAt) {
-    drawBanner("FASTER ROUTE  -" + String(fasterMin) + "min", bannerY, C_GREEN);
+    char msg[28];
+    snprintf(msg, sizeof(msg), "FASTER ROUTE  -%dmin", fasterMin);
+    drawBanner(msg, bannerY, C_GREEN);
   }
   if (gpsWeak) {                                                  // 左上角：橙色 “GPS” 加一条斜杠
     const int gx = CX - 128, gy = 150;

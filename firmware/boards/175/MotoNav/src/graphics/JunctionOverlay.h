@@ -10,7 +10,7 @@ void drawTrafficLightLab(uint32_t now) {
   if(previousRows>rows)navDirty=true;
   previousRows=rows;
   gfx->fillRoundRect(x-2,y-14,w+4,rows*(h+gap)+12,8,0x1082);
-  printCentered(preview?String("PREVIEW"):String("LIGHTS"),x+w/2,y-11,1,C_WHITE);
+  printCentered(preview?"PREVIEW":"LIGHTS",x+w/2,y-11,1,C_WHITE);   // v7.x W6：字面量直出
   uint32_t signature=preview?0xFFFF:0;
   for(int i=0;i<rows;++i) {
     const TrafficLightPhase &p=trafficLightLab.phases[i];
@@ -34,10 +34,19 @@ void drawTrafficLightLab(uint32_t now) {
     } else gfx->fillCircle(x+15,ry+17,6,color);
     unsigned seconds=present?p.seconds(now):0;
     if(rightMissing)gfx->fillCircle(x+64,ry+15,10,C_GREY);
-    else printCentered(known&&seconds?String(seconds):String("--"),x+64,ry+3,3,color);
+    else {                                             // v7.x W6：栈缓冲，不再每帧构造 String
+      char sec[8];
+      if(known&&seconds)snprintf(sec,sizeof(sec),"%u",seconds);
+      else snprintf(sec,sizeof(sec),"--");
+      printCentered(sec,x+64,ry+3,3,color);
+    }
     const char* label=i==0?"LEFT":i==1?"STRAIGHT":i==2?"RIGHT":"OTHER";
-    printCentered(String(label),x+64,ry+29,1,C_WHITE);
-    if(present&&p.wait>0)printCentered(String("W")+p.wait,x+15,ry+30,1,C_GREY);
+    printCentered(label,x+64,ry+29,1,C_WHITE);
+    if(present&&p.wait>0) {
+      char wt[8];
+      snprintf(wt,sizeof(wt),"W%d",p.wait);
+      printCentered(wt,x+15,ry+30,1,C_GREY);
+    }
     signature=signature*31+(present?((p.status+2)*1000+seconds):0);
   }
   static uint32_t previous=0;

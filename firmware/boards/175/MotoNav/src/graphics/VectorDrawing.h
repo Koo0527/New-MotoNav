@@ -230,6 +230,15 @@ void printCentered(const String &s, int x, int y, int size, uint16_t color) {
   gfx->print(s);
 }
 
+// v7.x W6 热路径重载：直接吃 const char*，避免字面量/栈缓冲隐式构造 String（每帧多次堆分配）。
+// 输出与上面 String 版逐字节一致（String::length() ≡ strlen，Print::print 两者写出相同字节）。
+void printCentered(const char *s, int x, int y, int size, uint16_t color) {
+  gfx->setTextSize(size);
+  gfx->setTextColor(color);
+  gfx->setCursor(x - (int)strlen(s) * 6 * size / 2, y);
+  gfx->print(s);
+}
+
 String distText(int m) {
   return (m >= 1000) ? String(m / 1000.0, 1) + "km" : String(m) + "m";
 }
