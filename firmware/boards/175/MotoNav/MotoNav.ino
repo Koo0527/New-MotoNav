@@ -172,6 +172,8 @@ void setup() {
 
 // 主循环：接收消息、处理输入、调度页面、绘图和推屏。
 void loop() {
+  esp_task_wdt_reset();   // v7.x 订阅型 TWDT 必须显式喂狗（delay() 不会自动喂）；
+                          // loop 真正卡死时走不到这里 → 约 5 秒看门狗自愈重启（真机验证过的行为）
   bootSoundTick();
   controlSessionTick();
   gStreamSessionTick();
