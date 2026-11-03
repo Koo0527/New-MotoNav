@@ -135,6 +135,7 @@ RxMsg rxq[RXQ_SLOTS];
 volatile int rxHead = 0, rxTail = 0;
 portMUX_TYPE mux = portMUX_INITIALIZER_UNLOCKED;
 volatile uint32_t rxqDroppedOversize = 0;   // 超长写整包丢弃计数（诊断用，不改协议）
+volatile uint32_t rxqDroppedFull = 0;      // v7.x 环满丢最旧计数（只进 10s 串口日志，不改协议）
 
 // ===== 导航与行车状态 =====
 bool shownConn = false;       // 屏幕上反映的连接状态

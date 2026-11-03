@@ -174,7 +174,7 @@ class RxCB : public BLECharacteristicCallbacks {
     }
     portENTER_CRITICAL(&mux);
     int next = (rxHead + 1) % RXQ_SLOTS;
-    if (next == rxTail) rxTail = (rxTail + 1) % RXQ_SLOTS;   // 队列满：丢掉最旧的一条
+    if (next == rxTail) { rxTail = (rxTail + 1) % RXQ_SLOTS; ++rxqDroppedFull; }   // 队列满：丢掉最旧的一条（v7.x 计数，10s 日志可见）
     rxq[rxHead].len = keep;
     rxq[rxHead].receivedAt=millis();rxq[rxHead].epoch=mediaConnectionEpoch;
     rxq[rxHead].authenticated=bleConnected&&bleAuthed;

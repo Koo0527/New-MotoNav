@@ -125,14 +125,19 @@ void laneRender() {
 
 void drawLanes(int y0) { drawLanesAt(CX, y0, 300, 32); }
 
+// v7.x W8：车道缓存放启动期分配。原来首帧懒分配，失败就静默永久丢车道且无重试；
+// 现在 setup() 里一次性分好（mallocHalt：失败打出名字/大小/剩余堆后重启，可诊断）。
+// 分配策略与原懒分配完全一致：laneCol(28,160B)>16KB 走默认 malloc 落 PSRAM，laneA(14,080B) 落内部堆。
+void initLaneBuf() {
+  if (laneCol && laneA) return;
+  laneCol = (uint16_t *)mallocHalt("laneCol", LANE_BUF_W * LANE_BUF_H * 2);
+  laneA = (uint8_t *)mallocHalt("laneA", LANE_BUF_W * LANE_BUF_H);
+}
+
 // v2.1 在指定位置画车道：cx = 中心 x，maxW = 最大总宽，h = 高度
 void drawLanesAt(float centerX, float y0, float maxW, float h) {
   if (laneN <= 0) return;
-  if (!laneCol) {
-    laneCol = (uint16_t *)malloc(LANE_BUF_W * LANE_BUF_H * 2);
-    laneA = (uint8_t *)malloc(LANE_BUF_W * LANE_BUF_H);
-    if (!laneCol || !laneA) return;
-  }
+  if (!laneCol || !laneA) return;                    // W8 后正常不该发生；保留防御（initLaneBuf 失败已被重启接管）
   float lw = fminf(36 * h / 32, maxW / laneN);
   float x0 = centerX - lw * laneN / 2;
   // 1. 记录所有车道的图形

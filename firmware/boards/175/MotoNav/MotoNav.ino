@@ -80,6 +80,7 @@ void setup() {
   iconBuf = (uint16_t *)psMallocHalt("iconBuf", (size_t)ICON_BUF_W * ICON_BUF_H * 2);   // v1.8.1 图标缓存（v7.x 加 NULL 检查）
   buildRingLut();                                                   // v1.8.3 抗锯齿圆环查找表
   mapInit();                                                        // v2.0 小地图缓冲
+  initLaneBuf();                                                    // v7.x W8 车道缓存启动期分配（失败走 allocFailHalt 而非静默丢车道）
   for (int i = 0; i < IMG_SLOTS; i++) {
     char nm[14];                                                    // v7.x 分配失败时串口能定位到哪一栏
     snprintf(nm, sizeof(nm), "img%d.show", i);

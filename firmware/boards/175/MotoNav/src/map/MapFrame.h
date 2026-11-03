@@ -156,12 +156,13 @@ void updateStats() {
   static uint8_t heapTick = 0;                 // v7.x 每 10 秒打一次堆水位（只进串口，不发协议）
   if (++heapTick >= 5) {
     heapTick = 0;
-    Serial.printf("HEAP int free=%u min=%u largest=%u | psram free=%u largest=%u\n",
+    Serial.printf("HEAP int free=%u min=%u largest=%u | psram free=%u largest=%u | drop_ovs=%u drop_full=%u ack_drop=%u\n",
                   (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL),
                   (unsigned)ESP.getMinFreeHeap(),
                   (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL),
                   (unsigned)heap_caps_get_free_size(MALLOC_CAP_SPIRAM),
-                  (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_SPIRAM));
+                  (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_SPIRAM),
+                  rxqDroppedOversize, rxqDroppedFull, pendingAck.dropped);   // v7.x 丢包计数进日志（期望恒 0）
   }
   float secs = (now - statAt) / 1000.0f;
   if (statAt != 0 && mapFrames > 0) {
