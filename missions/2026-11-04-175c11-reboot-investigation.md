@@ -257,7 +257,7 @@ PSRAM 较首 boot 少 ~885KB（4,265,808→3,381,064）：崩溃前用户推送�
 5. **CI**：release-firmware.yml 增加 `python3 firmware/tests/heap-checks/check.py` 一行，**仅暂存该行**（用户 touch-lock WIP 行保留未暂存，staged/unstaged diff 已核验）。flush-ownership 未接入（未跟踪，按计划）。
 6. **证据（见 missions/evidence/175c11-reboot/manifest.md）**：.13/.14/.15 ELF 以 gzip -9 -n 确定性归档入 git（解压校验哈希一致）；补存 .13/.12diag app bin；.12diag 与 .13fixdiag 完整 ELF SHA256 自 bin 内嵌 app_desc（本 SDK 魔数 0xABCD5432，SHA 偏移 +144）恢复；.15 bin 内嵌 ELF SHA256 与归档 ELF 实测一致。
 7. **构建**：FW `v7.12.10-pages.175c.15`，1,344,827B（42%）/ RAM 118,100B；构建后立即归档 ELF+bin（哈希见 manifest）。
-8. **真机**：待设备回连（烧录前串口无设备）。验收门槛见计划第 4 节；完成前本节状态为**硬件待验收**，不宣称整改闭环。
+8. **真机**：~~待设备回连~~ **状态同步（2026-11-04 收尾验收）**：`.15` 本体未单独烧录——Wire 修复已由后续 **`.16` 承接并通过 132 秒启动冒烟**，按验收方结论无需为测试/文档改动回刷 `.15`。原第 4 节冒烟门槛（自报版本、无 panic/WDT/ALLOC FAIL/flush 自愈、无 HEAPCHK、drop=0）由 `.16` 的 132s 冒烟覆盖。仍未验收（另一整改线）：导航负载、G 长测、电池骑行；Linux LSan 亦待 CI 首跑。
 9. **测试工具修复（175c.15 收尾轮，2026-11-04 深夜）**：
    - **桩资源泄漏**：wire-startup.cpp 的 `run()` 覆盖全局 Wire 前不释放旧缓冲、main 退出前不清理——d4b4041 版经 new[]/delete[] 计数探针实测 **14 次分配/10 次释放、4 个数组泄漏**（macOS ASan 不支持 detect_leaks，Linux LSan 见下）。修复：`run()` 前置 `Wire.freeWireBuffer()` + main 返回前再清一次；修复后探针 **14/14 平衡、0 泄漏**。
    - **负向测试门槛**：check.py 的 `build_and_run` 改返回 (编译成功, 退出码, stderr)；负向变体必须**编译成功**（断言 ok 且带编译器输出）、**rc != 0**、且 stderr 含 `FAIL ` 开头的场景断言行——编译错误、Sanitizer 故障、异常终止均不能冒充预期失败。新增语法错误对照（临时副本注入 `syntax-error`），验证编译失败使 runner 整体失败而非计为有效负向。原"编译失败也算通过"注释已删。
@@ -334,7 +334,7 @@ https://docs.espressif.com/projects/esp-idf/en/v5.5/esp32s3/api-guides/core_dump
 
 ## Current Status
 
-- **State:** COMPLETED（175c.13 根因修复）→ **175c.15 整改进行中**（2026-11-04 晚追加：闭合 Wire 初始化失败路径 / 行为测试替换正则 / 证据归档勘误，见 REVIEW REMEDIATION II 章节）。
+- **State:** COMPLETED（175c.13 根因修复 + 175c.15 整改：Wire 失败路径闭合/行为测试/证据归档，**软件侧经独立复核验收通过 `aafd7f3`**；Wire 修复已由 `.16` 承接并通过 132s 启动冒烟，无需回刷 `.15`。待办移交：导航负载、G 长测、电池骑行、Linux LSan CI 首跑——见 REVIEW REMEDIATION II 章节）。
 - **Last updated:** 2026-11-04（Asia/Shanghai）。
 - **Completed:** 全部验收标准；证据归档 `missions/evidence/175c11-reboot/`。
 - **遗留（独立问题，不属本次范围）**：SensorLib 单传感器分支返回值未钳制（越界读，休眠）；离线骑行/电池负载重启类未验证；用户报告的"偶发重启"若后续再现在非 G 场景，需按新证据另行分类。
@@ -361,3 +361,4 @@ https://docs.espressif.com/projects/esp-idf/en/v5.5/esp32s3/api-guides/core_dump
 | 2026-11-04 | 发布 175c.13 | 诊断零残留（git 净改动为零）+ 130s 冒烟 PASS；证据归档 missions/evidence/175c11-reboot/；mission 置 COMPLETED |
 | 2026-11-04 | 外部审查 + P2 整改 | 审查确认修复正确；整改三 P2：返回值检查+256B 重建、stMinB ×4 单位勘误、ELF 归档流程（抢救 .13、即时归档 .14）；check.py 五形态负向加固；见 REVIEW REMEDIATION 章节 |
 | 2026-11-04 | 175c.15 第二轮整改（软件侧完成，硬件待验收） | Wire 失败路径短路恢复链闭合（含 f19e758 遗留 end() 未检查缺陷，行为测试先红后绿）；5 负向变体运行时全拒；宿主 37/37；CI 接入 heap-checks（选择性暂存）；ELF gzip 确定性归档 + manifest + .12diag/.13fixdiag 完整 ELF SHA 恢复；数值勘误（resets=20、fault 码语义、coredump2.elf 前缀 d50ffab87）；见 REVIEW REMEDIATION II |
+| 2026-11-04 | 测试/证据收尾 `aafd7f3` + 独立复核通过 | 桩泄漏修复（探针 14/10→14/14）、负向门槛三重断言 + 语法错误对照、f19e758 全哈希错位笔误修正；复核确认探针/门槛/哈希/4 文件范围。交付状态同步：**Wire 修复由 `.16` 承接并通过 132s 启动冒烟，`.15` 不回刷**；导航负载/G 长测/电池骑行/Linux LSan 待办保留 |

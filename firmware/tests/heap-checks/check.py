@@ -85,7 +85,10 @@ with tempfile.TemporaryDirectory() as d:
         assert any(line.startswith('FAIL ') for line in err.splitlines()), \
             f'{name}: expected scenario assertion failure\n{err}'
 
-    # 手术自检：制造语法错误的副本必须让 runner 整体失败（编译失败不可计为有效负向测试）
+    # 手术自检：注入语法错误的副本必须使编译失败（build_and_run 返回 ok=False，runner 因此
+    # 整体失败）。注意本对照只覆盖"编译失败"这一种失败方式——上文负向门槛要求的是"编译成功
+    # 且以 FAIL 场景断言行失败"，两种失败不得混淆；若变异手术本身引入语法错误，负向门槛的
+    # `mutation must compile` 断言会先拦截。
     a, b = resize_region(ino)
     broken = ino[:a] + 'if (Wire.setBufferSize(512) syntax-error {\n' + ino[b:]
     ok, rc, err = build_and_run(broken, work, 'syntax-broken')
