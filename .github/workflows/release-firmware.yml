@@ -45,6 +45,7 @@ jobs:
           python3 -m unittest discover -s firmware/tests -p 'test_flash_macos.py'
           python3 firmware/tests/game-destination-draw/check.py
           python3 firmware/tests/lane-visibility/check.py
+          python3 firmware/tests/heap-checks/check.py
           clang++ -O1 -g -std=c++17 -fsanitize=address,undefined firmware/tests/raster-smoothing/main.cpp -o /tmp/raster-smoothing
           /tmp/raster-smoothing
           python3 firmware/tests/raster-work/check_sources.py

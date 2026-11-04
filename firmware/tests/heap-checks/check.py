@@ -1,40 +1,83 @@
 #!/usr/bin/env python3
-# 175c.12diag HeapChecks 宿主测试：
-# 1) 编译并运行 main.cpp（ASan/UBSan）：正常轮转 / 空闲强制遍历 / 损坏即停 / 环形记录 / 10s 自证行。
-# 2) 校验固件源里的打点布线（阶段齐全、范围封闭——正式版移除 = grep HEAPCHK 零残留）。
-import pathlib, subprocess, tempfile
+# 175c.12diag HeapChecks 宿主测试 + 175c.15 Wire 启动失败路径行为测试：
+# 1) 编译并运行 main.cpp（ASan/UBSan）：正常轮转 / 空闲强制遍历 / 损坏即停 / 环形记录 /
+#    10s 自证行（含 175c.14 stMinB 字节单位回归断言）。
+# 2) 校验固件源里的打点布线（正式版移除 = grep HEAPCHK 零残留）。
+# 3) 从生产 MotoNav.ino 提取 setup() 入口至首个 pinMode(0,INPUT_PULLUP) 行（含）的
+#    真实代码，与 wire-startup.cpp（Fake Wire 按 SDK 语义桩化）编译运行 6 场景；
+#    175c.15 起以此行为测试替代恢复链文本正则——注释/if(0)/裸调用等绕过形态
+#    由行为断言天然拒绝，另对 5 种负向变体（临时副本上篡改）逐一验证必败。
+import pathlib, re, subprocess, tempfile
 root = pathlib.Path(__file__).resolve().parents[3]
 src = root / 'firmware/boards/175/MotoNav'
+here = pathlib.Path(__file__).parent
 
 with tempfile.TemporaryDirectory() as d:
     out = pathlib.Path(d)
     subprocess.run(['c++', '-std=c++17', '-fsanitize=address,undefined',
-                    f'-I{pathlib.Path(__file__).parent}/stub',
+                    f'-I{here}/stub',
                     f'-I{src}/src',
-                    pathlib.Path(__file__).with_name('main.cpp'),
+                    here / 'main.cpp',
                     '-o', out / 'heapchecks'], check=True)
     subprocess.run([out / 'heapchecks'], check=True)
 
 # 布线断言（正式版 175c.13 起）：诊断打点零残留（HeapChecks.h 仅作为独立工具留在树中，固件源不引用）
-ino = (src / 'MotoNav.ino').read_text()
+ino_path = src / 'MotoNav.ino'
+ino = ino_path.read_text()
 assert 'HeapChecks.h' not in ino and 'HEAPCHK(' not in ino, 'diagnostic leftovers in MotoNav.ino'
 for path in src.rglob('*.h'):
     if path.name == 'HeapChecks.h':
         continue  # 工具本体，允许包含 HEAPCHK 宏定义
     assert 'HEAPCHK(' not in path.read_text(), f'diagnostic leftovers in {path}'
 
-# 根因修复布线：Wire.begin 后必须扩容 rxBuffer，否则 SensorLib FIFO 240B 单块读溢出 128B 默认缓冲。
-# 175c.14 起扩容必须带返回值检查（失败时 Wire 已 free 原缓冲，继续跑 = 静默死 I2C）：
-# 先剔除 // 注释再做正则，保证注释掉的调用、if(false)/#if 0 包裹或裸调用都无法通过；
-# 失败分支还必须含真实恢复动作（end() 重建总线 + allocFailHalt 兜底），防空壳检查。
-import re
-stripped = re.sub(r'//[^\n]*', '', ino)
-m = re.search(r'Wire\.begin\([^)]*\);\s*\n(.*?)if\s*\(\s*!\s*Wire\.setBufferSize\(\s*(\d+)\s*\)',
-              stripped, re.S)
-assert m and int(m.group(2)) >= 256, \
-    'failure-checked if(!Wire.setBufferSize(>=256)) must follow Wire.begin'
-assert not re.search(r'if\s*\(\s*false|#if\s+0', m.group(1)), 'fix disabled by if(false)/#if 0'
-tail = stripped[m.end():m.end() + 400]
-assert 'Wire.end()' in tail and 'allocFailHalt(' in tail, \
-    'setBufferSize failure branch must rebuild bus (Wire.end) or halt (allocFailHalt)'
-print('heap-checks wiring + host regression passed')
+# ===== Wire 启动失败路径行为测试（175c.15）=====
+def extract_setup_head(ino_text: str) -> str:
+    """提取 setup() 入口至首个 pinMode(0,INPUT_PULLUP) 行（含）的真实生产代码，
+    并补上闭合 '}' 使其成为完整函数（提取即所得，不改写语句）。"""
+    start = ino_text.index('void setup() {')
+    pin = ino_text.index('pinMode(0,INPUT_PULLUP);', start)
+    end = ino_text.index('\n', pin) + 1
+    return ino_text[start:end] + '}\n'
+
+def build_and_run(ino_text: str, workdir: pathlib.Path, tag: str):
+    """提取+编译+运行；返回 (编译成功, 退出码)。"""
+    exe = workdir / f'wire-startup-{tag}'
+    (workdir / f'setup_head-{tag}.inc').write_text(extract_setup_head(ino_text))
+    comp = subprocess.run(['c++', '-std=c++17', '-fsanitize=address,undefined',
+                           f'-DSETUP_INC="setup_head-{tag}.inc"',
+                           '-I', str(workdir),
+                           here / 'wire-startup.cpp', '-o', str(exe)],
+                          capture_output=True, text=True)
+    if comp.returncode != 0:
+        return False, comp.returncode
+    return True, subprocess.run([exe], capture_output=True).returncode
+
+with tempfile.TemporaryDirectory() as d:
+    work = pathlib.Path(d)
+    ok, rc = build_and_run(ino, work, 'real')
+    assert ok, 'wire-startup compile failed against production setup()'
+    assert rc == 0, f'wire-startup scenarios FAILED (rc={rc}) against production setup()'
+
+    # 负向变体：在临时副本上篡改，每种必须使行为测试失败（编译失败或场景失败均算）。
+    # 区间锚点 = 'if (Wire.setBufferSize(512)' 起至 'pinMode(0,INPUT_PULLUP);' 前；
+    # 找不到锚点即变体失效，视为失败。
+    def resize_region(t):
+        a = t.index('if (Wire.setBufferSize(512)')
+        b = t.index('pinMode(0,INPUT_PULLUP);', a)
+        return a, b
+
+    variants = {
+        'block-comment': lambda t: (lambda ab: t[:ab[0]] + '/* Wire resize disabled */\n' + t[ab[1]:])(resize_region(t)),
+        'if0-wrap': lambda t: (lambda ab: t[:ab[0]] + 'if (0) {\n' + t[ab[0]:ab[1]] + '}\n' + t[ab[1]:])(resize_region(t)),
+        'bare-call': lambda t: (lambda ab: t[:ab[0]] + 'Wire.setBufferSize(512);\n' + t[ab[1]:])(resize_region(t)),
+        'no-realloc': lambda t: (lambda ab: t[:ab[0]] + 'if (Wire.setBufferSize(512) != 512) allocFailHalt("Wire", 512);\n' + t[ab[1]:])(resize_region(t)),
+        'ignore-end-failure': lambda t: t.replace('!Wire.end() ||', 'Wire.end(),', 1),
+    }
+    for name, mutate in variants.items():
+        mutated = mutate(ino)
+        assert mutated != ino, f'variant {name}: anchor not found (mutation no-op)'
+        ok, rc = build_and_run(mutated, work, name)
+        assert not ok or rc != 0, \
+            f'variant {name} unexpectedly PASSED the behavior test'
+
+print('heap-checks wiring + host regression + wire-startup behavior passed')
