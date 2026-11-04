@@ -1,0 +1,777 @@
+[     0.1s] ESP-ROM:esp32s3-20210327
+[     0.1s] Build:Mar 27 2021
+[     0.1s] rst:0x15 (USB_UART_CHIP_RESET),boot:0x2b (SPI_FAST_FLASH_BOOT)
+[     0.1s] Saved PC:0x4037f86a
+[     0.1s] SPIWP:0xee
+[     0.1s] mode:DIO, clock div:1
+[     0.1s] load:0x3fce2820,len:0x10cc
+[     0.1s] load:0x403c8700,len:0xc2c
+[     0.1s] load:0x403cb700,len:0x30c0
+[     0.1s] entry 0x403c88b8
+[     0.3s] Reset reason=11, sleep wake=0
+[     0.4s] touch ok
+[     0.4s] G state=1 id=05 addr=6B ctrl=60/17/57/77/00 fifo=00:00 wm=0 status=00 n=0 valid=0 hz=0 err=0 ovf=0 direct=0 cpu_us=0 fault=0 a=0.000/0.000/0.000 w=0.00/0.00/0.00 pose=0 raw=1:0/0/0/0/0/0 axis=USB_REAR_NEG_X_FACE_POS_Z
+[     0.4s] G pose up=0.000/0.000/0.000 g=0.000/0.000 quiet=0.00 motion=2 mount=1/0 bias=0.000/0.000/0.000 batch=0 dt=0.000000 poll_ms=0 resets=0 motion_rx_age_ms=146
+[     3.8s] IPC stacks bytes=4096/4096 free-min=3152/3160
+[     3.8s] PWR short-press ready
+[     3.8s] MotoNav ready, firmware v7.12.10-pages.175c.12diag
+[     3.8s] MEDIA HID ready=0 auth=0 sub=0 suspended=0 report=1 release=1
+[     3.8s] MEDIA AMS controls=0
+[     3.8s] HEAPCHK n=1 walks=1 maxus=325 stMinB=22256
+[     5.9s] MEDIA LYRICS enabled=0
+[    11.8s] HEAP int free=83204 min=82656 largest=42996 | psram free=4265808 largest=4194292 | drop_ovs=0 drop_full=0 ack_drop=0
+[    13.8s] HEAPCHK n=4759 walks=1589 maxus=400 stMinB=21440
+[    21.8s] HEAP int free=83204 min=82656 largest=42996 | psram free=4265808 largest=4194292 | drop_ovs=0 drop_full=0 ack_drop=0
+[    23.8s] HEAPCHK n=9505 walks=3169 maxus=400 stMinB=21440
+[    27.4s] MEDIA LYRICS enabled=0
+[    31.9s] HEAP int free=83204 min=82656 largest=42996 | psram free=4265808 largest=4194292 | drop_ovs=0 drop_full=0 ack_drop=0
+[    33.8s] HEAPCHK n=14263 walks=4757 maxus=400 stMinB=21440
+[    40.7s] CLOCK sync time=13:17 date=2026-11-04
+[    41.9s] HEAP int free=83124 min=82232 largest=42996 | psram free=4265808 largest=4194292 | drop_ovs=0 drop_full=0 ack_drop=0
+[    43.8s] HEAPCHK n=18955 walks=6319 maxus=400 stMinB=21440
+[    44.2s] RASTER commit type=3 id=22 theme=1 elapsed_us=70740 processing_us=46950 max_slice_us=16102
+[    51.9s] HEAP int free=83156 min=82180 largest=42996 | psram free=3397452 largest=3342324 | drop_ovs=0 drop_full=0 ack_drop=0
+[    52.4s] CLOCK sync time=13:17 date=2026-11-04
+[    53.8s] HEAPCHK n=23677 walks=7895 maxus=400 stMinB=21440
+[    54.4s] CLOCK sync time=13:17 date=2026-11-04
+[    62.0s] HEAP int free=83156 min=82180 largest=42996 | psram free=3397452 largest=3342324 | drop_ovs=0 drop_full=0 ack_drop=0
+[    63.8s] HEAPCHK n=28429 walks=9479 maxus=400 stMinB=21440
+[    72.0s] HEAP int free=83156 min=82180 largest=42996 | psram free=3397452 largest=3342324 | drop_ovs=0 drop_full=0 ack_drop=0
+[    73.8s] HEAPCHK n=33181 walks=11063 maxus=400 stMinB=21440
+[    82.1s] HEAP int free=83156 min=82180 largest=42996 | psram free=3397452 largest=3342324 | drop_ovs=0 drop_full=0 ack_drop=0
+[    83.8s] HEAPCHK n=37939 walks=12648 maxus=400 stMinB=21440
+[    92.1s] HEAP int free=83156 min=82180 largest=42996 | psram free=3397452 largest=3342324 | drop_ovs=0 drop_full=0 ack_drop=0
+[    93.8s] HEAPCHK n=42709 walks=14238 maxus=400 stMinB=21440
+[   102.1s] HEAP int free=83156 min=82180 largest=42996 | psram free=3397452 largest=3342324 | drop_ovs=0 drop_full=0 ack_drop=0
+[   103.8s] HEAPCHK n=47467 walks=15823 maxus=400 stMinB=21440
+[   112.2s] HEAP int free=83156 min=82180 largest=42996 | psram free=3397452 largest=3342324 | drop_ovs=0 drop_full=0 ack_drop=0
+[   113.8s] HEAPCHK n=52213 walks=17406 maxus=400 stMinB=21440
+[   116.4s] CLOCK sync time=13:18 date=2026-11-04
+[   122.2s] HEAP int free=83156 min=82180 largest=42996 | psram free=3397452 largest=3342324 | drop_ovs=0 drop_full=0 ack_drop=0
+[   123.8s] HEAPCHK n=56971 walks=18991 maxus=400 stMinB=21440
+[   132.2s] HEAP int free=83156 min=82180 largest=42996 | psram free=3397452 largest=3342324 | drop_ovs=0 drop_full=0 ack_drop=0
+[   133.8s] HEAPCHK n=61711 walks=20573 maxus=400 stMinB=21440
+[   142.2s] HEAP int free=83156 min=82180 largest=42996 | psram free=3397452 largest=3342324 | drop_ovs=0 drop_full=0 ack_drop=0
+[   143.8s] HEAPCHK n=66481 walks=22163 maxus=400 stMinB=21440
+[   152.3s] HEAP int free=83156 min=82180 largest=42996 | psram free=3397452 largest=3342324 | drop_ovs=0 drop_full=0 ack_drop=0
+[   153.8s] HEAPCHK n=71239 walks=23748 maxus=400 stMinB=21440
+[   162.3s] HEAP int free=83156 min=82180 largest=42996 | psram free=3397452 largest=3342324 | drop_ovs=0 drop_full=0 ack_drop=0
+[   163.8s] HEAPCHK n=75997 walks=25333 maxus=421 stMinB=21440
+[   172.4s] HEAP int free=83156 min=82180 largest=42996 | psram free=3397452 largest=3342324 | drop_ovs=0 drop_full=0 ack_drop=0
+[   173.8s] HEAPCHK n=80755 walks=26921 maxus=421 stMinB=21440
+[   178.4s] CLOCK sync time=13:19 date=2026-11-04
+[   182.4s] HEAP int free=83156 min=82180 largest=42996 | psram free=3397452 largest=3342324 | drop_ovs=0 drop_full=0 ack_drop=0
+[   183.9s] HEAPCHK n=85531 walks=28512 maxus=421 stMinB=21440
+[   192.5s] HEAP int free=83156 min=82180 largest=42996 | psram free=3397452 largest=3342324 | drop_ovs=0 drop_full=0 ack_drop=0
+[   193.9s] HEAPCHK n=90271 walks=30091 maxus=421 stMinB=21440
+[   202.5s] HEAP int free=83156 min=82180 largest=42996 | psram free=3397452 largest=3342324 | drop_ovs=0 drop_full=0 ack_drop=0
+[   203.9s] HEAPCHK n=95017 walks=31674 maxus=421 stMinB=21440
+[   212.5s] HEAP int free=83156 min=82180 largest=42996 | psram free=3397452 largest=3342324 | drop_ovs=0 drop_full=0 ack_drop=0
+[   213.9s] HEAPCHK n=99775 walks=33259 maxus=421 stMinB=21440
+[   222.5s] HEAP int free=83156 min=82180 largest=42996 | psram free=3397452 largest=3342324 | drop_ovs=0 drop_full=0 ack_drop=0
+[   223.9s] HEAPCHK n=104533 walks=34847 maxus=421 stMinB=21440
+[   232.6s] HEAP int free=83156 min=82180 largest=42996 | psram free=3397452 largest=3342324 | drop_ovs=0 drop_full=0 ack_drop=0
+[   233.9s] HEAPCHK n=109309 walks=36438 maxus=421 stMinB=21440
+[   240.4s] CLOCK sync time=13:20 date=2026-11-04
+[   242.6s] HEAP int free=83156 min=82180 largest=42996 | psram free=3397452 largest=3342324 | drop_ovs=0 drop_full=0 ack_drop=0
+[   243.9s] HEAPCHK n=114037 walks=38015 maxus=421 stMinB=21440
+[   252.6s] HEAP int free=83156 min=82180 largest=42996 | psram free=3397452 largest=3342324 | drop_ovs=0 drop_full=0 ack_drop=0
+[   253.9s] HEAPCHK n=118777 walks=39594 maxus=421 stMinB=21440
+[   262.6s] HEAP int free=83156 min=82180 largest=42996 | psram free=3397452 largest=3342324 | drop_ovs=0 drop_full=0 ack_drop=0
+[   263.9s] HEAPCHK n=123535 walks=41179 maxus=421 stMinB=21440
+[   272.7s] HEAP int free=83156 min=82180 largest=42996 | psram free=3397452 largest=3342324 | drop_ovs=0 drop_full=0 ack_drop=0
+[   273.9s] HEAPCHK n=128323 walks=42775 maxus=421 stMinB=21440
+[   282.7s] HEAP int free=83156 min=82180 largest=42996 | psram free=3397452 largest=3342324 | drop_ovs=0 drop_full=0 ack_drop=0
+[   283.9s] HEAPCHK n=133081 walks=44363 maxus=421 stMinB=21440
+[   292.8s] HEAP int free=83156 min=82180 largest=42996 | psram free=3397452 largest=3342324 | drop_ovs=0 drop_full=0 ack_drop=0
+[   293.9s] HEAPCHK n=137809 walks=45937 maxus=421 stMinB=21440
+[   302.4s] CLOCK sync time=13:21 date=2026-11-04
+[   302.8s] HEAP int free=83156 min=82180 largest=42996 | psram free=3397452 largest=3342324 | drop_ovs=0 drop_full=0 ack_drop=0
+[   303.9s] HEAPCHK n=142579 walks=47527 maxus=421 stMinB=21440
+[   312.9s] HEAP int free=83156 min=82180 largest=42996 | psram free=3397452 largest=3342324 | drop_ovs=0 drop_full=0 ack_drop=0
+[   314.0s] HEAPCHK n=147319 walks=49109 maxus=421 stMinB=21440
+[   322.9s] HEAP int free=83156 min=82180 largest=42996 | psram free=3397452 largest=3342324 | drop_ovs=0 drop_full=0 ack_drop=0
+[   324.0s] HEAPCHK n=152095 walks=50700 maxus=421 stMinB=21440
+[   332.9s] HEAP int free=83156 min=82180 largest=42996 | psram free=3397452 largest=3342324 | drop_ovs=0 drop_full=0 ack_drop=0
+[   334.0s] HEAPCHK n=156853 walks=52285 maxus=421 stMinB=21440
+[   343.0s] HEAP int free=83156 min=82180 largest=42996 | psram free=3397452 largest=3342324 | drop_ovs=0 drop_full=0 ack_drop=0
+[   344.0s] HEAPCHK n=161611 walks=53873 maxus=421 stMinB=21440
+[   346.7s] CLOCK sync time=13:22 date=2026-11-04
+[   350.4s] CLOCK sync time=13:22 date=2026-11-04
+[   352.4s] CLOCK sync time=13:22 date=2026-11-04
+[   353.0s] HEAP int free=83156 min=82180 largest=42996 | psram free=3397452 largest=3342324 | drop_ovs=0 drop_full=0 ack_drop=0
+[   354.0s] HEAPCHK n=166357 walks=55453 maxus=421 stMinB=21440
+[   363.0s] HEAP int free=83156 min=82180 largest=42996 | psram free=3397452 largest=3342324 | drop_ovs=0 drop_full=0 ack_drop=0
+[   364.0s] HEAPCHK n=171121 walks=57042 maxus=421 stMinB=21440
+[   373.0s] HEAP int free=83156 min=82180 largest=42996 | psram free=3397452 largest=3342324 | drop_ovs=0 drop_full=0 ack_drop=0
+[   374.0s] HEAPCHK n=175879 walks=58627 maxus=421 stMinB=21440
+[   383.1s] HEAP int free=83156 min=82180 largest=42996 | psram free=3397452 largest=3342324 | drop_ovs=0 drop_full=0 ack_drop=0
+[   384.0s] HEAPCHK n=180625 walks=60210 maxus=421 stMinB=21440
+[   393.1s] HEAP int free=83156 min=82180 largest=42996 | psram free=3397452 largest=3342324 | drop_ovs=0 drop_full=0 ack_drop=0
+[   394.0s] HEAPCHK n=185383 walks=61795 maxus=421 stMinB=21440
+[   403.2s] HEAP int free=83156 min=82180 largest=42996 | psram free=3397452 largest=3342324 | drop_ovs=0 drop_full=0 ack_drop=0
+[   404.0s] HEAPCHK n=190141 walks=63383 maxus=421 stMinB=21440
+[   413.2s] HEAP int free=83156 min=82180 largest=42996 | psram free=3397452 largest=3342324 | drop_ovs=0 drop_full=0 ack_drop=0
+[   414.0s] HEAPCHK n=194911 walks=64973 maxus=421 stMinB=21440
+[   414.4s] CLOCK sync time=13:23 date=2026-11-04
+[   423.2s] HEAP int free=83156 min=82180 largest=42996 | psram free=3397452 largest=3342324 | drop_ovs=0 drop_full=0 ack_drop=0
+[   423.9s] G state=3 id=05 addr=6B ctrl=60/17/57/77/03 fifo=50:06 wm=1 status=00 n=0 valid=0 hz=0 err=0 ovf=0 direct=0 cpu_us=518387 fault=0 a=0.000/0.000/0.000 w=0.00/0.00/0.00 pose=0 raw=1:-1017/-1017/-1017/-20200/-21385/-23101 axis=USB_REAR_NEG_X_FACE_POS_Z
+[   423.9s] G pose up=0.000/0.000/0.000 g=0.000/0.000 quiet=0.00 motion=2 mount=1/0 bias=0.000/0.000/0.000 batch=0 dt=0.000000 poll_ms=0 resets=0 motion_rx_age_ms=77081
+[   424.0s] HEAPCHK n=199373 walks=66457 maxus=498 stMinB=16384
+[   424.9s] G state=3 id=05 addr=6B ctrl=60/17/57/77/03 fifo=00:00 wm=1 status=00 n=54 valid=0 hz=54 err=0 ovf=0 direct=0 cpu_us=199177 fault=0 a=0.692/-0.523/0.585 w=3.17/33.17/-5.83 pose=0 raw=1:5667/-4288/4789/203/2123/-373 axis=USB_REAR_NEG_X_FACE_POS_Z
+[   424.9s] G pose up=0.000/0.000/0.000 g=0.000/0.000 quiet=0.00 motion=2 mount=1/0 bias=0.000/0.000/0.000 batch=3 dt=0.019000 poll_ms=57 resets=0 motion_rx_age_ms=78106
+[   425.9s] G state=3 id=05 addr=6B ctrl=60/17/57/77/03 fifo=00:00 wm=1 status=00 n=107 valid=0 hz=53 err=0 ovf=0 direct=0 cpu_us=207107 fault=0 a=0.906/-0.228/0.586 w=15.27/44.92/33.47 pose=0 raw=1:7423/-1868/4801/977/2875/2142 axis=USB_REAR_NEG_X_FACE_POS_Z
+[   425.9s] G pose up=0.000/0.000/0.000 g=0.000/0.000 quiet=0.00 motion=2 mount=1/0 bias=0.000/0.000/0.000 batch=1 dt=0.017000 poll_ms=17 resets=0 motion_rx_age_ms=79118
+[   426.9s] G state=3 id=05 addr=6B ctrl=60/17/57/77/03 fifo=00:00 wm=1 status=00 n=160 valid=0 hz=53 err=0 ovf=0 direct=0 cpu_us=195327 fault=0 a=0.936/0.038/0.564 w=2.61/46.08/14.77 pose=0 raw=1:7665/310/4617/167/2949/945 axis=USB_REAR_NEG_X_FACE_POS_Z
+[   426.9s] G pose up=0.000/0.000/0.000 g=0.000/0.000 quiet=0.00 motion=2 mount=1/0 bias=0.000/0.000/0.000 batch=3 dt=0.019333 poll_ms=58 resets=0 motion_rx_age_ms=80136
+[   427.9s] G state=3 id=05 addr=6B ctrl=60/17/57/77/03 fifo=00:00 wm=1 status=00 n=213 valid=0 hz=53 err=0 ovf=0 direct=0 cpu_us=207324 fault=0 a=0.833/-0.051/0.575 w=5.64/1.88/0.34 pose=1 raw=1:6827/-417/4714/361/120/22 axis=USB_REAR_NEG_X_FACE_POS_Z
+[   428.0s] G pose up=0.000/0.000/0.000 g=0.000/0.000 quiet=0.00 motion=2 mount=1/0 bias=0.000/0.000/0.000 batch=1 dt=0.017000 poll_ms=17 resets=0 motion_rx_age_ms=81148
+[   429.0s] G state=3 id=05 addr=6B ctrl=60/17/57/77/03 fifo=00:00 wm=1 status=00 n=269 valid=0 hz=56 err=0 ovf=0 direct=0 cpu_us=219172 fault=0 a=0.835/-0.027/0.599 w=4.30/1.14/0.00 pose=0 raw=1:6842/-221/4909/275/73/0 axis=USB_REAR_NEG_X_FACE_POS_Z
+[   429.0s] G pose up=0.000/0.000/0.000 g=0.000/0.000 quiet=0.00 motion=2 mount=1/0 bias=0.000/0.000/0.000 batch=3 dt=0.018667 poll_ms=56 resets=0 motion_rx_age_ms=82188
+[   430.0s] G state=3 id=05 addr=6B ctrl=60/17/57/77/03 fifo=00:00 wm=1 status=00 n=322 valid=0 hz=53 err=0 ovf=0 direct=0 cpu_us=210164 fault=0 a=0.837/-0.040/0.594 w=4.31/0.66/0.69 pose=2 raw=1:6856/-328/4865/276/42/44 axis=USB_REAR_NEG_X_FACE_POS_Z
+[   430.0s] G pose up=0.000/0.000/0.000 g=0.000/0.000 quiet=0.00 motion=2 mount=1/0 bias=0.000/0.000/0.000 batch=1 dt=0.017000 poll_ms=17 resets=0 motion_rx_age_ms=83196
+[   431.0s] G state=3 id=05 addr=6B ctrl=60/17/57/77/03 fifo=00:00 wm=1 status=00 n=377 valid=0 hz=55 err=0 ovf=0 direct=0 cpu_us=209938 fault=0 a=0.838/-0.030/0.596 w=4.16/1.11/0.62 pose=0 raw=1:6862/-248/4886/266/71/40 axis=USB_REAR_NEG_X_FACE_POS_Z
+[   431.0s] G pose up=0.000/0.000/0.000 g=0.000/0.000 quiet=0.00 motion=2 mount=1/0 bias=0.000/0.000/0.000 batch=3 dt=0.019000 poll_ms=57 resets=0 motion_rx_age_ms=84226
+[   432.0s] G state=3 id=05 addr=6B ctrl=60/17/57/77/03 fifo=00:00 wm=1 status=00 n=430 valid=0 hz=53 err=0 ovf=0 direct=0 cpu_us=207389 fault=0 a=0.841/-0.034/0.595 w=4.70/1.06/-0.38 pose=5 raw=1:6888/-282/4874/301/68/-24 axis=USB_REAR_NEG_X_FACE_POS_Z
+[   432.0s] G pose up=0.000/0.000/0.000 g=0.000/0.000 quiet=0.00 motion=2 mount=1/0 bias=0.000/0.000/0.000 batch=1 dt=0.017000 poll_ms=17 resets=0 motion_rx_age_ms=85238
+[   433.1s] G state=3 id=05 addr=6B ctrl=60/17/57/77/03 fifo=00:00 wm=1 status=00 n=483 valid=0 hz=53 err=0 ovf=0 direct=0 cpu_us=199469 fault=0 a=0.838/-0.027/0.587 w=5.09/1.42/0.38 pose=8 raw=1:6867/-218/4809/326/107/7 axis=USB_REAR_NEG_X_FACE_POS_Z
+[   433.1s] G pose up=0.000/0.000/0.000 g=0.000/0.000 quiet=0.00 motion=2 mount=1/0 bias=0.000/0.000/0.000 batch=3 dt=0.018667 poll_ms=56 resets=0 motion_rx_age_ms=86258
+[   433.4s] HEAP int free=82772 min=82180 largest=40948 | psram free=2512708 largest=2490356 | drop_ovs=0 drop_full=0 ack_drop=0
+[   434.0s] HEAPCHK n=202344 walks=67235 maxus=498 stMinB=15600
+[   434.1s] G state=3 id=05 addr=6B ctrl=60/17/57/77/03 fifo=51:4D wm=1 status=00 n=484 valid=0 hz=1 err=0 ovf=0 direct=0 cpu_us=24614 fault=0 a=0.840/-0.027/0.590 w=5.02/1.67/0.11 pose=0 raw=1:6897/-154/4825/334/70/7 axis=USB_REAR_NEG_X_FACE_POS_Z
+[   434.1s] G pose up=0.000/0.000/0.000 g=0.000/0.000 quiet=0.00 motion=2 mount=1/0 bias=0.000/0.000/0.000 batch=1 dt=0.027000 poll_ms=23 resets=0 motion_rx_age_ms=87269
+[   435.1s] G state=5 id=05 addr=6B ctrl=60/17/57/77/03 fifo=52:AF wm=1 status=00 n=484 valid=0 hz=0 err=0 ovf=0 direct=0 cpu_us=18495 fault=0 a=0.840/-0.027/0.590 w=5.02/1.67/0.11 pose=0 raw=1:6999/-453/4572/353/27/155 axis=USB_REAR_NEG_X_FACE_POS_Z
+[   435.1s] G pose up=0.000/0.000/0.000 g=0.000/0.000 quiet=0.00 motion=2 mount=1/0 bias=0.000/0.000/0.000 batch=1 dt=0.027000 poll_ms=62 resets=0 motion_rx_age_ms=88310
+[   436.1s] G state=5 id=05 addr=6B ctrl=60/17/57/77/03 fifo=00:00 wm=1 status=00 n=523 valid=0 hz=39 err=0 ovf=1 direct=0 cpu_us=150767 fault=4 a=0.849/-0.151/0.333 w=22.88/-22.84/100.27 pose=0 raw=1:6958/-1235/2727/1464/-1462/6417 axis=USB_REAR_NEG_X_FACE_POS_Z
+[   436.1s] G pose up=0.000/0.000/0.000 g=0.000/0.000 quiet=0.00 motion=2 mount=1/0 bias=0.000/0.000/0.000 batch=1 dt=0.017000 poll_ms=17 resets=2 motion_rx_age_ms=89313
+[   437.1s] G state=5 id=05 addr=6B ctrl=60/17/57/77/03 fifo=00:00 wm=1 status=00 n=576 valid=0 hz=53 err=0 ovf=1 direct=0 cpu_us=198024 fault=4 a=-0.411/-0.439/0.782 w=-5.56/11.12/97.80 pose=0 raw=1:-3365/-3597/6406/-356/712/6259 axis=USB_REAR_NEG_X_FACE_POS_Z
+[   437.1s] G pose up=0.000/0.000/0.000 g=0.000/0.000 quiet=0.00 motion=2 mount=1/0 bias=0.000/0.000/0.000 batch=3 dt=0.019000 poll_ms=57 resets=2 motion_rx_age_ms=90332
+[   438.1s] G state=5 id=05 addr=6B ctrl=60/17/57/77/03 fifo=00:00 wm=1 status=00 n=629 valid=0 hz=53 err=0 ovf=1 direct=0 cpu_us=207147 fault=4 a=-0.439/-0.116/0.883 w=4.16/-1.23/3.56 pose=0 raw=1:-3593/-949/7233/266/-79/228 axis=USB_REAR_NEG_X_FACE_POS_Z
+[   438.1s] G pose up=0.000/0.000/0.000 g=0.000/0.000 quiet=0.00 motion=2 mount=1/0 bias=0.000/0.000/0.000 batch=1 dt=0.017000 poll_ms=17 resets=2 motion_rx_age_ms=91344
+[   439.2s] G state=5 id=05 addr=6B ctrl=60/17/57/77/03 fifo=00:00 wm=1 status=00 n=685 valid=0 hz=56 err=0 ovf=1 direct=0 cpu_us=219180 fault=4 a=-0.417/-0.088/0.898 w=5.12/-0.39/2.33 pose=2 raw=1:-3415/-720/7357/328/-25/149 axis=USB_REAR_NEG_X_FACE_POS_Z
+[   439.2s] G pose up=0.000/0.000/0.000 g=0.000/0.000 quiet=0.00 motion=2 mount=1/0 bias=0.000/0.000/0.000 batch=3 dt=0.019000 poll_ms=57 resets=2 motion_rx_age_ms=92384
+[   440.2s] G state=5 id=05 addr=6B ctrl=60/17/57/77/03 fifo=00:00 wm=1 status=00 n=738 valid=0 hz=53 err=0 ovf=1 direct=0 cpu_us=210058 fault=4 a=-0.408/-0.086/0.902 w=4.05/0.70/0.52 pose=11 raw=1:-3344/-707/7386/259/45/33 axis=USB_REAR_NEG_X_FACE_POS_Z
+[   440.2s] G pose up=0.000/0.000/0.000 g=0.000/0.000 quiet=0.00 motion=2 mount=1/0 bias=0.000/0.000/0.000 batch=1 dt=0.017000 poll_ms=17 resets=2 motion_rx_age_ms=93389
+[   441.2s] G state=5 id=05 addr=6B ctrl=60/17/57/77/03 fifo=00:00 wm=1 status=00 n=791 valid=0 hz=53 err=0 ovf=1 direct=0 cpu_us=195738 fault=4 a=-0.407/-0.086/0.903 w=4.22/0.92/0.48 pose=64 raw=1:-3335/-706/7401/270/59/31 axis=USB_REAR_NEG_X_FACE_POS_Z
+[   441.2s] G pose up=0.000/0.000/0.000 g=0.000/0.000 quiet=0.00 motion=2 mount=1/0 bias=0.000/0.000/0.000 batch=3 dt=0.019000 poll_ms=57 resets=2 motion_rx_age_ms=94405
+[   442.2s] G state=5 id=05 addr=6B ctrl=60/17/57/77/03 fifo=00:00 wm=1 status=00 n=844 valid=0 hz=53 err=0 ovf=1 direct=0 cpu_us=207475 fault=4 a=-0.405/-0.086/0.905 w=4.17/1.12/0.28 pose=16 raw=1:-3319/-701/7413/267/72/18 axis=USB_REAR_NEG_X_FACE_POS_Z
+[   442.2s] G pose up=0.000/0.000/0.000 g=0.000/0.000 quiet=0.00 motion=2 mount=1/0 bias=0.000/0.000/0.000 batch=1 dt=0.017000 poll_ms=17 resets=2 motion_rx_age_ms=95417
+[   443.2s] G state=5 id=05 addr=6B ctrl=60/17/57/77/03 fifo=00:00 wm=1 status=00 n=898 valid=0 hz=54 err=0 ovf=1 direct=0 cpu_us=200435 fault=4 a=-0.205/-0.105/0.848 w=42.69/-52.11/54.69 pose=0 raw=1:-1578/-885/7250/2771/-3328/3273 axis=USB_REAR_NEG_X_FACE_POS_Z
+[   443.2s] G pose up=0.000/0.000/0.000 g=0.000/0.000 quiet=0.00 motion=2 mount=1/0 bias=0.000/0.000/0.000 batch=3 dt=0.018667 poll_ms=56 resets=2 motion_rx_age_ms=96437
+[   443.4s] HEAP int free=82772 min=82180 largest=40948 | psram free=2512708 largest=2490356 | drop_ovs=0 drop_full=0 ack_drop=0
+[   444.1s] HEAPCHK n=205316 walks=68020 maxus=498 stMinB=15600
+[   444.2s] G state=5 id=05 addr=6B ctrl=60/17/57/77/03 fifo=00:00 wm=1 status=00 n=952 valid=0 hz=54 err=0 ovf=1 direct=0 cpu_us=210872 fault=4 a=-0.007/-0.021/1.006 w=4.00/0.80/0.16 pose=9 raw=1:-57/-170/8245/256/51/10 axis=USB_REAR_NEG_X_FACE_POS_Z
+[   444.2s] G pose up=0.000/0.000/0.000 g=0.000/0.000 quiet=0.00 motion=2 mount=1/0 bias=0.000/0.000/0.000 batch=2 dt=0.022000 poll_ms=24 resets=2 motion_rx_age_ms=97443
+[   445.3s] G state=5 id=05 addr=6B ctrl=60/17/57/77/03 fifo=00:00 wm=1 status=00 n=1005 valid=0 hz=53 err=0 ovf=1 direct=0 cpu_us=199216 fault=4 a=0.008/-0.018/1.008 w=4.22/1.16/0.34 pose=8 raw=1:66/-144/8254/269/69/23 axis=USB_REAR_NEG_X_FACE_POS_Z
+[   445.3s] G pose up=0.000/0.000/0.000 g=0.000/0.000 quiet=0.00 motion=2 mount=1/0 bias=0.000/0.000/0.000 batch=3 dt=0.018667 poll_ms=56 resets=2 motion_rx_age_ms=98465
+[   446.3s] G state=5 id=05 addr=6B ctrl=60/17/57/77/03 fifo=00:00 wm=1 status=00 n=1059 valid=0 hz=54 err=0 ovf=1 direct=0 cpu_us=211329 fault=4 a=0.009/-0.016/1.007 w=4.19/1.47/0.19 pose=62 raw=1:70/-135/8251/268/94/12 axis=USB_REAR_NEG_X_FACE_POS_Z
+[   446.3s] G pose up=0.000/0.000/0.000 g=0.000/0.000 quiet=0.00 motion=2 mount=1/0 bias=0.000/0.000/0.000 batch=2 dt=0.022000 poll_ms=24 resets=2 motion_rx_age_ms=99471
+[   447.3s] G state=5 id=05 addr=6B ctrl=60/17/57/77/03 fifo=00:00 wm=1 status=00 n=1112 valid=0 hz=53 err=0 ovf=1 direct=0 cpu_us=199589 fault=4 a=0.008/-0.017/1.006 w=4.06/1.36/0.25 pose=115 raw=1:63/-139/8241/260/87/16 axis=USB_REAR_NEG_X_FACE_POS_Z
+[   447.3s] G pose up=0.000/0.000/0.000 g=0.000/0.000 quiet=0.00 motion=2 mount=1/0 bias=0.000/0.000/0.000 batch=3 dt=0.019000 poll_ms=57 resets=2 motion_rx_age_ms=100491
+[   448.3s] G state=2 id=05 addr=6B ctrl=60/17/57/77/03 fifo=00:00 wm=1 status=00 n=1165 valid=1 hz=53 err=0 ovf=1 direct=0 cpu_us=212199 fault=4 a=0.007/-0.017/1.007 w=4.09/1.05/0.14 pose=0 raw=1:57/-137/8253/262/69/4 axis=USB_REAR_NEG_X_FACE_POS_Z
+[   448.3s] G pose up=0.008/-0.017/1.000 g=-0.000/-0.001 quiet=0.00 motion=2 mount=1/0 bias=4.114/1.248/0.218 batch=1 dt=0.017000 poll_ms=17 resets=2 motion_rx_age_ms=101508
+[   449.3s] G state=2 id=05 addr=6B ctrl=60/17/57/77/03 fifo=50:06 wm=1 status=00 n=1220 valid=56 hz=55 err=0 ovf=1 direct=0 cpu_us=210768 fault=4 a=0.007/-0.018/1.005 w=4.06/1.17/0.23 pose=0 raw=1:62/-145/8241/264/76/15 axis=USB_REAR_NEG_X_FACE_POS_Z
+[   449.4s] G pose up=0.007/-0.016/1.000 g=0.001/0.000 quiet=0.00 motion=2 mount=1/0 bias=4.114/1.248/0.218 batch=3 dt=0.020000 poll_ms=60 resets=2 motion_rx_age_ms=102548
+[   450.4s] G state=2 id=05 addr=6B ctrl=60/17/57/77/03 fifo=00:00 wm=1 status=00 n=1276 valid=112 hz=56 err=0 ovf=1 direct=0 cpu_us=211568 fault=4 a=-0.295/-0.156/1.148 w=-181.94/19.86/-39.50 pose=0 raw=1:-2416/-1281/9408/-11644/1271/-2528 axis=USB_REAR_NEG_X_FACE_POS_Z
+[   450.4s] G pose up=-0.144/-0.166/0.976 g=-0.038/-0.125 quiet=0.00 motion=2 mount=1/0 bias=4.114/1.248/0.218 batch=3 dt=0.019667 poll_ms=59 resets=2 motion_rx_age_ms=103606
+[   451.4s] G state=2 id=05 addr=6B ctrl=60/17/57/77/03 fifo=00:00 wm=1 status=00 n=1328 valid=164 hz=52 err=0 ovf=1 direct=0 cpu_us=198987 fault=4 a=0.213/-0.792/0.495 w=61.88/46.98/-42.78 pose=0 raw=1:1742/-6484/4059/3960/3007/-2738 axis=USB_REAR_NEG_X_FACE_POS_Z
+[   451.4s] G pose up=0.253/-0.817/0.519 g=0.006/-0.031 quiet=0.00 motion=2 mount=1/0 bias=4.114/1.248/0.218 batch=2 dt=0.021500 poll_ms=24 resets=2 motion_rx_age_ms=104614
+[   452.4s] G state=2 id=05 addr=6B ctrl=60/17/57/77/03 fifo=50:06 wm=1 status=00 n=1381 valid=217 hz=53 err=0 ovf=1 direct=0 cpu_us=200534 fault=4 a=0.907/-0.303/0.289 w=-1.75/6.89/-38.41 pose=0 raw=1:7574/-2536/2440/-217/401/-1795 axis=USB_REAR_NEG_X_FACE_POS_Z
+[   452.4s] G pose up=0.932/-0.295/0.211 g=-0.057/-0.058 quiet=0.00 motion=2 mount=1/0 bias=4.114/1.248/0.218 batch=3 dt=0.019000 poll_ms=57 resets=2 motion_rx_age_ms=105644
+[   453.4s] G state=2 id=05 addr=6B ctrl=60/17/57/77/03 fifo=00:00 wm=1 status=00 n=1434 valid=270 hz=53 err=0 ovf=1 direct=0 cpu_us=202883 fault=4 a=0.945/-0.334/0.266 w=-51.75/-21.91/15.69 pose=0 raw=1:7739/-2737/2181/-3312/-1402/1004 axis=USB_REAR_NEG_X_FACE_POS_Z
+[   453.5s] G pose up=0.909/-0.347/0.231 g=-0.036/0.007 quiet=0.00 motion=2 mount=1/0 bias=4.114/1.248/0.218 batch=1 dt=0.017000 poll_ms=17 resets=2 motion_rx_age_ms=106648
+[   453.6s] HEAP int free=82624 min=82180 largest=40948 | psram free=2512708 largest=2490356 | drop_ovs=0 drop_full=0 ack_drop=0
+[   454.1s] HEAPCHK n=208235 walks=68765 maxus=498 stMinB=15600
+[   454.5s] G state=2 id=05 addr=6B ctrl=60/17/57/77/03 fifo=00:00 wm=1 status=00 n=1488 valid=324 hz=54 err=0 ovf=1 direct=0 cpu_us=201443 fault=4 a=0.923/-0.031/0.345 w=-0.22/13.78/16.03 pose=0 raw=1:7560/-257/2826/-14/882/1445 axis=USB_REAR_NEG_X_FACE_POS_Z
+[   454.5s] G pose up=0.938/-0.137/0.319 g=-0.107/0.011 quiet=0.00 motion=2 mount=1/0 bias=4.114/1.248/0.218 batch=3 dt=0.019333 poll_ms=58 resets=2 motion_rx_age_ms=107682
+[   455.5s] G state=2 id=05 addr=6B ctrl=60/17/57/77/03 fifo=00:00 wm=1 status=00 n=1541 valid=377 hz=53 err=0 ovf=1 direct=0 cpu_us=202771 fault=4 a=0.946/-0.218/0.334 w=4.33/-0.34/0.41 pose=0 raw=1:7751/-1783/2735/277/-22/26 axis=USB_REAR_NEG_X_FACE_POS_Z
+[   455.5s] G pose up=0.929/-0.145/0.341 g=0.070/-0.013 quiet=0.00 motion=2 mount=1/0 bias=4.114/1.248/0.218 batch=2 dt=0.022000 poll_ms=24 resets=2 motion_rx_age_ms=108688
+[   456.5s] G state=2 id=05 addr=6B ctrl=60/17/57/77/03 fifo=50:05 wm=1 status=00 n=1593 valid=429 hz=52 err=0 ovf=1 direct=0 cpu_us=190933 fault=4 a=1.104/-1.288/0.019 w=3.89/-23.03/-21.23 pose=0 raw=1:8435/-8398/-46/-275/-359/-5395 axis=USB_REAR_NEG_X_FACE_POS_Z
+[   456.5s] G pose up=0.972/-0.053/0.228 g=1.250/-0.035 quiet=0.00 motion=2 mount=1/0 bias=4.114/1.248/0.218 batch=3 dt=0.019667 poll_ms=59 resets=2 motion_rx_age_ms=109712
+[   457.5s] G state=2 id=05 addr=6B ctrl=60/17/57/77/03 fifo=00:00 wm=1 status=00 n=1645 valid=481 hz=52 err=0 ovf=1 direct=0 cpu_us=193496 fault=4 a=0.535/-0.121/0.738 w=0.36/7.92/-39.47 pose=0 raw=1:4385/-991/6047/23/507/-2526 axis=USB_REAR_NEG_X_FACE_POS_Z
+[   457.5s] G pose up=0.966/-0.009/0.257 g=0.095/-0.579 quiet=0.00 motion=2 mount=1/0 bias=4.114/1.248/0.218 batch=2 dt=0.022000 poll_ms=24 resets=2 motion_rx_age_ms=110718
+[   458.5s] G state=2 id=05 addr=6B ctrl=60/17/57/77/03 fifo=00:00 wm=1 status=00 n=1697 valid=533 hz=52 err=0 ovf=1 direct=0 cpu_us=182850 fault=4 a=1.064/0.047/0.385 w=5.77/24.73/12.41 pose=0 raw=1:8717/387/3154/369/1583/794 axis=USB_REAR_NEG_X_FACE_POS_Z
+[   458.5s] G pose up=0.922/0.126/0.365 g=0.081/0.061 quiet=0.00 motion=2 mount=1/0 bias=4.114/1.248/0.218 batch=3 dt=0.019667 poll_ms=59 resets=2 motion_rx_age_ms=111743
+[   459.5s] G state=2 id=05 addr=6B ctrl=60/17/57/77/03 fifo=00:00 wm=1 status=00 n=1748 valid=584 hz=51 err=0 ovf=1 direct=0 cpu_us=192310 fault=4 a=0.887/-0.201/0.469 w=-7.78/-7.80/6.47 pose=0 raw=1:7268/-1644/3839/-498/-499/414 axis=USB_REAR_NEG_X_FACE_POS_Z
+[   459.6s] G pose up=0.863/-0.089/0.497 g=0.115/0.019 quiet=0.00 motion=2 mount=1/0 bias=4.114/1.248/0.218 batch=1 dt=0.017000 poll_ms=17 resets=2 motion_rx_age_ms=112750
+[   460.6s] G state=2 id=05 addr=6B ctrl=60/17/57/77/03 fifo=00:00 wm=1 status=00 n=1802 valid=638 hz=54 err=0 ovf=1 direct=0 cpu_us=201463 fault=4 a=0.898/-0.185/0.424 w=28.94/8.59/8.08 pose=0 raw=1:7353/-1516/3474/1852/550/517 axis=USB_REAR_NEG_X_FACE_POS_Z
+[   460.6s] G pose up=0.873/-0.057/0.485 g=0.134/0.052 quiet=0.00 motion=2 mount=1/0 bias=4.114/1.248/0.218 batch=3 dt=0.019333 poll_ms=58 resets=2 motion_rx_age_ms=113791
+[   461.6s] G state=2 id=05 addr=6B ctrl=60/17/57/77/03 fifo=00:00 wm=1 status=00 n=1854 valid=690 hz=52 err=0 ovf=1 direct=0 cpu_us=193617 fault=4 a=0.907/-0.242/0.514 w=5.47/1.52/10.17 pose=0 raw=1:7429/-1985/4212/350/97/651 axis=USB_REAR_NEG_X_FACE_POS_Z
+[   461.6s] G pose up=0.849/-0.073/0.524 g=0.169/0.020 quiet=0.00 motion=2 mount=1/0 bias=4.114/1.248/0.218 batch=1 dt=0.017000 poll_ms=17 resets=2 motion_rx_age_ms=114796
+[   462.6s] G state=2 id=05 addr=6B ctrl=60/17/57/77/03 fifo=00:00 wm=1 status=00 n=1909 valid=745 hz=55 err=0 ovf=1 direct=0 cpu_us=210825 fault=4 a=0.740/-0.219/0.787 w=8.14/4.11/9.91 pose=0 raw=1:6066/-1792/6445/521/263/634 axis=USB_REAR_NEG_X_FACE_POS_Z
+[   462.6s] G pose up=0.851/-0.028/0.524 g=0.176/-0.290 quiet=0.00 motion=2 mount=1/0 bias=4.114/1.248/0.218 batch=3 dt=0.019333 poll_ms=58 resets=2 motion_rx_age_ms=115838
+[   463.6s] G state=2 id=05 addr=6B ctrl=60/17/57/77/03 fifo=00:00 wm=1 status=00 n=1961 valid=797 hz=52 err=0 ovf=1 direct=0 cpu_us=201696 fault=4 a=0.832/0.033/0.524 w=6.33/0.41/3.39 pose=0 raw=1:6812/271/4290/405/26/217 axis=USB_REAR_NEG_X_FACE_POS_Z
+[   463.6s] G pose up=0.802/0.199/0.563 g=0.144/0.091 quiet=0.00 motion=2 mount=1/0 bias=4.114/1.248/0.218 batch=2 dt=0.022000 poll_ms=24 resets=2 motion_rx_age_ms=116841
+[   463.8s] HEAP int free=82624 min=82180 largest=40948 | psram free=2512708 largest=2490356 | drop_ovs=0 drop_full=0 ack_drop=0
+[   464.1s] HEAPCHK n=211089 walks=69499 maxus=498 stMinB=15600
+[   464.7s] G state=2 id=05 addr=6B ctrl=60/17/57/77/03 fifo=00:00 wm=1 status=00 n=2014 valid=850 hz=53 err=0 ovf=1 direct=0 cpu_us=199571 fault=4 a=0.861/0.052/0.547 w=6.00/1.97/-1.33 pose=0 raw=1:7054/430/4477/384/126/-85 axis=USB_REAR_NEG_X_FACE_POS_Z
+[   464.7s] G pose up=0.820/0.190/0.540 g=0.132/0.055 quiet=0.00 motion=2 mount=1/0 bias=4.114/1.248/0.218 batch=3 dt=0.019000 poll_ms=57 resets=2 motion_rx_age_ms=117884
+[   465.7s] G state=2 id=05 addr=6B ctrl=60/17/57/77/03 fifo=00:00 wm=1 status=00 n=2066 valid=902 hz=52 err=0 ovf=1 direct=0 cpu_us=201727 fault=4 a=0.850/0.088/0.565 w=2.62/2.36/5.67 pose=0 raw=1:6962/721/4625/168/151/363 axis=USB_REAR_NEG_X_FACE_POS_Z
+[   465.7s] G pose up=0.814/0.207/0.543 g=0.120/0.038 quiet=0.00 motion=2 mount=1/0 bias=4.114/1.248/0.218 batch=1 dt=0.017000 poll_ms=17 resets=2 motion_rx_age_ms=118889
+[   466.7s] G state=2 id=05 addr=6B ctrl=60/17/57/77/03 fifo=00:00 wm=1 status=00 n=2118 valid=954 hz=52 err=0 ovf=1 direct=0 cpu_us=200591 fault=4 a=0.866/0.037/0.543 w=4.45/0.39/1.52 pose=0 raw=1:7098/303/4451/285/25/97 axis=USB_REAR_NEG_X_FACE_POS_Z
+[   466.7s] G pose up=0.831/0.180/0.527 g=0.140/0.045 quiet=0.00 motion=2 mount=1/0 bias=4.114/1.248/0.218 batch=1 dt=0.018000 poll_ms=18 resets=2 motion_rx_age_ms=119904
+[   467.7s] G state=2 id=05 addr=6B ctrl=60/17/57/77/03 fifo=00:00 wm=1 status=00 n=2174 valid=1010 hz=56 err=0 ovf=1 direct=0 cpu_us=219154 fault=4 a=0.870/0.018/0.538 w=3.73/0.09/2.36 pose=0 raw=1:7127/147/4411/239/6/151 axis=USB_REAR_NEG_X_FACE_POS_Z
+[   467.7s] G pose up=0.839/0.161/0.521 g=0.142/0.038 quiet=0.00 motion=2 mount=1/0 bias=4.114/1.248/0.218 batch=3 dt=0.018667 poll_ms=56 resets=2 motion_rx_age_ms=120944
+[   468.8s] G state=2 id=05 addr=6B ctrl=60/17/57/77/03 fifo=50:06 wm=1 status=00 n=2225 valid=1061 hz=51 err=0 ovf=1 direct=0 cpu_us=191501 fault=4 a=0.877/0.024/0.518 w=1.23/2.48/-2.03 pose=0 raw=1:7186/187/4210/181/109/-13 axis=USB_REAR_NEG_X_FACE_POS_Z
+[   468.8s] G pose up=0.864/0.143/0.483 g=0.124/0.006 quiet=0.00 motion=2 mount=1/0 bias=4.114/1.248/0.218 batch=3 dt=0.019333 poll_ms=58 resets=2 motion_rx_age_ms=121961
+[   469.8s] G state=2 id=05 addr=6B ctrl=60/17/57/77/03 fifo=00:00 wm=1 status=00 n=2278 valid=1114 hz=53 err=0 ovf=1 direct=0 cpu_us=202846 fault=4 a=0.875/-0.077/0.525 w=-5.20/1.19/5.17 pose=0 raw=1:7164/-627/4300/-333/76/331 axis=USB_REAR_NEG_X_FACE_POS_Z
+[   469.8s] G pose up=0.856/0.071/0.512 g=0.148/0.015 quiet=0.00 motion=2 mount=1/0 bias=4.114/1.248/0.218 batch=2 dt=0.022000 poll_ms=24 resets=2 motion_rx_age_ms=122961
+[   470.8s] G state=2 id=05 addr=6B ctrl=60/17/57/77/03 fifo=50:00 wm=1 status=00 n=2331 valid=1167 hz=53 err=0 ovf=1 direct=0 cpu_us=200340 fault=4 a=0.881/-0.059/0.540 w=5.88/1.06/0.42 pose=0 raw=1:7243/-542/4424/421/8/18 axis=USB_REAR_NEG_X_FACE_POS_Z
+[   470.8s] G pose up=0.856/0.095/0.509 g=0.157/0.011 quiet=0.00 motion=2 mount=1/0 bias=4.114/1.248/0.218 batch=3 dt=0.019000 poll_ms=57 resets=2 motion_rx_age_ms=123983
+[   471.8s] G state=2 id=05 addr=6B ctrl=60/17/57/77/03 fifo=50:06 wm=1 status=00 n=2382 valid=1218 hz=51 err=0 ovf=1 direct=0 cpu_us=190930 fault=4 a=0.885/-0.058/0.517 w=4.20/1.12/0.16 pose=0 raw=1:7239/-430/4282/269/76/-7 axis=USB_REAR_NEG_X_FACE_POS_Z
+[   471.8s] G pose up=0.867/0.092/0.491 g=0.152/0.010 quiet=0.00 motion=2 mount=1/0 bias=4.114/1.248/0.218 batch=3 dt=0.019000 poll_ms=20 resets=2 motion_rx_age_ms=124988
+[   472.8s] G state=2 id=05 addr=6B ctrl=60/17/57/77/03 fifo=00:00 wm=1 status=00 n=2436 valid=1272 hz=54 err=0 ovf=1 direct=0 cpu_us=197478 fault=4 a=0.881/-0.049/0.508 w=4.45/0.34/0.47 pose=0 raw=1:7214/-398/4162/285/22/30 axis=USB_REAR_NEG_X_FACE_POS_Z
+[   472.8s] G pose up=0.872/0.091/0.481 g=0.142/0.004 quiet=0.00 motion=2 mount=1/0 bias=4.114/1.248/0.218 batch=3 dt=0.019000 poll_ms=57 resets=2 motion_rx_age_ms=126026
+[   473.9s] G state=2 id=05 addr=6B ctrl=60/17/57/77/03 fifo=00:00 wm=1 status=00 n=2490 valid=1326 hz=54 err=0 ovf=1 direct=0 cpu_us=204059 fault=4 a=0.885/-0.049/0.507 w=4.47/0.91/-0.17 pose=0 raw=1:7252/-404/4150/286/58/-11 axis=USB_REAR_NEG_X_FACE_POS_Z
+[   473.9s] G pose up=0.875/0.096/0.475 g=0.149/0.002 quiet=0.00 motion=2 mount=1/0 bias=4.114/1.248/0.218 batch=3 dt=0.019000 poll_ms=57 resets=2 motion_rx_age_ms=127082
+[   474.0s] HEAP int free=82624 min=82180 largest=40948 | psram free=2512708 largest=2490356 | drop_ovs=0 drop_full=0 ack_drop=0
+[   474.2s] HEAPCHK n=213882 walks=70204 maxus=498 stMinB=15600
+[   474.9s] G state=2 id=05 addr=6B ctrl=60/17/57/77/03 fifo=00:00 wm=1 status=00 n=2544 valid=1380 hz=54 err=0 ovf=1 direct=0 cpu_us=216161 fault=4 a=0.884/-0.051/0.514 w=4.73/1.95/0.12 pose=0 raw=1:7245/-416/4209/303/125/8 axis=USB_REAR_NEG_X_FACE_POS_Z
+[   474.9s] G pose up=0.877/0.096/0.470 g=0.153/-0.009 quiet=0.00 motion=2 mount=1/0 bias=4.114/1.248/0.218 batch=1 dt=0.017000 poll_ms=17 resets=2 motion_rx_age_ms=128089
+[   475.9s] G state=2 id=05 addr=6B ctrl=60/17/57/77/03 fifo=50:06 wm=1 status=00 n=2599 valid=1435 hz=55 err=0 ovf=1 direct=0 cpu_us=209697 fault=4 a=0.880/-0.062/0.516 w=4.52/1.11/0.47 pose=0 raw=1:7220/-513/4245/283/69/47 axis=USB_REAR_NEG_X_FACE_POS_Z
+[   475.9s] G pose up=0.877/0.087/0.473 g=0.153/-0.012 quiet=0.00 motion=2 mount=1/0 bias=4.114/1.248/0.218 batch=3 dt=0.019000 poll_ms=57 resets=2 motion_rx_age_ms=129126
+[   476.4s] CLOCK sync time=13:23 date=2026-11-04
+[   476.9s] G state=2 id=05 addr=6B ctrl=60/17/57/77/03 fifo=00:00 wm=1 status=00 n=2653 valid=1489 hz=54 err=0 ovf=1 direct=0 cpu_us=212417 fault=4 a=0.881/-0.061/0.523 w=4.28/1.38/0.80 pose=0 raw=1:7216/-499/4281/274/88/51 axis=USB_REAR_NEG_X_FACE_POS_Z
+[   476.9s] G pose up=0.877/0.087/0.472 g=0.155/-0.019 quiet=0.00 motion=2 mount=1/0 bias=4.114/1.248/0.218 batch=1 dt=0.017000 poll_ms=17 resets=2 motion_rx_age_ms=130138
+[   478.0s] G state=2 id=05 addr=6B ctrl=60/17/57/77/03 fifo=00:00 wm=1 status=00 n=2708 valid=1544 hz=55 err=0 ovf=1 direct=0 cpu_us=210841 fault=4 a=0.882/-0.071/0.513 w=4.12/0.81/0.27 pose=0 raw=1:7229/-585/4206/264/52/17 axis=USB_REAR_NEG_X_FACE_POS_Z
+[   478.0s] G pose up=0.882/0.083/0.464 g=0.160/-0.019 quiet=0.00 motion=2 mount=1/0 bias=4.114/1.248/0.218 batch=3 dt=0.019000 poll_ms=57 resets=2 motion_rx_age_ms=131175
+[   479.0s] G state=2 id=05 addr=6B ctrl=60/17/57/77/03 fifo=00:00 wm=1 status=00 n=2760 valid=1596 hz=52 err=0 ovf=1 direct=0 cpu_us=201713 fault=4 a=0.938/-0.117/0.605 w=-14.48/-7.66/44.70 pose=0 raw=1:7685/-955/4958/-927/-490/2861 axis=USB_REAR_NEG_X_FACE_POS_Z
+[   479.0s] G pose up=0.880/0.092/0.466 g=0.231/-0.058 quiet=0.00 motion=2 mount=1/0 bias=4.114/1.248/0.218 batch=2 dt=0.021500 poll_ms=24 resets=2 motion_rx_age_ms=132177
+[   480.0s] G state=1 id=05 addr=6B ctrl=60/17/57/77/03 fifo=00:00 wm=1 status=00 n=2812 valid=1629 hz=52 err=0 ovf=1 direct=0 cpu_us=190588 fault=4 a=0.274/-0.847/0.526 w=334.73/115.98/182.73 pose=0 raw=1:2246/-6939/4310/21423/7423/11695 axis=USB_REAR_NEG_X_FACE_POS_Z
+[   480.0s] G pose up=0.966/-0.048/0.256 g=0.189/-0.010 quiet=0.00 motion=2 mount=1/0 bias=4.114/1.248/0.218 batch=3 dt=0.019333 poll_ms=58 resets=2 motion_rx_age_ms=133202
+[   481.0s] G state=1 id=05 addr=6B ctrl=60/17/57/77/03 fifo=00:00 wm=1 status=00 n=2865 valid=1629 hz=53 err=0 ovf=1 direct=0 cpu_us=209887 fault=4 a=0.901/0.029/0.510 w=153.11/75.56/-163.69 pose=0 raw=1:7381/240/4178/9799/4836/-10476 axis=USB_REAR_NEG_X_FACE_POS_Z
+[   481.0s] G pose up=0.966/-0.048/0.256 g=0.189/-0.010 quiet=0.00 motion=2 mount=1/0 bias=4.114/1.248/0.218 batch=1 dt=0.017000 poll_ms=17 resets=2 motion_rx_age_ms=134212
+[   482.0s] G state=1 id=05 addr=6B ctrl=60/17/57/77/03 fifo=00:00 wm=1 status=00 n=2920 valid=1629 hz=55 err=0 ovf=1 direct=0 cpu_us=209581 fault=4 a=0.454/0.043/0.951 w=-222.30/-218.06/54.53 pose=0 raw=1:3719/353/7788/-14227/-13956/3490 axis=USB_REAR_NEG_X_FACE_POS_Z
+[   482.0s] G pose up=0.966/-0.048/0.256 g=0.189/-0.010 quiet=0.00 motion=2 mount=1/0 bias=4.114/1.248/0.218 batch=3 dt=0.019000 poll_ms=57 resets=2 motion_rx_age_ms=135248
+[   483.1s] G state=1 id=05 addr=6B ctrl=60/17/57/77/03 fifo=00:00 wm=1 status=00 n=2973 valid=1629 hz=53 err=0 ovf=1 direct=0 cpu_us=210016 fault=4 a=0.749/-0.587/-0.328 w=121.19/233.53/-79.19 pose=0 raw=1:6136/-4810/-2688/7756/14946/-5068 axis=USB_REAR_NEG_X_FACE_POS_Z
+[   483.1s] G pose up=0.966/-0.048/0.256 g=0.189/-0.010 quiet=0.00 motion=2 mount=1/0 bias=4.114/1.248/0.218 batch=1 dt=0.017000 poll_ms=17 resets=2 motion_rx_age_ms=136254
+[   484.1s] G state=1 id=05 addr=6B ctrl=60/17/57/77/03 fifo=00:00 wm=1 status=00 n=3026 valid=1629 hz=53 err=0 ovf=1 direct=0 cpu_us=199209 fault=4 a=0.885/-0.090/0.632 w=86.78/-64.84/38.72 pose=0 raw=1:7249/-740/5181/5554/-4150/942 axis=USB_REAR_NEG_X_FACE_POS_Z
+[   484.1s] G pose up=0.966/-0.048/0.256 g=0.189/-0.010 quiet=0.00 motion=2 mount=1/0 bias=4.114/1.248/0.218 batch=3 dt=0.018667 poll_ms=56 resets=2 motion_rx_age_ms=137274
+[   484.2s] HEAP int free=82624 min=82180 largest=40948 | psram free=2512708 largest=2490356 | drop_ovs=0 drop_full=0 ack_drop=0
+[   484.2s] HEAPCHK n=216783 walks=70938 maxus=498 stMinB=15600
+[   485.1s] G state=1 id=05 addr=6B ctrl=60/17/57/77/03 fifo=00:00 wm=1 status=00 n=3080 valid=1629 hz=54 err=0 ovf=1 direct=0 cpu_us=211075 fault=4 a=0.791/0.012/0.637 w=-0.45/0.33/1.73 pose=0 raw=1:6481/96/5222/-29/21/111 axis=USB_REAR_NEG_X_FACE_POS_Z
+[   485.1s] G pose up=0.966/-0.048/0.256 g=0.189/-0.010 quiet=0.00 motion=2 mount=1/0 bias=4.114/1.248/0.218 batch=1 dt=0.017000 poll_ms=17 resets=2 motion_rx_age_ms=138284
+[   486.1s] G state=1 id=05 addr=6B ctrl=60/17/57/77/03 fifo=00:00 wm=1 status=00 n=3133 valid=1629 hz=53 err=0 ovf=1 direct=0 cpu_us=195401 fault=4 a=0.809/0.010/0.601 w=6.30/-22.23/16.08 pose=0 raw=1:6624/86/4923/403/-1423/1029 axis=USB_REAR_NEG_X_FACE_POS_Z
+[   486.1s] G pose up=0.966/-0.048/0.256 g=0.189/-0.010 quiet=0.00 motion=2 mount=1/0 bias=4.114/1.248/0.218 batch=3 dt=0.019000 poll_ms=57 resets=2 motion_rx_age_ms=139300
+[   487.1s] G state=1 id=05 addr=6B ctrl=60/17/57/77/03 fifo=00:00 wm=1 status=00 n=3185 valid=1629 hz=52 err=0 ovf=1 direct=0 cpu_us=200317 fault=4 a=0.842/-0.009/0.603 w=2.38/-4.75/-1.34 pose=0 raw=1:6897/-71/4938/152/-304/-86 axis=USB_REAR_NEG_X_FACE_POS_Z
+[   487.1s] G pose up=0.966/-0.048/0.256 g=0.189/-0.010 quiet=0.00 motion=2 mount=1/0 bias=4.114/1.248/0.218 batch=1 dt=0.017000 poll_ms=17 resets=2 motion_rx_age_ms=140314
+[   494.2s] HEAPCHK n=220624 walks=72149 maxus=504 stMinB=15600
+[   494.3s] HEAP int free=82564 min=82180 largest=40948 | psram free=2512708 largest=2490356 | drop_ovs=0 drop_full=0 ack_drop=0
+[   504.2s] HEAPCHK n=225904 walks=73908 maxus=504 stMinB=15600
+[   504.3s] HEAP int free=82564 min=82180 largest=40948 | psram free=2512708 largest=2490356 | drop_ovs=0 drop_full=0 ack_drop=0
+[   514.2s] HEAPCHK n=231184 walks=75667 maxus=504 stMinB=15600
+[   514.3s] HEAP int free=82564 min=82180 largest=40948 | psram free=2512708 largest=2490356 | drop_ovs=0 drop_full=0 ack_drop=0
+[   524.2s] HEAPCHK n=236458 walks=77425 maxus=504 stMinB=15600
+[   524.3s] HEAP int free=82564 min=82180 largest=40948 | psram free=2512708 largest=2490356 | drop_ovs=0 drop_full=0 ack_drop=0
+[   534.2s] HEAPCHK n=241738 walks=79187 maxus=504 stMinB=15600
+[   534.4s] HEAP int free=82564 min=82180 largest=40948 | psram free=2512708 largest=2490356 | drop_ovs=0 drop_full=0 ack_drop=0
+[   538.3s] CLOCK sync time=13:25 date=2026-11-04
+[   544.2s] HEAPCHK n=247024 walks=80947 maxus=504 stMinB=15600
+[   544.4s] HEAP int free=82564 min=82180 largest=40948 | psram free=2512708 largest=2490356 | drop_ovs=0 drop_full=0 ack_drop=0
+[   554.2s] HEAPCHK n=252304 walks=82709 maxus=504 stMinB=15600
+[   554.4s] HEAP int free=82564 min=82180 largest=40948 | psram free=2512708 largest=2490356 | drop_ovs=0 drop_full=0 ack_drop=0
+[   564.3s] HEAPCHK n=255094 walks=83639 maxus=506 stMinB=15600
+[   564.6s] HEAP int free=82564 min=81968 largest=40948 | psram free=2512708 largest=2490356 | drop_ovs=0 drop_full=0 ack_drop=0
+[   565.1s] G state=3 id=05 addr=6B ctrl=60/17/57/77/03 fifo=50:06 wm=1 status=00 n=3200 valid=1629 hz=15 err=0 ovf=1 direct=0 cpu_us=251652 fault=4 a=0.859/0.014/0.689 w=5.73/-4.20/-10.84 pose=0 raw=1:7710/-765/5516/-6488/-10212/-28805 axis=USB_REAR_NEG_X_FACE_POS_Z
+[   565.1s] G pose up=0.966/-0.048/0.256 g=0.189/-0.010 quiet=0.00 motion=2 mount=1/0 bias=4.114/1.248/0.218 batch=9 dt=0.017222 poll_ms=155 resets=2 motion_rx_age_ms=218339
+[   566.2s] G state=3 id=05 addr=6B ctrl=60/17/57/77/03 fifo=00:00 wm=1 status=00 n=3255 valid=1629 hz=55 err=0 ovf=1 direct=0 cpu_us=207558 fault=4 a=0.610/-0.024/0.818 w=4.55/1.14/0.66 pose=3 raw=1:4996/-195/6701/291/73/42 axis=USB_REAR_NEG_X_FACE_POS_Z
+[   566.2s] G pose up=0.966/-0.048/0.256 g=0.189/-0.010 quiet=0.00 motion=2 mount=1/0 bias=4.114/1.248/0.218 batch=3 dt=0.018667 poll_ms=56 resets=2 motion_rx_age_ms=219371
+[   567.2s] G state=3 id=05 addr=6B ctrl=60/17/57/77/03 fifo=00:00 wm=1 status=00 n=3308 valid=1629 hz=53 err=0 ovf=1 direct=0 cpu_us=210434 fault=4 a=0.613/-0.015/0.816 w=4.12/0.84/0.59 pose=4 raw=1:5022/-126/6686/264/54/38 axis=USB_REAR_NEG_X_FACE_POS_Z
+[   567.2s] G pose up=0.966/-0.048/0.256 g=0.189/-0.010 quiet=0.00 motion=2 mount=1/0 bias=4.114/1.248/0.218 batch=1 dt=0.017000 poll_ms=17 resets=2 motion_rx_age_ms=220381
+[   568.2s] G state=3 id=05 addr=6B ctrl=60/17/57/77/03 fifo=00:00 wm=1 status=00 n=3363 valid=1629 hz=55 err=0 ovf=1 direct=0 cpu_us=209892 fault=4 a=0.615/-0.015/0.820 w=3.95/0.62/0.59 pose=0 raw=1:5037/-126/6717/253/40/38 axis=USB_REAR_NEG_X_FACE_POS_Z
+[   568.2s] G pose up=0.966/-0.048/0.256 g=0.189/-0.010 quiet=0.00 motion=2 mount=1/0 bias=4.114/1.248/0.218 batch=3 dt=0.019000 poll_ms=57 resets=2 motion_rx_age_ms=221412
+[   569.2s] G state=3 id=05 addr=6B ctrl=60/17/57/77/03 fifo=00:00 wm=1 status=00 n=3416 valid=1629 hz=53 err=0 ovf=1 direct=0 cpu_us=207697 fault=4 a=0.611/-0.011/0.806 w=3.02/1.88/1.48 pose=0 raw=1:5006/-88/6605/193/120/95 axis=USB_REAR_NEG_X_FACE_POS_Z
+[   569.2s] G pose up=0.966/-0.048/0.256 g=0.189/-0.010 quiet=0.00 motion=2 mount=1/0 bias=4.114/1.248/0.218 batch=1 dt=0.017000 poll_ms=17 resets=2 motion_rx_age_ms=222425
+[   570.3s] G state=3 id=05 addr=6B ctrl=60/17/57/77/03 fifo=00:00 wm=1 status=00 n=3471 valid=1629 hz=55 err=0 ovf=1 direct=0 cpu_us=210108 fault=4 a=0.609/-0.023/0.823 w=3.77/1.23/0.19 pose=5 raw=1:4992/-188/6742/241/79/12 axis=USB_REAR_NEG_X_FACE_POS_Z
+[   570.3s] G pose up=0.966/-0.048/0.256 g=0.189/-0.010 quiet=0.00 motion=2 mount=1/0 bias=4.114/1.248/0.218 batch=3 dt=0.019000 poll_ms=57 resets=2 motion_rx_age_ms=223458
+[   571.3s] G state=3 id=05 addr=6B ctrl=60/17/57/77/03 fifo=00:00 wm=1 status=00 n=3523 valid=1629 hz=52 err=0 ovf=1 direct=0 cpu_us=198432 fault=4 a=0.619/-0.038/0.828 w=3.05/0.44/1.53 pose=1 raw=1:5071/-308/6784/195/28/98 axis=USB_REAR_NEG_X_FACE_POS_Z
+[   571.3s] G pose up=0.966/-0.048/0.256 g=0.189/-0.010 quiet=0.00 motion=2 mount=1/0 bias=4.114/1.248/0.218 batch=2 dt=0.022000 poll_ms=24 resets=2 motion_rx_age_ms=224467
+[   572.3s] G state=3 id=05 addr=6B ctrl=60/17/57/77/03 fifo=00:00 wm=1 status=00 n=3576 valid=1629 hz=53 err=0 ovf=1 direct=0 cpu_us=199477 fault=4 a=0.611/-0.011/0.816 w=4.62/1.38/0.67 pose=1 raw=1:5006/-90/6685/296/88/43 axis=USB_REAR_NEG_X_FACE_POS_Z
+[   572.3s] G pose up=0.966/-0.048/0.256 g=0.189/-0.010 quiet=0.00 motion=2 mount=1/0 bias=4.114/1.248/0.218 batch=3 dt=0.019000 poll_ms=57 resets=2 motion_rx_age_ms=225487
+[   573.3s] G state=3 id=05 addr=6B ctrl=60/17/57/77/03 fifo=00:00 wm=1 status=00 n=3629 valid=1629 hz=53 err=0 ovf=1 direct=0 cpu_us=207473 fault=4 a=0.620/-0.030/0.822 w=5.06/0.17/-1.11 pose=0 raw=1:5083/-245/6731/324/11/-71 axis=USB_REAR_NEG_X_FACE_POS_Z
+[   573.3s] G pose up=0.966/-0.048/0.256 g=0.189/-0.010 quiet=0.00 motion=2 mount=1/0 bias=4.114/1.248/0.218 batch=1 dt=0.017000 poll_ms=17 resets=2 motion_rx_age_ms=226499
+[   574.3s] HEAPCHK n=257933 walks=84373 maxus=506 stMinB=15600
+[   574.3s] G state=3 id=05 addr=6B ctrl=60/17/57/77/03 fifo=00:00 wm=1 status=00 n=3685 valid=1629 hz=56 err=0 ovf=1 direct=0 cpu_us=219034 fault=4 a=0.614/-0.016/0.814 w=4.97/1.09/0.72 pose=1 raw=1:5030/-135/6671/318/70/46 axis=USB_REAR_NEG_X_FACE_POS_Z
+[   574.3s] G pose up=0.966/-0.048/0.256 g=0.189/-0.010 quiet=0.00 motion=2 mount=1/0 bias=4.114/1.248/0.218 batch=3 dt=0.018333 poll_ms=55 resets=2 motion_rx_age_ms=227540
+[   574.9s] HEAP int free=82564 min=81968 largest=40948 | psram free=2512708 largest=2490356 | drop_ovs=0 drop_full=0 ack_drop=0
+[   575.3s] G state=3 id=05 addr=6B ctrl=60/17/57/77/03 fifo=00:00 wm=1 status=00 n=3737 valid=1629 hz=52 err=0 ovf=1 direct=0 cpu_us=200812 fault=4 a=0.617/-0.005/0.812 w=4.16/1.19/0.97 pose=2 raw=1:5053/-39/6654/266/76/62 axis=USB_REAR_NEG_X_FACE_POS_Z
+[   575.3s] G pose up=0.966/-0.048/0.256 g=0.189/-0.010 quiet=0.00 motion=2 mount=1/0 bias=4.114/1.248/0.218 batch=2 dt=0.021500 poll_ms=24 resets=2 motion_rx_age_ms=228540
+[   576.4s] G state=3 id=05 addr=6B ctrl=60/17/57/77/03 fifo=00:00 wm=1 status=00 n=3790 valid=1629 hz=53 err=0 ovf=1 direct=0 cpu_us=199235 fault=4 a=0.503/0.000/1.115 w=9.47/-29.72/34.86 pose=0 raw=1:4123/3/9135/606/-1902/2231 axis=USB_REAR_NEG_X_FACE_POS_Z
+[   576.4s] G pose up=0.966/-0.048/0.256 g=0.189/-0.010 quiet=0.00 motion=2 mount=1/0 bias=4.114/1.248/0.218 batch=3 dt=0.019333 poll_ms=58 resets=2 motion_rx_age_ms=229562
+[   577.4s] G state=3 id=05 addr=6B ctrl=60/17/57/77/03 fifo=00:00 wm=1 status=00 n=3843 valid=1629 hz=53 err=0 ovf=1 direct=0 cpu_us=207098 fault=4 a=0.093/-0.601/0.811 w=43.47/-57.11/92.19 pose=0 raw=1:764/-4920/6647/2782/-3655/5900 axis=USB_REAR_NEG_X_FACE_POS_Z
+[   577.4s] G pose up=0.966/-0.048/0.256 g=0.189/-0.010 quiet=0.00 motion=2 mount=1/0 bias=4.114/1.248/0.218 batch=1 dt=0.017000 poll_ms=17 resets=2 motion_rx_age_ms=230575
+[   578.4s] G state=3 id=05 addr=6B ctrl=60/17/57/77/03 fifo=00:00 wm=1 status=00 n=3898 valid=1629 hz=55 err=0 ovf=1 direct=0 cpu_us=209392 fault=4 a=-0.170/-1.126/1.160 w=136.45/19.86/56.78 pose=0 raw=1:-1394/-9224/9500/8733/1271/3634 axis=USB_REAR_NEG_X_FACE_POS_Z
+[   578.4s] G pose up=0.966/-0.048/0.256 g=0.189/-0.010 quiet=0.00 motion=2 mount=1/0 bias=4.114/1.248/0.218 batch=3 dt=0.019000 poll_ms=57 resets=2 motion_rx_age_ms=231607
+[   579.4s] G state=3 id=05 addr=6B ctrl=60/17/57/77/03 fifo=00:00 wm=1 status=00 n=3951 valid=1629 hz=53 err=0 ovf=1 direct=0 cpu_us=206977 fault=4 a=-0.005/-0.020/1.008 w=4.95/-2.03/0.56 pose=1 raw=1:-45/-161/8255/317/-130/36 axis=USB_REAR_NEG_X_FACE_POS_Z
+[   579.4s] G pose up=0.966/-0.048/0.256 g=0.189/-0.010 quiet=0.00 motion=2 mount=1/0 bias=4.114/1.248/0.218 batch=1 dt=0.017000 poll_ms=17 resets=2 motion_rx_age_ms=232620
+[   580.4s] G state=3 id=05 addr=6B ctrl=60/17/57/77/03 fifo=00:00 wm=1 status=00 n=4006 valid=1629 hz=55 err=0 ovf=1 direct=0 cpu_us=209884 fault=4 a=-0.008/-0.020/1.006 w=4.20/0.86/0.39 pose=25 raw=1:-63/-163/8242/269/55/25 axis=USB_REAR_NEG_X_FACE_POS_Z
+[   580.4s] G pose up=0.966/-0.048/0.256 g=0.189/-0.010 quiet=0.00 motion=2 mount=1/0 bias=4.114/1.248/0.218 batch=3 dt=0.019000 poll_ms=57 resets=2 motion_rx_age_ms=233654
+[   581.5s] G state=3 id=05 addr=6B ctrl=60/17/57/77/03 fifo=00:00 wm=1 status=00 n=4059 valid=1629 hz=53 err=0 ovf=1 direct=0 cpu_us=207507 fault=4 a=-0.007/-0.019/1.006 w=4.16/0.77/0.03 pose=78 raw=1:-54/-159/8245/266/49/2 axis=USB_REAR_NEG_X_FACE_POS_Z
+[   581.5s] G pose up=0.966/-0.048/0.256 g=0.189/-0.010 quiet=0.00 motion=2 mount=1/0 bias=4.114/1.248/0.218 batch=1 dt=0.017000 poll_ms=17 resets=2 motion_rx_age_ms=234666
+[   582.5s] G state=3 id=05 addr=6B ctrl=60/17/57/77/03 fifo=00:00 wm=1 status=00 n=4113 valid=1629 hz=54 err=0 ovf=1 direct=0 cpu_us=197052 fault=4 a=-0.006/-0.019/1.007 w=4.22/1.05/0.12 pose=132 raw=1:-51/-155/8246/270/67/8 axis=USB_REAR_NEG_X_FACE_POS_Z
+[   582.5s] G pose up=0.966/-0.048/0.256 g=0.189/-0.010 quiet=0.00 motion=2 mount=1/0 bias=4.114/1.248/0.218 batch=3 dt=0.018667 poll_ms=56 resets=2 motion_rx_age_ms=235684
+[   583.5s] G state=2 id=05 addr=6B ctrl=60/17/57/77/03 fifo=00:00 wm=1 status=00 n=4167 valid=1648 hz=54 err=0 ovf=1 direct=0 cpu_us=216645 fault=4 a=-0.005/-0.019/1.007 w=4.19/0.84/0.05 pose=0 raw=1:-42/-158/8250/268/54/3 axis=USB_REAR_NEG_X_FACE_POS_Z
+[   583.5s] G pose up=-0.007/-0.020/1.000 g=-0.001/0.002 quiet=0.00 motion=2 mount=1/0 bias=4.234/0.839/0.267 batch=1 dt=0.017000 poll_ms=17 resets=2 motion_rx_age_ms=236697
+[   584.3s] HEAPCHK n=260855 walks=85114 maxus=506 stMinB=15600
+[   584.5s] G state=2 id=05 addr=6B ctrl=60/17/57/77/03 fifo=00:00 wm=1 status=00 n=4222 valid=1703 hz=55 err=0 ovf=1 direct=0 cpu_us=210728 fault=4 a=-0.004/-0.020/1.006 w=4.22/0.98/0.22 pose=0 raw=1:-36/-163/8242/269/60/14 axis=USB_REAR_NEG_X_FACE_POS_Z
+[   584.5s] G pose up=-0.007/-0.019/1.000 g=0.001/0.003 quiet=0.00 motion=2 mount=1/0 bias=4.234/0.839/0.267 batch=3 dt=0.019000 poll_ms=57 resets=2 motion_rx_age_ms=237731
+[   585.0s] HEAP int free=82564 min=81968 largest=40948 | psram free=2512708 largest=2490356 | drop_ovs=0 drop_full=0 ack_drop=0
+[   585.5s] G state=2 id=05 addr=6B ctrl=60/17/57/77/03 fifo=00:00 wm=1 status=00 n=4275 valid=1756 hz=53 err=0 ovf=1 direct=0 cpu_us=199997 fault=4 a=-0.016/-0.010/1.001 w=4.34/8.53/-1.20 pose=0 raw=1:-135/-81/8203/278/546/-77 axis=USB_REAR_NEG_X_FACE_POS_Z
+[   585.5s] G pose up=0.001/-0.023/1.000 g=-0.013/-0.017 quiet=0.00 motion=2 mount=1/0 bias=4.234/0.839/0.267 batch=1 dt=0.017000 poll_ms=17 resets=2 motion_rx_age_ms=238741
+[   586.6s] G state=1 id=05 addr=6B ctrl=60/17/57/77/03 fifo=00:00 wm=1 status=00 n=4330 valid=1779 hz=55 err=0 ovf=1 direct=0 cpu_us=210106 fault=4 a=0.193/0.070/-0.972 w=-97.03/3.72/-61.80 pose=0 raw=1:1580/577/-7964/-6210/238/-3955 axis=USB_REAR_NEG_X_FACE_POS_Z
+[   586.6s] G pose up=0.016/-0.612/0.791 g=0.048/0.004 quiet=0.00 motion=2 mount=1/0 bias=4.234/0.839/0.267 batch=3 dt=0.019000 poll_ms=57 resets=2 motion_rx_age_ms=239775
+[   587.6s] G state=1 id=05 addr=6B ctrl=60/17/57/77/03 fifo=00:00 wm=1 status=00 n=4383 valid=1779 hz=53 err=0 ovf=1 direct=0 cpu_us=207172 fault=4 a=-0.774/-0.186/-0.566 w=-107.08/95.23/-36.86 pose=0 raw=1:-6343/-1526/-4637/-6853/6095/-2359 axis=USB_REAR_NEG_X_FACE_POS_Z
+[   587.6s] G pose up=0.016/-0.612/0.791 g=0.048/0.004 quiet=0.00 motion=2 mount=1/0 bias=4.234/0.839/0.267 batch=1 dt=0.017000 poll_ms=17 resets=2 motion_rx_age_ms=240787
+[   588.6s] G state=1 id=05 addr=6B ctrl=60/17/57/77/03 fifo=00:00 wm=1 status=00 n=4439 valid=1779 hz=56 err=0 ovf=1 direct=0 cpu_us=211653 fault=4 a=0.078/0.702/0.071 w=-288.89/195.86/229.08 pose=0 raw=1:643/5750/579/-18489/12535/14661 axis=USB_REAR_NEG_X_FACE_POS_Z
+[   588.6s] G pose up=0.016/-0.612/0.791 g=0.048/0.004 quiet=0.00 motion=2 mount=1/0 bias=4.234/0.839/0.267 batch=3 dt=0.019333 poll_ms=58 resets=2 motion_rx_age_ms=241821
+[   589.6s] G state=1 id=05 addr=6B ctrl=60/17/57/77/03 fifo=00:00 wm=1 status=00 n=4492 valid=1779 hz=53 err=0 ovf=1 direct=0 cpu_us=207134 fault=4 a=0.739/0.172/0.694 w=134.83/-87.48/16.88 pose=0 raw=1:6052/1412/5686/8629/-5599/1080 axis=USB_REAR_NEG_X_FACE_POS_Z
+[   589.6s] G pose up=0.016/-0.612/0.791 g=0.048/0.004 quiet=0.00 motion=2 mount=1/0 bias=4.234/0.839/0.267 batch=1 dt=0.017000 poll_ms=17 resets=2 motion_rx_age_ms=242832
+[   590.6s] G state=1 id=05 addr=6B ctrl=60/17/57/77/03 fifo=50:06 wm=1 status=00 n=4545 valid=1779 hz=53 err=0 ovf=1 direct=0 cpu_us=199328 fault=4 a=0.062/-0.242/-0.745 w=28.16/-290.80/-30.41 pose=0 raw=1:-136/-1690/-6410/4090/-19888/-2642 axis=USB_REAR_NEG_X_FACE_POS_Z
+[   590.7s] G pose up=0.016/-0.612/0.791 g=0.048/0.004 quiet=0.00 motion=2 mount=1/0 bias=4.234/0.839/0.267 batch=3 dt=0.018667 poll_ms=56 resets=2 motion_rx_age_ms=243854
+[   591.7s] G state=1 id=05 addr=6B ctrl=60/17/57/77/03 fifo=00:00 wm=1 status=00 n=4599 valid=1779 hz=54 err=0 ovf=1 direct=0 cpu_us=210977 fault=4 a=0.354/0.224/1.014 w=2.69/-161.42/-7.33 pose=0 raw=1:2900/1838/8303/172/-10331/-469 axis=USB_REAR_NEG_X_FACE_POS_Z
+[   591.7s] G pose up=0.016/-0.612/0.791 g=0.048/0.004 quiet=0.00 motion=2 mount=1/0 bias=4.234/0.839/0.267 batch=2 dt=0.022000 poll_ms=24 resets=2 motion_rx_age_ms=244860
+[   592.7s] G state=1 id=05 addr=6B ctrl=60/17/57/77/03 fifo=00:00 wm=1 status=00 n=4652 valid=1779 hz=53 err=0 ovf=1 direct=0 cpu_us=199212 fault=4 a=0.891/-0.417/-0.469 w=-359.28/-34.95/25.98 pose=0 raw=1:7302/-3416/-4098/-19981/-1365/799 axis=USB_REAR_NEG_X_FACE_POS_Z
+[   592.7s] G pose up=0.016/-0.612/0.791 g=0.048/0.004 quiet=0.00 motion=2 mount=1/0 bias=4.234/0.839/0.267 batch=3 dt=0.018667 poll_ms=56 resets=2 motion_rx_age_ms=245881
+[   593.7s] G state=1 id=05 addr=6B ctrl=60/17/57/77/03 fifo=00:00 wm=1 status=00 n=4706 valid=1779 hz=54 err=0 ovf=1 direct=0 cpu_us=210988 fault=4 a=0.963/-0.224/-0.294 w=16.89/7.08/6.34 pose=0 raw=1:7886/-1839/-2406/1081/453/406 axis=USB_REAR_NEG_X_FACE_POS_Z
+[   593.7s] G pose up=0.016/-0.612/0.791 g=0.048/0.004 quiet=0.00 motion=2 mount=1/0 bias=4.234/0.839/0.267 batch=2 dt=0.022000 poll_ms=24 resets=2 motion_rx_age_ms=246887
+[   594.3s] HEAPCHK n=263784 walks=85861 maxus=506 stMinB=15600
+[   594.7s] G state=1 id=05 addr=6B ctrl=60/17/57/77/03 fifo=00:00 wm=1 status=00 n=4759 valid=1779 hz=53 err=0 ovf=1 direct=0 cpu_us=199152 fault=4 a=0.928/-0.294/-0.309 w=7.50/5.88/0.25 pose=0 raw=1:7602/-2411/-2531/480/376/16 axis=USB_REAR_NEG_X_FACE_POS_Z
+[   594.7s] G pose up=0.016/-0.612/0.791 g=0.048/0.004 quiet=0.00 motion=2 mount=1/0 bias=4.234/0.839/0.267 batch=3 dt=0.019000 poll_ms=57 resets=2 motion_rx_age_ms=247908
+[   595.2s] HEAP int free=82564 min=81968 largest=40948 | psram free=2512708 largest=2490356 | drop_ovs=0 drop_full=0 ack_drop=0
+[   595.7s] G state=1 id=05 addr=6B ctrl=60/17/57/77/03 fifo=00:00 wm=1 status=00 n=4812 valid=1779 hz=53 err=0 ovf=1 direct=0 cpu_us=207114 fault=4 a=0.725/0.457/0.287 w=104.28/50.33/157.31 pose=0 raw=1:5941/3743/2354/6674/3221/10068 axis=USB_REAR_NEG_X_FACE_POS_Z
+[   595.7s] G pose up=0.016/-0.612/0.791 g=0.048/0.004 quiet=0.00 motion=2 mount=1/0 bias=4.234/0.839/0.267 batch=1 dt=0.017000 poll_ms=17 resets=2 motion_rx_age_ms=248922
+[   596.7s] G state=1 id=05 addr=6B ctrl=60/17/57/77/03 fifo=00:00 wm=1 status=00 n=4867 valid=1779 hz=55 err=0 ovf=1 direct=0 cpu_us=209438 fault=4 a=0.632/0.564/0.482 w=13.73/-11.30/51.62 pose=0 raw=1:5174/4620/3948/879/-723/3304 axis=USB_REAR_NEG_X_FACE_POS_Z
+[   596.8s] G pose up=0.016/-0.612/0.791 g=0.048/0.004 quiet=0.00 motion=2 mount=1/0 bias=4.234/0.839/0.267 batch=3 dt=0.019000 poll_ms=57 resets=2 motion_rx_age_ms=249954
+[   597.8s] G state=1 id=05 addr=6B ctrl=60/17/57/77/03 fifo=00:00 wm=1 status=00 n=4920 valid=1779 hz=53 err=0 ovf=1 direct=0 cpu_us=206971 fault=4 a=0.582/-0.323/-0.924 w=339.25/119.03/29.98 pose=0 raw=1:4769/-2643/-7571/21712/7618/1919 axis=USB_REAR_NEG_X_FACE_POS_Z
+[   597.8s] G pose up=0.016/-0.612/0.791 g=0.048/0.004 quiet=0.00 motion=2 mount=1/0 bias=4.234/0.839/0.267 batch=1 dt=0.017000 poll_ms=17 resets=2 motion_rx_age_ms=250966
+[   598.8s] G state=1 id=05 addr=6B ctrl=60/17/57/77/03 fifo=00:00 wm=1 status=00 n=4976 valid=1779 hz=56 err=0 ovf=1 direct=0 cpu_us=218852 fault=4 a=0.615/0.021/0.734 w=-128.53/-85.34/-8.84 pose=0 raw=1:5040/170/6015/-8226/-5462/-566 axis=USB_REAR_NEG_X_FACE_POS_Z
+[   598.8s] G pose up=0.016/-0.612/0.791 g=0.048/0.004 quiet=0.00 motion=2 mount=1/0 bias=4.234/0.839/0.267 batch=3 dt=0.018667 poll_ms=56 resets=2 motion_rx_age_ms=252006
+[   600.3s] CLOCK sync time=13:26 date=2026-11-04
+[   601.3s] PWR short-press: screen off
+[   603.4s] PWR short-press: screen on
+[   604.3s] HEAPCHK n=266869 walks=86878 maxus=506 stMinB=15600
+[   605.0s] PWR short-press: screen off
+[   605.5s] HEAP int free=82564 min=81968 largest=40948 | psram free=2512708 largest=2490356 | drop_ovs=0 drop_full=0 ack_drop=0
+[   608.3s] PWR short-press: screen on
+[   611.8s] PWR short-press: screen off
+[   613.2s] PWR short-press: screen on
+[   614.3s] HEAPCHK n=270617 walks=88374 maxus=506 stMinB=15600
+[   615.9s] HEAP int free=82564 min=81968 largest=40948 | psram free=2512708 largest=2490356 | drop_ovs=0 drop_full=0 ack_drop=0
+[   618.7s] G state=3 id=05 addr=6B ctrl=60/17/57/77/03 fifo=50:06 wm=1 status=00 n=5025 valid=1779 hz=49 err=0 ovf=1 direct=0 cpu_us=340345 fault=4 a=0.831/-0.172/0.591 w=37.89/-11.42/7.64 pose=0 raw=1:7640/-2639/5935/-17529/-26144/-27326 axis=USB_REAR_NEG_X_FACE_POS_Z
+[   618.7s] G pose up=0.016/-0.612/0.791 g=0.048/0.004 quiet=0.00 motion=2 mount=1/0 bias=4.234/0.839/0.267 batch=1 dt=0.025000 poll_ms=25 resets=2 motion_rx_age_ms=271937
+[   619.8s] G state=3 id=05 addr=6B ctrl=60/17/57/77/03 fifo=00:00 wm=1 status=00 n=5078 valid=1779 hz=53 err=0 ovf=1 direct=0 cpu_us=182448 fault=4 a=0.466/0.188/0.858 w=-75.52/0.22/-42.48 pose=0 raw=1:3815/1537/7026/-4833/14/-2719 axis=USB_REAR_NEG_X_FACE_POS_Z
+[   619.8s] G pose up=0.016/-0.612/0.791 g=0.048/0.004 quiet=0.00 motion=2 mount=1/0 bias=4.234/0.839/0.267 batch=2 dt=0.022500 poll_ms=45 resets=2 motion_rx_age_ms=272971
+[   624.4s] HEAPCHK n=273337 walks=89261 maxus=506 stMinB=15600
+[   624.9s] G state=3 id=05 addr=6B ctrl=60/17/57/77/03 fifo=50:06 wm=1 status=00 n=5080 valid=1779 hz=2 err=0 ovf=1 direct=0 cpu_us=149577 fault=4 a=0.436/0.107/0.951 w=-90.36/-24.20/-56.75 pose=0 raw=1:4686/-980/7957/32767/32767/32767 axis=USB_REAR_NEG_X_FACE_POS_Z
+[   624.9s] G pose up=0.016/-0.612/0.791 g=0.048/0.004 quiet=0.00 motion=2 mount=1/0 bias=4.234/0.839/0.267 batch=1 dt=0.018000 poll_ms=18 resets=2 motion_rx_age_ms=278119
+[   625.9s] G state=3 id=05 addr=6B ctrl=60/17/57/77/03 fifo=00:00 wm=1 status=00 n=5135 valid=1779 hz=55 err=0 ovf=1 direct=0 cpu_us=207483 fault=4 a=0.002/-0.019/1.006 w=4.28/1.52/0.06 pose=1 raw=1:15/-158/8239/274/97/4 axis=USB_REAR_NEG_X_FACE_POS_Z
+[   625.9s] G pose up=0.016/-0.612/0.791 g=0.048/0.004 quiet=0.00 motion=2 mount=1/0 bias=4.234/0.839/0.267 batch=3 dt=0.018667 poll_ms=56 resets=2 motion_rx_age_ms=279153
+[   626.1s] HEAP int free=82564 min=81968 largest=40948 | psram free=2512708 largest=2490356 | drop_ovs=0 drop_full=0 ack_drop=0
+[   627.0s] G state=3 id=05 addr=6B ctrl=60/17/57/77/03 fifo=00:00 wm=1 status=00 n=5188 valid=1779 hz=53 err=0 ovf=1 direct=0 cpu_us=210158 fault=4 a=0.011/-0.018/1.006 w=4.14/1.12/-0.36 pose=5 raw=1:88/-146/8243/265/72/-23 axis=USB_REAR_NEG_X_FACE_POS_Z
+[   627.0s] G pose up=0.016/-0.612/0.791 g=0.048/0.004 quiet=0.00 motion=2 mount=1/0 bias=4.234/0.839/0.267 batch=1 dt=0.017000 poll_ms=17 resets=2 motion_rx_age_ms=280159
+[   628.0s] G state=3 id=05 addr=6B ctrl=60/17/57/77/03 fifo=00:00 wm=1 status=00 n=5244 valid=1779 hz=56 err=0 ovf=1 direct=0 cpu_us=219245 fault=4 a=0.011/-0.018/1.007 w=3.97/1.42/0.22 pose=35 raw=1:92/-144/8248/254/91/14 axis=USB_REAR_NEG_X_FACE_POS_Z
+[   628.0s] G pose up=0.016/-0.612/0.791 g=0.048/0.004 quiet=0.00 motion=2 mount=1/0 bias=4.234/0.839/0.267 batch=3 dt=0.018667 poll_ms=56 resets=2 motion_rx_age_ms=281198
+[   629.0s] G state=3 id=05 addr=6B ctrl=60/17/57/77/03 fifo=00:00 wm=1 status=00 n=5297 valid=1779 hz=53 err=0 ovf=1 direct=0 cpu_us=210175 fault=4 a=0.014/-0.017/1.007 w=4.25/0.38/0.27 pose=1 raw=1:118/-138/8249/272/24/17 axis=USB_REAR_NEG_X_FACE_POS_Z
+[   629.0s] G pose up=0.016/-0.612/0.791 g=0.048/0.004 quiet=0.00 motion=2 mount=1/0 bias=4.234/0.839/0.267 batch=1 dt=0.017000 poll_ms=17 resets=2 motion_rx_age_ms=282203
+[   630.0s] G state=3 id=05 addr=6B ctrl=60/17/57/77/03 fifo=00:00 wm=1 status=00 n=5350 valid=1779 hz=53 err=0 ovf=1 direct=0 cpu_us=199475 fault=4 a=0.016/-0.017/1.006 w=3.91/0.80/-0.53 pose=22 raw=1:131/-138/8238/254/47/-31 axis=USB_REAR_NEG_X_FACE_POS_Z
+[   630.0s] G pose up=0.016/-0.612/0.791 g=0.048/0.004 quiet=0.00 motion=2 mount=1/0 bias=4.234/0.839/0.267 batch=3 dt=0.018667 poll_ms=56 resets=2 motion_rx_age_ms=283223
+[   631.0s] G state=3 id=05 addr=6B ctrl=60/17/57/77/03 fifo=00:00 wm=1 status=00 n=5404 valid=1779 hz=54 err=0 ovf=1 direct=0 cpu_us=211355 fault=4 a=0.017/-0.016/1.006 w=3.88/0.97/0.02 pose=76 raw=1:137/-133/8245/248/62/1 axis=USB_REAR_NEG_X_FACE_POS_Z
+[   631.0s] G pose up=0.016/-0.612/0.791 g=0.048/0.004 quiet=0.00 motion=2 mount=1/0 bias=4.234/0.839/0.267 batch=1 dt=0.017000 poll_ms=17 resets=2 motion_rx_age_ms=284232
+[   632.0s] G state=3 id=05 addr=6B ctrl=60/17/57/77/03 fifo=00:00 wm=1 status=00 n=5457 valid=1779 hz=53 err=0 ovf=1 direct=0 cpu_us=199512 fault=4 a=0.018/-0.016/1.006 w=3.77/0.69/0.14 pose=6 raw=1:146/-130/8241/250/45/13 axis=USB_REAR_NEG_X_FACE_POS_Z
+[   632.0s] G pose up=0.016/-0.612/0.791 g=0.048/0.004 quiet=0.00 motion=2 mount=1/0 bias=4.234/0.839/0.267 batch=3 dt=0.018667 poll_ms=56 resets=2 motion_rx_age_ms=285252
+[   633.1s] G state=3 id=05 addr=6B ctrl=60/17/57/77/03 fifo=00:00 wm=1 status=00 n=5511 valid=1779 hz=54 err=0 ovf=1 direct=0 cpu_us=211315 fault=4 a=0.019/-0.016/1.006 w=3.97/0.83/0.11 pose=27 raw=1:153/-129/8245/254/53/7 axis=USB_REAR_NEG_X_FACE_POS_Z
+[   633.1s] G pose up=0.016/-0.612/0.791 g=0.048/0.004 quiet=0.00 motion=2 mount=1/0 bias=4.234/0.839/0.267 batch=2 dt=0.021500 poll_ms=24 resets=2 motion_rx_age_ms=286258
+[   634.1s] G state=3 id=05 addr=6B ctrl=60/17/57/77/03 fifo=00:00 wm=1 status=00 n=5564 valid=1779 hz=53 err=0 ovf=1 direct=0 cpu_us=199495 fault=4 a=0.019/-0.017/1.006 w=3.83/1.08/0.03 pose=0 raw=1:159/-136/8244/245/69/2 axis=USB_REAR_NEG_X_FACE_POS_Z
+[   634.1s] G pose up=0.016/-0.612/0.791 g=0.048/0.004 quiet=0.00 motion=2 mount=1/0 bias=4.234/0.839/0.267 batch=3 dt=0.019333 poll_ms=58 resets=2 motion_rx_age_ms=287279
+[   634.4s] HEAPCHK n=276134 walks=89972 maxus=507 stMinB=15600
+[   635.1s] G state=3 id=05 addr=6B ctrl=60/17/57/77/03 fifo=00:00 wm=1 status=00 n=5617 valid=1779 hz=53 err=0 ovf=1 direct=0 cpu_us=207466 fault=4 a=0.019/-0.016/1.006 w=4.08/0.42/0.27 pose=19 raw=1:156/-128/8242/261/27/17 axis=USB_REAR_NEG_X_FACE_POS_Z
+[   635.1s] G pose up=0.016/-0.612/0.791 g=0.048/0.004 quiet=0.00 motion=2 mount=1/0 bias=4.234/0.839/0.267 batch=1 dt=0.017000 poll_ms=17 resets=2 motion_rx_age_ms=288290
+[   636.1s] G state=3 id=05 addr=6B ctrl=60/17/57/77/03 fifo=00:00 wm=1 status=00 n=5672 valid=1779 hz=55 err=0 ovf=1 direct=0 cpu_us=209906 fault=4 a=0.020/-0.015/1.006 w=4.00/0.77/0.06 pose=74 raw=1:161/-126/8241/256/49/4 axis=USB_REAR_NEG_X_FACE_POS_Z
+[   636.1s] G pose up=0.016/-0.612/0.791 g=0.048/0.004 quiet=0.00 motion=2 mount=1/0 bias=4.234/0.839/0.267 batch=3 dt=0.019000 poll_ms=57 resets=2 motion_rx_age_ms=289324
+[   636.3s] HEAP int free=82564 min=81968 largest=40948 | psram free=2512708 largest=2490356 | drop_ovs=0 drop_full=0 ack_drop=0
+[   637.1s] G state=3 id=05 addr=6B ctrl=60/17/57/77/03 fifo=00:00 wm=1 status=00 n=5725 valid=1779 hz=53 err=0 ovf=1 direct=0 cpu_us=207431 fault=4 a=0.016/-0.017/1.007 w=3.94/0.64/-0.48 pose=0 raw=1:133/-136/8250/252/41/-31 axis=USB_REAR_NEG_X_FACE_POS_Z
+[   637.1s] G pose up=0.016/-0.612/0.791 g=0.048/0.004 quiet=0.00 motion=2 mount=1/0 bias=4.234/0.839/0.267 batch=1 dt=0.017000 poll_ms=17 resets=2 motion_rx_age_ms=290336
+[   638.1s] G state=3 id=05 addr=6B ctrl=60/17/57/77/03 fifo=00:00 wm=1 status=00 n=5779 valid=1779 hz=54 err=0 ovf=1 direct=0 cpu_us=196907 fault=4 a=0.025/-0.013/1.007 w=4.09/0.66/0.44 pose=2 raw=1:201/-110/8246/262/42/28 axis=USB_REAR_NEG_X_FACE_POS_Z
+[   638.1s] G pose up=0.016/-0.612/0.791 g=0.048/0.004 quiet=0.00 motion=2 mount=1/0 bias=4.234/0.839/0.267 batch=3 dt=0.019000 poll_ms=57 resets=2 motion_rx_age_ms=291353
+[   639.2s] G state=3 id=05 addr=6B ctrl=60/17/57/77/03 fifo=00:00 wm=1 status=00 n=5832 valid=1779 hz=53 err=0 ovf=1 direct=0 cpu_us=207464 fault=4 a=0.024/-0.014/1.006 w=3.86/0.50/0.11 pose=0 raw=1:200/-111/8243/247/32/7 axis=USB_REAR_NEG_X_FACE_POS_Z
+[   639.2s] G pose up=0.016/-0.612/0.791 g=0.048/0.004 quiet=0.00 motion=2 mount=1/0 bias=4.234/0.839/0.267 batch=1 dt=0.017000 poll_ms=17 resets=2 motion_rx_age_ms=292365
+[   640.2s] G state=3 id=05 addr=6B ctrl=60/17/57/77/03 fifo=00:00 wm=1 status=00 n=5888 valid=1779 hz=56 err=0 ovf=1 direct=0 cpu_us=219251 fault=4 a=0.026/-0.014/1.007 w=3.78/0.66/0.28 pose=22 raw=1:212/-116/8248/242/42/18 axis=USB_REAR_NEG_X_FACE_POS_Z
+[   640.2s] G pose up=0.016/-0.612/0.791 g=0.048/0.004 quiet=0.00 motion=2 mount=1/0 bias=4.234/0.839/0.267 batch=3 dt=0.019667 poll_ms=59 resets=2 motion_rx_age_ms=293406
+[   641.2s] G state=3 id=05 addr=6B ctrl=60/17/57/77/03 fifo=00:00 wm=1 status=00 n=5941 valid=1779 hz=53 err=0 ovf=1 direct=0 cpu_us=210206 fault=4 a=0.027/-0.014/1.007 w=4.02/0.80/-0.02 pose=5 raw=1:222/-115/8249/257/51/-1 axis=USB_REAR_NEG_X_FACE_POS_Z
+[   641.2s] G pose up=0.016/-0.612/0.791 g=0.048/0.004 quiet=0.00 motion=2 mount=1/0 bias=4.234/0.839/0.267 batch=1 dt=0.017000 poll_ms=17 resets=2 motion_rx_age_ms=294411
+[   642.2s] G state=3 id=05 addr=6B ctrl=60/17/57/77/03 fifo=00:00 wm=1 status=00 n=5994 valid=1779 hz=53 err=0 ovf=1 direct=0 cpu_us=195693 fault=4 a=0.028/-0.015/1.007 w=3.81/1.41/0.52 pose=2 raw=1:226/-124/8246/244/90/33 axis=USB_REAR_NEG_X_FACE_POS_Z
+[   642.2s] G pose up=0.016/-0.612/0.791 g=0.048/0.004 quiet=0.00 motion=2 mount=1/0 bias=4.234/0.839/0.267 batch=3 dt=0.019000 poll_ms=57 resets=2 motion_rx_age_ms=295427
+[   643.2s] G state=3 id=05 addr=6B ctrl=60/17/57/77/03 fifo=00:00 wm=1 status=00 n=6047 valid=1779 hz=53 err=0 ovf=1 direct=0 cpu_us=207401 fault=4 a=0.032/-0.015/1.006 w=3.81/0.23/-0.06 pose=2 raw=1:262/-119/8245/244/15/-4 axis=USB_REAR_NEG_X_FACE_POS_Z
+[   643.2s] G pose up=0.016/-0.612/0.791 g=0.048/0.004 quiet=0.00 motion=2 mount=1/0 bias=4.234/0.839/0.267 batch=1 dt=0.017000 poll_ms=17 resets=2 motion_rx_age_ms=296439
+[   644.3s] G state=3 id=05 addr=6B ctrl=60/17/57/77/03 fifo=00:00 wm=1 status=00 n=6100 valid=1779 hz=53 err=0 ovf=1 direct=0 cpu_us=199222 fault=4 a=-0.038/-0.076/1.005 w=5.89/-6.80/12.11 pose=0 raw=1:-372/-547/8259/422/-255/535 axis=USB_REAR_NEG_X_FACE_POS_Z
+[   644.3s] G pose up=0.016/-0.612/0.791 g=0.048/0.004 quiet=0.00 motion=2 mount=1/0 bias=4.234/0.839/0.267 batch=3 dt=0.019000 poll_ms=57 resets=2 motion_rx_age_ms=297460
+[   644.4s] HEAPCHK n=279063 walks=90716 maxus=507 stMinB=15600
+[   645.3s] G state=3 id=05 addr=6B ctrl=60/17/57/77/03 fifo=00:00 wm=1 status=00 n=6154 valid=1779 hz=54 err=0 ovf=1 direct=0 cpu_us=211252 fault=4 a=0.020/-0.013/1.006 w=4.31/1.00/0.19 pose=32 raw=1:161/-106/8240/276/64/12 axis=USB_REAR_NEG_X_FACE_POS_Z
+[   645.3s] G pose up=0.016/-0.612/0.791 g=0.048/0.004 quiet=0.00 motion=2 mount=1/0 bias=4.234/0.839/0.267 batch=2 dt=0.021500 poll_ms=24 resets=2 motion_rx_age_ms=298466
+[   646.3s] G state=3 id=05 addr=6B ctrl=60/17/57/77/03 fifo=00:00 wm=1 status=00 n=6207 valid=1779 hz=53 err=0 ovf=1 direct=0 cpu_us=199484 fault=4 a=0.020/-0.012/1.006 w=4.09/0.98/0.20 pose=85 raw=1:163/-102/8244/262/63/13 axis=USB_REAR_NEG_X_FACE_POS_Z
+[   646.3s] G pose up=0.016/-0.612/0.791 g=0.048/0.004 quiet=0.00 motion=2 mount=1/0 bias=4.234/0.839/0.267 batch=3 dt=0.019000 poll_ms=57 resets=2 motion_rx_age_ms=299486
+[   646.5s] HEAP int free=82564 min=81968 largest=40948 | psram free=2512708 largest=2490356 | drop_ovs=0 drop_full=0 ack_drop=0
+[   647.3s] G state=3 id=05 addr=6B ctrl=60/17/57/77/03 fifo=00:00 wm=1 status=00 n=6260 valid=1779 hz=53 err=0 ovf=1 direct=0 cpu_us=207462 fault=4 a=0.022/-0.012/1.005 w=4.16/0.97/0.08 pose=138 raw=1:179/-100/8232/266/62/5 axis=USB_REAR_NEG_X_FACE_POS_Z
+[   647.3s] G pose up=0.016/-0.612/0.791 g=0.048/0.004 quiet=0.00 motion=2 mount=1/0 bias=4.234/0.839/0.267 batch=1 dt=0.017000 poll_ms=17 resets=2 motion_rx_age_ms=300498
+[   648.3s] G state=2 id=05 addr=6B ctrl=60/17/57/77/03 fifo=00:00 wm=1 status=00 n=6315 valid=1805 hz=55 err=0 ovf=1 direct=0 cpu_us=215099 fault=4 a=0.022/-0.012/1.006 w=4.22/1.05/0.23 pose=0 raw=1:183/-104/8246/269/69/9 axis=USB_REAR_NEG_X_FACE_POS_Z
+[   648.3s] G pose up=0.021/-0.013/1.000 g=-0.000/0.002 quiet=0.00 motion=2 mount=1/0 bias=4.186/1.030/0.111 batch=3 dt=0.019000 poll_ms=57 resets=2 motion_rx_age_ms=301534
+[   649.3s] G state=2 id=05 addr=6B ctrl=60/17/57/77/03 fifo=00:00 wm=1 status=00 n=6369 valid=1859 hz=54 err=0 ovf=1 direct=0 cpu_us=212201 fault=4 a=0.022/-0.013/1.006 w=4.23/1.14/0.05 pose=0 raw=1:183/-107/8242/271/73/3 axis=USB_REAR_NEG_X_FACE_POS_Z
+[   649.3s] G pose up=0.020/-0.012/1.000 g=0.001/0.002 quiet=0.00 motion=2 mount=1/0 bias=4.186/1.030/0.111 batch=1 dt=0.017000 poll_ms=17 resets=2 motion_rx_age_ms=302543
+[   650.4s] G state=2 id=05 addr=6B ctrl=60/17/57/77/03 fifo=00:00 wm=1 status=00 n=6425 valid=1915 hz=56 err=0 ovf=1 direct=0 cpu_us=212735 fault=4 a=0.276/-0.461/0.758 w=129.52/-13.73/-51.62 pose=0 raw=1:2258/-3779/6209/8289/-879/-3304 axis=USB_REAR_NEG_X_FACE_POS_Z
+[   650.4s] G pose up=0.342/-0.290/0.894 g=0.205/-0.035 quiet=0.00 motion=2 mount=1/0 bias=4.186/1.030/0.111 batch=3 dt=0.019000 poll_ms=57 resets=2 motion_rx_age_ms=303582
+[   651.4s] G state=2 id=05 addr=6B ctrl=60/17/57/77/03 fifo=00:00 wm=1 status=00 n=6478 valid=1968 hz=53 err=0 ovf=1 direct=0 cpu_us=211073 fault=4 a=0.619/0.281/0.596 w=-148.36/-7.00/-28.47 pose=0 raw=1:5071/2298/4879/-9495/-448/-1822 axis=USB_REAR_NEG_X_FACE_POS_Z
+[   651.4s] G pose up=0.564/0.313/0.764 g=-0.033/0.140 quiet=0.00 motion=2 mount=1/0 bias=4.186/1.030/0.111 batch=1 dt=0.017000 poll_ms=17 resets=2 motion_rx_age_ms=304592
+[   652.4s] G state=1 id=05 addr=6B ctrl=60/17/57/77/03 fifo=00:00 wm=1 status=00 n=6533 valid=1980 hz=55 err=0 ovf=1 direct=0 cpu_us=209852 fault=4 a=0.740/-0.333/0.540 w=34.39/-42.14/-15.95 pose=0 raw=1:6066/-2730/4424/2201/-2697/-1021 axis=USB_REAR_NEG_X_FACE_POS_Z
+[   652.4s] G pose up=0.618/0.075/0.782 g=-0.087/0.078 quiet=0.00 motion=2 mount=1/0 bias=4.186/1.030/0.111 batch=3 dt=0.019000 poll_ms=57 resets=2 motion_rx_age_ms=305624
+[   653.4s] G state=1 id=05 addr=6B ctrl=60/17/57/77/03 fifo=00:00 wm=1 status=00 n=6586 valid=1980 hz=53 err=0 ovf=1 direct=0 cpu_us=207169 fault=4 a=0.558/-0.337/0.785 w=-80.95/15.23/-73.06 pose=0 raw=1:4571/-2757/6427/-5181/975/-4676 axis=USB_REAR_NEG_X_FACE_POS_Z
+[   653.4s] G pose up=0.618/0.075/0.782 g=-0.087/0.078 quiet=0.00 motion=2 mount=1/0 bias=4.186/1.030/0.111 batch=1 dt=0.017000 poll_ms=17 resets=2 motion_rx_age_ms=306637
+[   654.4s] HEAPCHK n=281990 walks=91455 maxus=507 stMinB=15600
+[   654.5s] G state=1 id=05 addr=6B ctrl=60/17/57/77/03 fifo=00:00 wm=1 status=00 n=6642 valid=1980 hz=56 err=0 ovf=1 direct=0 cpu_us=218940 fault=4 a=0.857/-0.212/0.450 w=48.75/-39.36/14.47 pose=0 raw=1:7019/-1735/3686/3120/-2519/926 axis=USB_REAR_NEG_X_FACE_POS_Z
+[   654.5s] G pose up=0.618/0.075/0.782 g=-0.087/0.078 quiet=0.00 motion=2 mount=1/0 bias=4.186/1.030/0.111 batch=3 dt=0.019000 poll_ms=57 resets=2 motion_rx_age_ms=307678
+[   655.5s] G state=1 id=05 addr=6B ctrl=60/17/57/77/03 fifo=00:00 wm=1 status=00 n=6695 valid=1980 hz=53 err=0 ovf=1 direct=0 cpu_us=209824 fault=4 a=0.568/-0.569/-0.242 w=-251.66/-204.66/30.81 pose=0 raw=1:4652/-4660/-1985/-16106/-13098/1972 axis=USB_REAR_NEG_X_FACE_POS_Z
+[   655.5s] G pose up=0.618/0.075/0.782 g=-0.087/0.078 quiet=0.00 motion=2 mount=1/0 bias=4.186/1.030/0.111 batch=1 dt=0.017000 poll_ms=17 resets=2 motion_rx_age_ms=308684
+[   656.5s] G state=1 id=05 addr=6B ctrl=60/17/57/77/03 fifo=00:00 wm=1 status=00 n=6751 valid=1980 hz=56 err=0 ovf=1 direct=0 cpu_us=218929 fault=4 a=0.787/-0.323/0.637 w=61.11/7.80/76.50 pose=0 raw=1:6445/-2647/5217/3911/499/4896 axis=USB_REAR_NEG_X_FACE_POS_Z
+[   656.5s] G pose up=0.618/0.075/0.782 g=-0.087/0.078 quiet=0.00 motion=2 mount=1/0 bias=4.186/1.030/0.111 batch=3 dt=0.018667 poll_ms=56 resets=2 motion_rx_age_ms=309723
+[   656.7s] HEAP int free=82564 min=81968 largest=40948 | psram free=2512708 largest=2490356 | drop_ovs=0 drop_full=0 ack_drop=0
+[   657.5s] G state=1 id=05 addr=6B ctrl=60/17/57/77/03 fifo=00:00 wm=1 status=00 n=6804 valid=1980 hz=53 err=0 ovf=1 direct=0 cpu_us=209866 fault=4 a=0.272/-0.472/0.818 w=-53.58/-80.50/-1.16 pose=0 raw=1:2228/-3866/6701/-3429/-5152/-74 axis=USB_REAR_NEG_X_FACE_POS_Z
+[   657.5s] G pose up=0.618/0.075/0.782 g=-0.087/0.078 quiet=0.00 motion=2 mount=1/0 bias=4.186/1.030/0.111 batch=1 dt=0.017000 poll_ms=17 resets=2 motion_rx_age_ms=310729
+[   658.6s] G state=1 id=05 addr=6B ctrl=60/17/57/77/03 fifo=00:00 wm=1 status=00 n=6860 valid=1980 hz=56 err=0 ovf=1 direct=0 cpu_us=218849 fault=4 a=0.547/-0.842/0.486 w=-78.92/-105.50/156.02 pose=0 raw=1:4482/-6898/3978/-5051/-6752/9985 axis=USB_REAR_NEG_X_FACE_POS_Z
+[   658.6s] G pose up=0.618/0.075/0.782 g=-0.087/0.078 quiet=0.00 motion=2 mount=1/0 bias=4.186/1.030/0.111 batch=3 dt=0.018667 poll_ms=56 resets=2 motion_rx_age_ms=311768
+[   659.6s] G state=1 id=05 addr=6B ctrl=60/17/57/77/03 fifo=00:00 wm=1 status=00 n=6913 valid=1980 hz=53 err=0 ovf=1 direct=0 cpu_us=209886 fault=4 a=-0.208/0.124/-0.798 w=-42.00/-104.25/-35.22 pose=0 raw=1:-1705/1013/-6541/-2688/-6672/-2254 axis=USB_REAR_NEG_X_FACE_POS_Z
+[   659.6s] G pose up=0.618/0.075/0.782 g=-0.087/0.078 quiet=0.00 motion=2 mount=1/0 bias=4.186/1.030/0.111 batch=2 dt=0.022000 poll_ms=24 resets=2 motion_rx_age_ms=312773
+[   660.6s] G state=1 id=05 addr=6B ctrl=60/17/57/77/03 fifo=50:00 wm=1 status=00 n=6966 valid=1980 hz=53 err=0 ovf=1 direct=0 cpu_us=199112 fault=4 a=0.820/-0.258/0.576 w=-203.98/54.55/186.86 pose=0 raw=1:6387/-3789/5608/-10492/3132/11321 axis=USB_REAR_NEG_X_FACE_POS_Z
+[   660.6s] G pose up=0.618/0.075/0.782 g=-0.087/0.078 quiet=0.00 motion=2 mount=1/0 bias=4.186/1.030/0.111 batch=3 dt=0.018667 poll_ms=56 resets=2 motion_rx_age_ms=313795
+[   662.6s] PWR short-press: screen off
+[   664.4s] HEAPCHK n=284962 walks=92290 maxus=507 stMinB=15600
+[   666.4s] PWR short-press: screen off
+[   667.0s] HEAP int free=82564 min=81968 largest=40948 | psram free=2512708 largest=2490356 | drop_ovs=0 drop_full=0 ack_drop=0
+[   671.1s] CLOCK sync time=13:27 date=2026-11-04
+[   672.5s] MEDIA LYRICS enabled=0
+[   674.4s] HEAPCHK n=288632 walks=93984 maxus=507 stMinB=15600
+[   677.0s] HEAP int free=82564 min=81756 largest=40948 | psram free=2512708 largest=2490356 | drop_ovs=0 drop_full=0 ack_drop=0
+[   684.4s] HEAPCHK n=293148 walks=95557 maxus=507 stMinB=15600
+[   687.0s] HEAP int free=82564 min=81756 largest=40948 | psram free=2512708 largest=2490356 | drop_ovs=0 drop_full=0 ack_drop=0
+[   694.4s] HEAPCHK n=297918 walks=97147 maxus=507 stMinB=15600
+[   697.0s] HEAP int free=82564 min=81756 largest=40948 | psram free=2512708 largest=2490356 | drop_ovs=0 drop_full=0 ack_drop=0
+[   704.4s] HEAPCHK n=302670 walks=98731 maxus=507 stMinB=15600
+[   707.1s] HEAP int free=82564 min=81756 largest=40948 | psram free=2512708 largest=2490356 | drop_ovs=0 drop_full=0 ack_drop=0
+[   714.4s] HEAPCHK n=307440 walks=100321 maxus=507 stMinB=15600
+[   717.1s] HEAP int free=82564 min=81756 largest=40948 | psram free=2512708 largest=2490356 | drop_ovs=0 drop_full=0 ack_drop=0
+[   724.4s] HEAPCHK n=312210 walks=101911 maxus=507 stMinB=15600
+[   727.1s] HEAP int free=82564 min=81756 largest=40948 | psram free=2512708 largest=2490356 | drop_ovs=0 drop_full=0 ack_drop=0
+[   734.4s] HEAPCHK n=316974 walks=103500 maxus=507 stMinB=15600
+[   737.2s] HEAP int free=82564 min=81756 largest=40948 | psram free=2512708 largest=2490356 | drop_ovs=0 drop_full=0 ack_drop=0
+[   744.4s] HEAPCHK n=321726 walks=105084 maxus=507 stMinB=15600
+[   747.2s] HEAP int free=82564 min=81756 largest=40948 | psram free=2512708 largest=2490356 | drop_ovs=0 drop_full=0 ack_drop=0
+[   754.4s] HEAPCHK n=326490 walks=106673 maxus=507 stMinB=15600
+[   757.2s] HEAP int free=82564 min=81756 largest=40948 | psram free=2512708 largest=2490356 | drop_ovs=0 drop_full=0 ack_drop=0
+[   764.4s] HEAPCHK n=331254 walks=108259 maxus=507 stMinB=15600
+[   767.3s] HEAP int free=82564 min=81756 largest=40948 | psram free=2512708 largest=2490356 | drop_ovs=0 drop_full=0 ack_drop=0
+[   774.5s] HEAPCHK n=336042 walks=109855 maxus=507 stMinB=15600
+[   777.3s] HEAP int free=82564 min=81756 largest=40948 | psram free=2512708 largest=2490356 | drop_ovs=0 drop_full=0 ack_drop=0
+[   784.5s] HEAPCHK n=340836 walks=111455 maxus=507 stMinB=15600
+[   787.3s] HEAP int free=82564 min=81756 largest=40948 | psram free=2512708 largest=2490356 | drop_ovs=0 drop_full=0 ack_drop=0
+[   794.5s] HEAPCHK n=345600 walks=113041 maxus=507 stMinB=15600
+[   797.4s] HEAP int free=82564 min=81756 largest=40948 | psram free=2512708 largest=2490356 | drop_ovs=0 drop_full=0 ack_drop=0
+[   804.5s] HEAPCHK n=350364 walks=114630 maxus=507 stMinB=15600
+[   807.4s] HEAP int free=82564 min=81756 largest=40948 | psram free=2512708 largest=2490356 | drop_ovs=0 drop_full=0 ack_drop=0
+[   814.5s] HEAPCHK n=355146 walks=116225 maxus=507 stMinB=15600
+[   817.4s] HEAP int free=82564 min=81756 largest=40948 | psram free=2512708 largest=2490356 | drop_ovs=0 drop_full=0 ack_drop=0
+[   824.5s] HEAPCHK n=359928 walks=117817 maxus=507 stMinB=15600
+[   827.5s] HEAP int free=82564 min=81756 largest=40948 | psram free=2512708 largest=2490356 | drop_ovs=0 drop_full=0 ack_drop=0
+[   834.5s] HEAPCHK n=364680 walks=119401 maxus=507 stMinB=15600
+[   837.5s] HEAP int free=82564 min=81756 largest=40948 | psram free=2512708 largest=2490356 | drop_ovs=0 drop_full=0 ack_drop=0
+[   844.5s] HEAPCHK n=369450 walks=120991 maxus=507 stMinB=15600
+[   847.5s] HEAP int free=82564 min=81756 largest=40948 | psram free=2512708 largest=2490356 | drop_ovs=0 drop_full=0 ack_drop=0
+[   854.5s] HEAPCHK n=374208 walks=122579 maxus=507 stMinB=15600
+[   857.6s] HEAP int free=82564 min=81756 largest=40948 | psram free=2512708 largest=2490356 | drop_ovs=0 drop_full=0 ack_drop=0
+[   864.5s] HEAPCHK n=378984 walks=124170 maxus=507 stMinB=15600
+[   867.6s] HEAP int free=82564 min=81756 largest=40948 | psram free=2512708 largest=2490356 | drop_ovs=0 drop_full=0 ack_drop=0
+[   874.5s] HEAPCHK n=383766 walks=125765 maxus=507 stMinB=15600
+[   877.6s] HEAP int free=82564 min=81756 largest=40948 | psram free=2512708 largest=2490356 | drop_ovs=0 drop_full=0 ack_drop=0
+[   884.5s] HEAPCHK n=388518 walks=127349 maxus=507 stMinB=15600
+[   887.7s] HEAP int free=82564 min=81756 largest=40948 | psram free=2512708 largest=2490356 | drop_ovs=0 drop_full=0 ack_drop=0
+[   894.5s] HEAPCHK n=393288 walks=128939 maxus=507 stMinB=15600
+[   897.7s] HEAP int free=82564 min=81756 largest=40948 | psram free=2512708 largest=2490356 | drop_ovs=0 drop_full=0 ack_drop=0
+[   904.5s] HEAPCHK n=398058 walks=130529 maxus=507 stMinB=15600
+[   907.7s] HEAP int free=82564 min=81756 largest=40948 | psram free=2512708 largest=2490356 | drop_ovs=0 drop_full=0 ack_drop=0
+[   914.6s] HEAPCHK n=402828 walks=132119 maxus=507 stMinB=15600
+[   917.7s] HEAP int free=82564 min=81756 largest=40948 | psram free=2512708 largest=2490356 | drop_ovs=0 drop_full=0 ack_drop=0
+[   924.6s] HEAPCHK n=407586 walks=133704 maxus=507 stMinB=15600
+[   927.8s] HEAP int free=82564 min=81756 largest=40948 | psram free=2512708 largest=2490356 | drop_ovs=0 drop_full=0 ack_drop=0
+[   934.6s] HEAPCHK n=412350 walks=135293 maxus=507 stMinB=15600
+[   937.8s] HEAP int free=82564 min=81756 largest=40948 | psram free=2512708 largest=2490356 | drop_ovs=0 drop_full=0 ack_drop=0
+[   944.6s] HEAPCHK n=417120 walks=136883 maxus=507 stMinB=15600
+[   947.8s] HEAP int free=82564 min=81756 largest=40948 | psram free=2512708 largest=2490356 | drop_ovs=0 drop_full=0 ack_drop=0
+[   954.6s] HEAPCHK n=421890 walks=138473 maxus=507 stMinB=15600
+[   957.9s] HEAP int free=82564 min=81756 largest=40948 | psram free=2512708 largest=2490356 | drop_ovs=0 drop_full=0 ack_drop=0
+[   964.6s] HEAPCHK n=426672 walks=140065 maxus=507 stMinB=15600
+[   967.9s] HEAP int free=82564 min=81756 largest=40948 | psram free=2512708 largest=2490356 | drop_ovs=0 drop_full=0 ack_drop=0
+[   974.6s] HEAPCHK n=431424 walks=141649 maxus=507 stMinB=15600
+[   978.0s] HEAP int free=82564 min=81756 largest=40948 | psram free=2512708 largest=2490356 | drop_ovs=0 drop_full=0 ack_drop=0
+[   984.6s] HEAPCHK n=436188 walks=143238 maxus=507 stMinB=15600
+[   988.0s] HEAP int free=82564 min=81756 largest=40948 | psram free=2512708 largest=2490356 | drop_ovs=0 drop_full=0 ack_drop=0
+[   994.6s] HEAPCHK n=440952 walks=144827 maxus=507 stMinB=15600
+[   998.0s] HEAP int free=82564 min=81756 largest=40948 | psram free=2512708 largest=2490356 | drop_ovs=0 drop_full=0 ack_drop=0
+[  1004.6s] HEAPCHK n=445734 walks=146419 maxus=507 stMinB=15600
+[  1008.0s] HEAP int free=82564 min=81756 largest=40948 | psram free=2512708 largest=2490356 | drop_ovs=0 drop_full=0 ack_drop=0
+[  1014.6s] HEAPCHK n=450480 walks=148002 maxus=507 stMinB=15600
+[  1018.1s] HEAP int free=82564 min=81756 largest=40948 | psram free=2512708 largest=2490356 | drop_ovs=0 drop_full=0 ack_drop=0
+[  1024.6s] HEAPCHK n=455244 walks=149591 maxus=507 stMinB=15600
+[  1028.1s] HEAP int free=82564 min=81756 largest=40948 | psram free=2512708 largest=2490356 | drop_ovs=0 drop_full=0 ack_drop=0
+[  1034.6s] HEAPCHK n=459996 walks=151175 maxus=507 stMinB=15600
+[  1038.2s] HEAP int free=82564 min=81756 largest=40948 | psram free=2512708 largest=2490356 | drop_ovs=0 drop_full=0 ack_drop=0
+[  1044.6s] HEAPCHK n=464760 walks=152761 maxus=507 stMinB=15600
+[  1048.2s] HEAP int free=82564 min=81756 largest=40948 | psram free=2512708 largest=2490356 | drop_ovs=0 drop_full=0 ack_drop=0
+[  1054.6s] HEAPCHK n=469542 walks=154356 maxus=507 stMinB=15600
+[  1058.2s] HEAP int free=82564 min=81756 largest=40948 | psram free=2512708 largest=2490356 | drop_ovs=0 drop_full=0 ack_drop=0
+[  1064.6s] HEAPCHK n=474300 walks=155941 maxus=507 stMinB=15600
+[  1068.3s] HEAP int free=82564 min=81756 largest=40948 | psram free=2512708 largest=2490356 | drop_ovs=0 drop_full=0 ack_drop=0
+[  1074.6s] HEAPCHK n=479070 walks=157531 maxus=507 stMinB=15600
+[  1078.3s] HEAP int free=82564 min=81756 largest=40948 | psram free=2512708 largest=2490356 | drop_ovs=0 drop_full=0 ack_drop=0
+[  1084.6s] HEAPCHK n=483834 walks=159120 maxus=507 stMinB=15600
+[  1088.4s] HEAP int free=82564 min=81756 largest=40948 | psram free=2512708 largest=2490356 | drop_ovs=0 drop_full=0 ack_drop=0
+[  1094.6s] HEAPCHK n=488616 walks=160715 maxus=507 stMinB=15600
+[  1098.4s] HEAP int free=82564 min=81756 largest=40948 | psram free=2512708 largest=2490356 | drop_ovs=0 drop_full=0 ack_drop=0
+[  1104.6s] HEAPCHK n=493368 walks=162299 maxus=507 stMinB=15600
+[  1108.4s] HEAP int free=82564 min=81756 largest=40948 | psram free=2512708 largest=2490356 | drop_ovs=0 drop_full=0 ack_drop=0
+[  1114.6s] HEAPCHK n=498138 walks=163889 maxus=507 stMinB=15600
+[  1118.5s] HEAP int free=82564 min=81756 largest=40948 | psram free=2512708 largest=2490356 | drop_ovs=0 drop_full=0 ack_drop=0
+[  1124.7s] HEAPCHK n=502908 walks=165479 maxus=507 stMinB=15600
+[  1128.5s] HEAP int free=82564 min=81756 largest=40948 | psram free=2512708 largest=2490356 | drop_ovs=0 drop_full=0 ack_drop=0
+[  1134.7s] HEAPCHK n=507672 walks=167065 maxus=507 stMinB=15600
+[  1138.5s] HEAP int free=82564 min=81756 largest=40948 | psram free=2512708 largest=2490356 | drop_ovs=0 drop_full=0 ack_drop=0
+[  1145.0s] G state=3 id=05 addr=6B ctrl=60/17/57/77/03 fifo=50:06 wm=1 status=00 n=7000 valid=1980 hz=34 err=0 ovf=1 direct=0 cpu_us=685740 fault=4 a=0.695/-0.531/0.565 w=-121.31/47.80/-19.48 pose=0 raw=1:6315/-6077/3211/32767/32767/-8895 axis=USB_REAR_NEG_X_FACE_POS_Z
+[  1145.0s] G pose up=0.618/0.075/0.782 g=-0.087/0.078 quiet=0.00 motion=2 mount=1/0 bias=4.186/1.030/0.111 batch=1 dt=0.019000 poll_ms=19 resets=2 motion_rx_age_ms=471558
+[  1145.1s] HEAPCHK n=512155 walks=168559 maxus=507 stMinB=15600
+[  1146.1s] G state=3 id=05 addr=6B ctrl=60/17/57/77/03 fifo=00:00 wm=1 status=00 n=7055 valid=1980 hz=55 err=0 ovf=1 direct=0 cpu_us=207419 fault=4 a=0.767/-0.457/0.440 w=8.36/-7.38/2.83 pose=1 raw=1:6281/-3741/3602/535/-472/181 axis=USB_REAR_NEG_X_FACE_POS_Z
+[  1146.1s] G pose up=0.618/0.075/0.782 g=-0.087/0.078 quiet=0.00 motion=2 mount=1/0 bias=4.186/1.030/0.111 batch=3 dt=0.018667 poll_ms=56 resets=2 motion_rx_age_ms=472593
+[  1147.1s] G state=3 id=05 addr=6B ctrl=60/17/57/77/03 fifo=00:00 wm=1 status=00 n=7108 valid=1980 hz=53 err=0 ovf=1 direct=0 cpu_us=209757 fault=4 a=0.379/-1.003/0.498 w=60.03/52.39/241.86 pose=0 raw=1:3105/-8213/4083/3842/3353/15479 axis=USB_REAR_NEG_X_FACE_POS_Z
+[  1147.1s] G pose up=0.618/0.075/0.782 g=-0.087/0.078 quiet=0.00 motion=2 mount=1/0 bias=4.186/1.030/0.111 batch=1 dt=0.017000 poll_ms=17 resets=2 motion_rx_age_ms=473597
+[  1148.1s] G state=3 id=05 addr=6B ctrl=60/17/57/77/03 fifo=00:00 wm=1 status=00 n=7164 valid=1980 hz=56 err=0 ovf=1 direct=0 cpu_us=218668 fault=4 a=0.027/0.164/-0.932 w=24.31/8.52/-0.75 pose=0 raw=1:224/1344/-7636/1556/545/-48 axis=USB_REAR_NEG_X_FACE_POS_Z
+[  1148.1s] G pose up=0.618/0.075/0.782 g=-0.087/0.078 quiet=0.00 motion=2 mount=1/0 bias=4.186/1.030/0.111 batch=3 dt=0.019000 poll_ms=57 resets=2 motion_rx_age_ms=474637
+[  1148.6s] HEAP int free=82564 min=81756 largest=40948 | psram free=2512708 largest=2490356 | drop_ovs=0 drop_full=0 ack_drop=0
+[  1149.1s] G state=3 id=05 addr=6B ctrl=60/17/57/77/03 fifo=00:00 wm=1 status=00 n=7217 valid=1980 hz=53 err=0 ovf=1 direct=0 cpu_us=209634 fault=4 a=0.157/-0.745/0.608 w=-56.25/67.42/1.09 pose=0 raw=1:1288/-6106/4981/-3600/4315/70 axis=USB_REAR_NEG_X_FACE_POS_Z
+[  1149.1s] G pose up=0.618/0.075/0.782 g=-0.087/0.078 quiet=0.00 motion=2 mount=1/0 bias=4.186/1.030/0.111 batch=1 dt=0.017000 poll_ms=17 resets=2 motion_rx_age_ms=475641
+[  1150.1s] G state=3 id=05 addr=6B ctrl=60/17/57/77/03 fifo=00:00 wm=1 status=00 n=7270 valid=1980 hz=53 err=0 ovf=1 direct=0 cpu_us=198931 fault=4 a=0.488/-0.054/0.793 w=241.06/-59.95/78.95 pose=0 raw=1:3995/-446/6500/27216/193/4402 axis=USB_REAR_NEG_X_FACE_POS_Z
+[  1150.1s] G pose up=0.618/0.075/0.782 g=-0.087/0.078 quiet=0.00 motion=2 mount=1/0 bias=4.186/1.030/0.111 batch=3 dt=0.018667 poll_ms=56 resets=2 motion_rx_age_ms=476661
+[  1151.1s] G state=3 id=05 addr=6B ctrl=60/17/57/77/03 fifo=00:00 wm=1 status=00 n=7324 valid=1980 hz=54 err=0 ovf=1 direct=0 cpu_us=210560 fault=4 a=0.654/0.789/-0.508 w=-121.83/47.41/-57.03 pose=0 raw=1:5358/6464/-4159/-7797/3034/-3650 axis=USB_REAR_NEG_X_FACE_POS_Z
+[  1151.1s] G pose up=0.618/0.075/0.782 g=-0.087/0.078 quiet=0.00 motion=2 mount=1/0 bias=4.186/1.030/0.111 batch=2 dt=0.022000 poll_ms=24 resets=2 motion_rx_age_ms=477669
+[  1152.2s] G state=3 id=05 addr=6B ctrl=60/17/57/77/03 fifo=00:00 wm=1 status=00 n=7377 valid=1980 hz=53 err=0 ovf=1 direct=0 cpu_us=198890 fault=4 a=0.797/-0.481/0.236 w=-512.00/72.73/-140.41 pose=0 raw=1:6530/-3943/1931/-32768/4655/-8986 axis=USB_REAR_NEG_X_FACE_POS_Z
+[  1152.2s] G pose up=0.618/0.075/0.782 g=-0.087/0.078 quiet=0.00 motion=2 mount=1/0 bias=4.186/1.030/0.111 batch=3 dt=0.018667 poll_ms=56 resets=2 motion_rx_age_ms=478689
+[  1153.2s] G state=3 id=05 addr=6B ctrl=60/17/57/77/03 fifo=00:00 wm=1 status=00 n=7431 valid=1980 hz=54 err=0 ovf=1 direct=0 cpu_us=210649 fault=4 a=0.196/0.161/1.189 w=29.92/11.53/34.48 pose=0 raw=1:1605/1320/9742/1915/738/2207 axis=USB_REAR_NEG_X_FACE_POS_Z
+[  1153.2s] G pose up=0.618/0.075/0.782 g=-0.087/0.078 quiet=0.00 motion=2 mount=1/0 bias=4.186/1.030/0.111 batch=2 dt=0.022000 poll_ms=24 resets=2 motion_rx_age_ms=479695
+[  1154.2s] G state=3 id=05 addr=6B ctrl=60/17/57/77/03 fifo=00:00 wm=1 status=00 n=7484 valid=1980 hz=53 err=0 ovf=1 direct=0 cpu_us=198914 fault=4 a=0.017/0.080/0.986 w=-139.31/38.09/62.97 pose=0 raw=1:142/656/8080/-8916/2438/4030 axis=USB_REAR_NEG_X_FACE_POS_Z
+[  1154.2s] G pose up=0.618/0.075/0.782 g=-0.087/0.078 quiet=0.00 motion=2 mount=1/0 bias=4.186/1.030/0.111 batch=3 dt=0.019000 poll_ms=57 resets=2 motion_rx_age_ms=480715
+[  1155.1s] HEAPCHK n=515093 walks=169304 maxus=507 stMinB=15600
+[  1155.2s] G state=3 id=05 addr=6B ctrl=60/17/57/77/03 fifo=00:00 wm=1 status=00 n=7537 valid=1980 hz=53 err=0 ovf=1 direct=0 cpu_us=207389 fault=4 a=0.017/-0.019/1.006 w=4.12/1.00/0.28 pose=40 raw=1:138/-157/8244/264/64/18 axis=USB_REAR_NEG_X_FACE_POS_Z
+[  1155.2s] G pose up=0.618/0.075/0.782 g=-0.087/0.078 quiet=0.00 motion=2 mount=1/0 bias=4.186/1.030/0.111 batch=1 dt=0.017000 poll_ms=17 resets=2 motion_rx_age_ms=481727
+[  1156.2s] G state=3 id=05 addr=6B ctrl=60/17/57/77/03 fifo=00:00 wm=1 status=00 n=7590 valid=1980 hz=53 err=0 ovf=1 direct=0 cpu_us=199454 fault=4 a=0.016/-0.019/1.006 w=4.20/2.23/0.09 pose=0 raw=1:132/-152/8241/269/143/6 axis=USB_REAR_NEG_X_FACE_POS_Z
+[  1156.2s] G pose up=0.618/0.075/0.782 g=-0.087/0.078 quiet=0.00 motion=2 mount=1/0 bias=4.186/1.030/0.111 batch=3 dt=0.018667 poll_ms=56 resets=2 motion_rx_age_ms=482749
+[  1157.2s] G state=3 id=05 addr=6B ctrl=60/17/57/77/03 fifo=00:00 wm=1 status=00 n=7643 valid=1980 hz=53 err=0 ovf=1 direct=0 cpu_us=210189 fault=4 a=0.015/-0.019/1.006 w=4.25/0.72/0.08 pose=50 raw=1:124/-156/8243/272/46/5 axis=USB_REAR_NEG_X_FACE_POS_Z
+[  1157.2s] G pose up=0.618/0.075/0.782 g=-0.087/0.078 quiet=0.00 motion=2 mount=1/0 bias=4.186/1.030/0.111 batch=2 dt=0.021500 poll_ms=24 resets=2 motion_rx_age_ms=483753
+[  1158.2s] G state=3 id=05 addr=6B ctrl=60/17/57/77/03 fifo=00:00 wm=1 status=00 n=7696 valid=1980 hz=53 err=0 ovf=1 direct=0 cpu_us=199529 fault=4 a=0.015/-0.020/1.006 w=4.17/1.00/0.12 pose=103 raw=1:126/-163/8244/267/64/8 axis=USB_REAR_NEG_X_FACE_POS_Z
+[  1158.2s] G pose up=0.618/0.075/0.782 g=-0.087/0.078 quiet=0.00 motion=2 mount=1/0 bias=4.186/1.030/0.111 batch=3 dt=0.019333 poll_ms=58 resets=2 motion_rx_age_ms=484774
+[  1158.8s] HEAP int free=82564 min=81756 largest=40948 | psram free=2512708 largest=2490356 | drop_ovs=0 drop_full=0 ack_drop=0
+[  1159.3s] G state=3 id=05 addr=6B ctrl=60/17/57/77/03 fifo=00:00 wm=1 status=00 n=7749 valid=1980 hz=53 err=0 ovf=1 direct=0 cpu_us=207483 fault=4 a=0.016/-0.019/1.007 w=4.11/0.88/0.62 pose=156 raw=1:128/-157/8251/263/56/40 axis=USB_REAR_NEG_X_FACE_POS_Z
+[  1159.3s] G pose up=0.618/0.075/0.782 g=-0.087/0.078 quiet=0.00 motion=2 mount=1/0 bias=4.186/1.030/0.111 batch=1 dt=0.017000 poll_ms=17 resets=2 motion_rx_age_ms=485786
+[  1160.3s] G state=2 id=05 addr=6B ctrl=60/17/57/77/03 fifo=00:00 wm=1 status=00 n=7804 valid=2024 hz=55 err=0 ovf=1 direct=0 cpu_us=215379 fault=4 a=0.015/-0.020/1.007 w=4.30/0.89/0.27 pose=0 raw=1:125/-160/8245/275/59/16 axis=USB_REAR_NEG_X_FACE_POS_Z
+[  1160.3s] G pose up=0.015/-0.019/1.000 g=0.001/-0.000 quiet=0.00 motion=2 mount=1/0 bias=4.194/0.858/0.228 batch=3 dt=0.018667 poll_ms=56 resets=2 motion_rx_age_ms=486822
+[  1161.3s] G state=2 id=05 addr=6B ctrl=60/17/57/77/03 fifo=00:00 wm=1 status=00 n=7858 valid=2078 hz=54 err=0 ovf=1 direct=0 cpu_us=212225 fault=4 a=0.015/-0.019/1.007 w=4.20/0.98/0.06 pose=0 raw=1:124/-158/8252/269/63/4 axis=USB_REAR_NEG_X_FACE_POS_Z
+[  1161.3s] G pose up=0.015/-0.019/1.000 g=0.000/-0.000 quiet=0.00 motion=2 mount=1/0 bias=4.194/0.858/0.228 batch=1 dt=0.017000 poll_ms=17 resets=2 motion_rx_age_ms=487833
+[  1162.3s] G state=2 id=05 addr=6B ctrl=60/17/57/77/03 fifo=00:00 wm=1 status=00 n=7913 valid=2133 hz=55 err=0 ovf=1 direct=0 cpu_us=210789 fault=4 a=0.015/-0.020/1.007 w=3.97/0.75/0.16 pose=0 raw=1:126/-163/8248/254/48/10 axis=USB_REAR_NEG_X_FACE_POS_Z
+[  1162.3s] G pose up=0.016/-0.019/1.000 g=0.000/-0.000 quiet=0.00 motion=2 mount=1/0 bias=4.194/0.858/0.228 batch=3 dt=0.019000 poll_ms=57 resets=2 motion_rx_age_ms=488870
+[  1163.3s] G state=2 id=05 addr=6B ctrl=60/17/57/77/03 fifo=00:00 wm=1 status=00 n=7966 valid=2186 hz=53 err=0 ovf=1 direct=0 cpu_us=211014 fault=4 a=0.015/-0.019/1.007 w=4.12/0.73/0.42 pose=0 raw=1:125/-156/8246/264/47/27 axis=USB_REAR_NEG_X_FACE_POS_Z
+[  1163.3s] G pose up=0.015/-0.020/1.000 g=-0.001/0.000 quiet=0.00 motion=2 mount=1/0 bias=4.194/0.858/0.228 batch=1 dt=0.017000 poll_ms=17 resets=2 motion_rx_age_ms=489881
+[  1164.4s] G state=2 id=05 addr=6B ctrl=60/17/57/77/03 fifo=00:00 wm=1 status=00 n=8021 valid=2241 hz=55 err=0 ovf=1 direct=0 cpu_us=210821 fault=4 a=0.015/-0.020/1.007 w=4.19/0.84/0.16 pose=0 raw=1:126/-160/8246/268/54/10 axis=USB_REAR_NEG_X_FACE_POS_Z
+[  1164.4s] G pose up=0.015/-0.019/1.000 g=-0.000/0.000 quiet=0.00 motion=2 mount=1/0 bias=4.194/0.858/0.228 batch=3 dt=0.019000 poll_ms=57 resets=2 motion_rx_age_ms=490919
+[  1165.1s] HEAPCHK n=518008 walks=170042 maxus=507 stMinB=15600
+[  1165.4s] G state=2 id=05 addr=6B ctrl=60/17/57/77/03 fifo=00:00 wm=1 status=00 n=8073 valid=2293 hz=52 err=0 ovf=1 direct=0 cpu_us=201835 fault=4 a=0.015/-0.020/1.006 w=4.22/0.86/0.00 pose=0 raw=1:125/-163/8244/270/55/0 axis=USB_REAR_NEG_X_FACE_POS_Z
+[  1165.4s] G pose up=0.015/-0.020/1.000 g=-0.000/0.000 quiet=0.00 motion=2 mount=1/0 bias=4.194/0.858/0.228 batch=1 dt=0.017000 poll_ms=17 resets=2 motion_rx_age_ms=491924
+[  1166.4s] G state=2 id=05 addr=6B ctrl=60/17/57/77/03 fifo=00:00 wm=1 status=00 n=8127 valid=2347 hz=54 err=0 ovf=1 direct=0 cpu_us=205835 fault=4 a=0.523/-0.141/-0.613 w=-175.73/32.23/-193.20 pose=0 raw=1:4283/-1154/-5024/-11247/2063/-12365 axis=USB_REAR_NEG_X_FACE_POS_Z
+[  1166.4s] G pose up=0.442/-0.210/-0.872 g=0.005/0.191 quiet=0.00 motion=2 mount=1/0 bias=4.194/0.858/0.228 batch=3 dt=0.019333 poll_ms=58 resets=2 motion_rx_age_ms=492960
+[  1167.4s] G state=1 id=05 addr=6B ctrl=60/17/57/77/03 fifo=00:00 wm=1 status=00 n=8181 valid=2366 hz=54 err=0 ovf=1 direct=0 cpu_us=211356 fault=4 a=0.284/0.770/-0.651 w=212.28/-16.05/-20.97 pose=0 raw=1:2328/6304/-5337/13586/-1027/-1342 axis=USB_REAR_NEG_X_FACE_POS_Z
+[  1167.4s] G pose up=0.701/-0.401/-0.590 g=-0.091/-0.154 quiet=0.00 motion=2 mount=1/0 bias=4.194/0.858/0.228 batch=1 dt=0.017000 poll_ms=17 resets=2 motion_rx_age_ms=493969
+[  1168.5s] G state=1 id=05 addr=6B ctrl=60/17/57/77/03 fifo=00:00 wm=1 status=00 n=8231 valid=2366 hz=50 err=1 ovf=1 direct=0 cpu_us=183750 fault=3 a=-0.308/-0.283/0.893 w=-181.77/34.83/-40.25 pose=0 raw=1:-2523/-2320/7315/-11633/2229/-2576 axis=USB_REAR_NEG_X_FACE_POS_Z
+[  1168.5s] G pose up=0.701/-0.401/-0.590 g=-0.091/-0.154 quiet=0.00 motion=2 mount=1/0 bias=4.194/0.858/0.228 batch=3 dt=0.019333 poll_ms=58 resets=3 motion_rx_age_ms=494988
+[  1169.0s] HEAP int free=82564 min=81756 largest=40948 | psram free=2512708 largest=2490356 | drop_ovs=0 drop_full=0 ack_drop=0
+[  1169.2s] CORRUPT HEAP: Bad tail at 0x3fcec9a0. Expected 0xbaad5678 got 0xff45fb3c
+[  1169.2s] CORRUPT HEAP: Bad head at 0x3fcec9ac. Expected 0xabba1234 got 0x009ffb3c
+[  1169.2s] HEAPCHK FAIL stage=4 at=1168993
+[  1169.2s] HEAPCHK ring old->new:
+[  1169.2s]  t=1168993 s=8 f=0 d=0
+[  1169.2s]  t=1168974 s=7 f=0 d=0
+[  1169.2s]  t=1168752 s=3 f=1 d=440
+[  1169.2s]  t=1168751 s=2 f=1 d=361
+[  1169.2s]  t=1168751 s=1 f=1 d=456
+[  1169.2s]  t=1168740 s=5 f=0 d=0
+[  1169.2s]  t=1168740 s=6 f=0 d=0
+[  1169.2s]  t=1168740 s=4 f=0 d=0
+[  1169.2s]  t=1168740 s=8 f=0 d=0
+[  1169.2s]  t=1168730 s=7 f=0 d=0
+[  1169.2s]  t=1168642 s=3 f=0 d=0
+[  1169.2s]  t=1168642 s=2 f=0 d=0
+[  1169.2s]  t=1168642 s=1 f=0 d=0
+[  1169.2s]  t=1168632 s=5 f=0 d=0
+[  1169.2s]  t=1168632 s=6 f=0 d=0
+[  1169.2s]  t=1168632 s=4 f=0 d=0
+[  1169.2s]  t=1168631 s=8 f=1 d=307
+[  1169.2s]  t=1168624 s=7 f=1 d=333
+[  1169.2s]  t=1168620 s=3 f=0 d=0
+[  1169.2s]  t=1168620 s=2 f=0 d=0
+[  1169.2s]  t=1168620 s=1 f=0 d=0
+[  1169.2s]  t=1168610 s=5 f=0 d=0
+[  1169.2s]  t=1168609 s=6 f=1 d=338
+[  1169.2s]  t=1168586 s=12 f=0 d=0
+[  1169.2s]  t=1168570 s=4 f=0 d=0
+[  1169.2s]  t=1168570 s=8 f=0 d=0
+[  1169.2s]  t=1168565 s=7 f=0 d=0
+[  1169.2s]  t=1168564 s=3 f=0 d=0
+[  1169.2s]  t=1168564 s=2 f=0 d=0
+[  1169.2s]  t=1168564 s=1 f=0 d=0
+[  1169.2s]  t=1168553 s=5 f=1 d=315
+[  1169.2s]  t=1168553 s=6 f=0 d=0
+[  1169.2s]  t=1168553 s=4 f=1 d=327
+[  1169.3s]  t=1168553 s=8 f=0 d=0
+[  1169.3s]  t=1168548 s=7 f=0 d=0
+[  1169.3s]  t=1168547 s=3 f=1 d=304
+[  1169.3s]  t=1168546 s=2 f=1 d=304
+[  1169.3s]  t=1168546 s=1 f=1 d=333
+[  1169.3s]  t=1168535 s=5 f=0 d=0
+[  1169.3s]  t=1168535 s=6 f=0 d=0
+[  1169.3s]  t=1168535 s=4 f=0 d=0
+[  1169.3s]  t=1168535 s=8 f=0 d=0
+[  1169.3s]  t=1168530 s=7 f=0 d=0
+[  1169.3s]  t=1168530 s=3 f=0 d=0
+[  1169.3s]  t=1168530 s=2 f=0 d=0
+[  1169.3s]  t=1168530 s=1 f=0 d=0
+[  1169.3s]  t=1168519 s=5 f=0 d=0
+[  1169.3s]  t=1168519 s=6 f=0 d=0
+[  1169.3s]  t=1168519 s=4 f=0 d=0
+[  1169.3s]  t=1168519 s=8 f=1 d=314
+[  1169.3s]  t=1168511 s=7 f=1 d=319
+[  1169.3s]  t=1168510 s=3 f=0 d=0
+[  1169.3s]  t=1168510 s=2 f=0 d=0
+[  1169.3s]  t=1168510 s=1 f=0 d=0
+[  1169.3s]  t=1168500 s=5 f=0 d=0
+[  1169.3s]  t=1168499 s=6 f=1 d=339
+[  1169.3s]  t=1168476 s=12 f=0 d=0
+[  1169.3s]  t=1168460 s=4 f=0 d=0
+[  1169.3s]  t=1168460 s=8 f=0 d=0
+[  1169.3s]  t=1168454 s=7 f=0 d=0
+[  1169.3s]  t=1168453 s=3 f=0 d=0
+[  1169.3s]  t=1168453 s=2 f=0 d=0
+[  1169.3s]  t=1168453 s=1 f=0 d=0
+[  1169.3s]  t=1168993 s=4 f=3 d=1919
+[  1169.3s] HEAPCHK aborting for coredump
+[  1169.4s] 
+[  1169.4s] abort() was called at PC 0x4201d78b on core 1
+[  1169.4s] 
+[  1169.4s] 
+[  1169.4s] Backtrace: 0x40382aad:0x3fcebe70 0x40382a75:0x3fcebe90 0x4038989d:0x3fcebeb0 0x4201d78b:0x3fcebf30 0x4201d87d:0x3fcebf50 0x42022ced:0x3fcebf80 0x42034778:0x3fcec000 0x40383aa1:0x3fcec020
+[  1169.4s] 
+[  1169.4s] 
+[  1169.4s] 
+[  1169.4s] 
+[  1169.4s] ELF file SHA256: d50ffab87
+[  1169.4s] 
+[  1169.4s] Rebooting...
+[  1169.4s] ESP-ROM:esp32s3-20210327
+[  1169.4s] Build:Mar 27 2021
+[  1169.4s] rst:0xc (RTC_SW_CPU_RST),boot:0x2b (SPI_FAST_FLASH_BOOT)
+[  1169.4s] Saved PC:0x4037f86a
+[  1169.4s] SPIWP:0xee
+[  1169.4s] mode:DIO, clock div:1
+[  1169.4s] load:0x3fce2820,len:0x10cc
+[  1169.4s] load:0x403c8700,len:0xc2c
+[  1169.4s] load:0x403cb700,len:0x30c0
+[  1169.5s] entry 0x403c88b8
+[  1169.7s] Reset reason=4, sleep wake=0
+[  1169.8s] touch ok
+[  1169.9s] G state=1 id=05 addr=6B ctrl=60/17/57/77/00 fifo=00:00 wm=0 status=00 n=0 valid=0 hz=0 err=0 ovf=0 direct=0 cpu_us=0 fault=0 a=0.000/0.000/0.000 w=0.00/0.00/0.00 pose=0 raw=1:0/0/0/0/0/0 axis=USB_REAR_NEG_X_FACE_POS_Z
+[  1169.9s] G pose up=0.000/0.000/0.000 g=0.000/0.000 quiet=0.00 motion=2 mount=1/0 bias=0.000/0.000/0.000 batch=0 dt=0.000000 poll_ms=0 resets=0 motion_rx_age_ms=146
+[  1173.2s] IPC stacks bytes=4096/4096 free-min=3152/3160
+[  1173.2s] PWR short-press ready
+[  1173.2s] MotoNav ready, firmware v7.12.10-pages.175c.12diag
+[  1173.2s] MEDIA HID ready=0 auth=0 sub=0 suspended=0 report=1 release=1
+[  1173.2s] MEDIA AMS controls=0
+[  1173.2s] HEAPCHK n=1 walks=1 maxus=325 stMinB=22256
+[  1174.0s] MEDIA HID ready=1 auth=1 sub=1 suspended=0 report=1 release=0
+[  1179.3s] MEDIA HID ready=0 auth=1 sub=1 suspended=1 report=1 release=1
+[  1181.2s] HEAP int free=83724 min=83616 largest=42996 | psram free=4265808 largest=4194292 | drop_ovs=0 drop_full=0 ack_drop=0
+[  1183.2s] HEAPCHK n=4717 walks=1573 maxus=389 stMinB=22256
+[  1186.8s] G state=3 id=05 addr=6B ctrl=60/17/57/77/03 fifo=50:06 wm=1 status=00 n=0 valid=0 hz=0 err=0 ovf=0 direct=0 cpu_us=146232 fault=0 a=0.000/0.000/0.000 w=0.00/0.00/0.00 pose=0 raw=1:-1017/-1017/-1017/-32768/-32768/-32768 axis=USB_REAR_NEG_X_FACE_POS_Z
+[  1186.8s] G pose up=0.000/0.000/0.000 g=0.000/0.000 quiet=0.00 motion=2 mount=1/0 bias=0.000/0.000/0.000 batch=0 dt=0.000000 poll_ms=0 resets=0 motion_rx_age_ms=17097
+[  1187.8s] G state=3 id=05 addr=6B ctrl=60/17/57/77/03 fifo=00:00 wm=1 status=00 n=55 valid=0 hz=55 err=0 ovf=0 direct=0 cpu_us=207775 fault=0 a=-0.145/-0.015/0.991 w=4.28/1.38/0.08 pose=23 raw=1:-1185/-119/8118/274/88/5 axis=USB_REAR_NEG_X_FACE_POS_Z
+[  1187.8s] G pose up=0.000/0.000/0.000 g=0.000/0.000 quiet=0.00 motion=2 mount=1/0 bias=0.000/0.000/0.000 batch=3 dt=0.018667 poll_ms=56 resets=0 motion_rx_age_ms=18128
+[  1188.8s] G state=3 id=05 addr=6B ctrl=60/17/57/77/03 fifo=00:00 wm=1 status=00 n=108 valid=0 hz=53 err=0 ovf=0 direct=0 cpu_us=210111 fault=0 a=-0.145/-0.015/0.991 w=4.36/1.58/0.22 pose=1 raw=1:-1184/-125/8117/279/101/14 axis=USB_REAR_NEG_X_FACE_POS_Z
+[  1188.8s] G pose up=0.000/0.000/0.000 g=0.000/0.000 quiet=0.00 motion=2 mount=1/0 bias=0.000/0.000/0.000 batch=1 dt=0.017000 poll_ms=17 resets=0 motion_rx_age_ms=19135
+[  1189.7s] MEDIA HID ready=1 auth=1 sub=1 suspended=0 report=1 release=0
+[  1189.9s] G state=3 id=05 addr=6B ctrl=60/17/57/77/03 fifo=00:00 wm=1 status=00 n=164 valid=0 hz=56 err=0 ovf=0 direct=0 cpu_us=219185 fault=0 a=-0.143/-0.016/0.991 w=4.27/1.20/0.20 pose=57 raw=1:-1174/-127/8120/273/77/13 axis=USB_REAR_NEG_X_FACE_POS_Z
+[  1189.9s] G pose up=0.000/0.000/0.000 g=0.000/0.000 quiet=0.00 motion=2 mount=1/0 bias=0.000/0.000/0.000 batch=3 dt=0.018667 poll_ms=56 resets=0 motion_rx_age_ms=20178
+[  1190.9s] G state=3 id=05 addr=6B ctrl=60/17/57/77/03 fifo=00:00 wm=1 status=00 n=217 valid=0 hz=53 err=0 ovf=0 direct=0 cpu_us=210040 fault=0 a=-0.144/-0.016/0.991 w=4.28/1.28/-0.06 pose=110 raw=1:-1176/-128/8122/274/82/-4 axis=USB_REAR_NEG_X_FACE_POS_Z
+[  1190.9s] G pose up=0.000/0.000/0.000 g=0.000/0.000 quiet=0.00 motion=2 mount=1/0 bias=0.000/0.000/0.000 batch=1 dt=0.017000 poll_ms=17 resets=0 motion_rx_age_ms=21181
+[  1191.3s] HEAP int free=83340 min=83064 largest=42996 | psram free=3381064 largest=3342324 | drop_ovs=0 drop_full=0 ack_drop=0
+[  1191.9s] G state=3 id=05 addr=6B ctrl=60/17/57/77/03 fifo=00:00 wm=1 status=00 n=273 valid=0 hz=56 err=0 ovf=0 direct=0 cpu_us=219079 fault=0 a=-0.143/-0.016/0.992 w=4.20/1.17/0.42 pose=166 raw=1:-1169/-129/8126/269/75/27 axis=USB_REAR_NEG_X_FACE_POS_Z
+[  1191.9s] G pose up=0.000/0.000/0.000 g=0.000/0.000 quiet=0.00 motion=2 mount=1/0 bias=0.000/0.000/0.000 batch=3 dt=0.018667 poll_ms=56 resets=0 motion_rx_age_ms=22223
+[  1192.9s] G state=2 id=05 addr=6B ctrl=60/17/57/77/03 fifo=00:00 wm=1 status=00 n=325 valid=51 hz=52 err=0 ovf=0 direct=0 cpu_us=205988 fault=0 a=-0.089/-0.054/1.039 w=-67.61/27.38/29.00 pose=0 raw=1:-726/-441/8515/-4327/1752/1856 axis=USB_REAR_NEG_X_FACE_POS_Z
+[  1192.9s] G pose up=-0.155/-0.061/0.986 g=-0.010/0.074 quiet=0.00 motion=2 mount=1/0 bias=4.283/1.234/0.161 batch=1 dt=0.016000 poll_ms=16 resets=0 motion_rx_age_ms=23228
+[  1193.2s] HEAPCHK n=7835 walks=2460 maxus=499 stMinB=15600
+[  1194.0s] G state=2 id=05 addr=6B ctrl=60/17/57/77/03 fifo=00:00 wm=1 status=00 n=380 valid=106 hz=55 err=0 ovf=0 direct=0 cpu_us=210663 fault=0 a=-1.081/-0.301/0.180 w=-117.80/-30.89/9.52 pose=0 raw=1:-8853/-2468/1475/-7539/-1080/-1285 axis=USB_REAR_NEG_X_FACE_POS_Z
+[  1194.0s] G pose up=-0.960/-0.157/0.231 g=0.145/-0.025 quiet=0.00 motion=2 mount=1/0 bias=4.283/1.234/0.161 batch=3 dt=0.019333 poll_ms=58 resets=0 motion_rx_age_ms=24264
+[  1195.0s] G state=2 id=05 addr=6B ctrl=60/17/57/77/03 fifo=00:00 wm=1 status=00 n=434 valid=160 hz=54 err=0 ovf=0 direct=0 cpu_us=212154 fault=0 a=-0.669/0.245/0.630 w=-19.95/-168.59/-99.28 pose=0 raw=1:-5481/2006/5163/-1277/-10790/-6354 axis=USB_REAR_NEG_X_FACE_POS_Z
+[  1195.0s] G pose up=-0.556/0.240/0.796 g=-0.044/-0.183 quiet=0.00 motion=2 mount=1/0 bias=4.283/1.234/0.161 batch=1 dt=0.017000 poll_ms=17 resets=0 motion_rx_age_ms=25276
+[  1196.0s] G state=2 id=05 addr=6B ctrl=60/17/57/77/03 fifo=00:00 wm=1 status=00 n=489 valid=215 hz=55 err=0 ovf=0 direct=0 cpu_us=210780 fault=0 a=-0.481/-0.165/0.965 w=-45.59/79.52/-44.47 pose=0 raw=1:-3937/-1351/7903/-2918/5089/-2846 axis=USB_REAR_NEG_X_FACE_POS_Z
+[  1196.0s] G pose up=-0.355/-0.110/0.928 g=0.049/-0.103 quiet=0.00 motion=2 mount=1/0 bias=4.283/1.234/0.161 batch=3 dt=0.019000 poll_ms=57 resets=0 motion_rx_age_ms=26316
+[  1197.0s] G state=2 id=05 addr=6B ctrl=60/17/57/77/03 fifo=00:00 wm=1 status=00 n=541 valid=267 hz=52 err=0 ovf=0 direct=0 cpu_us=201661 fault=0 a=-0.522/-0.405/0.730 w=7.28/0.72/-0.97 pose=0 raw=1:-4276/-3320/5978/466/46/-62 axis=USB_REAR_NEG_X_FACE_POS_Z
+[  1197.0s] G pose up=-0.544/-0.315/0.778 g=0.103/0.006 quiet=0.00 motion=2 mount=1/0 bias=4.283/1.234/0.161 batch=1 dt=0.017000 poll_ms=17 resets=0 motion_rx_age_ms=27321
+[  1198.1s] G state=2 id=05 addr=6B ctrl=60/17/57/77/03 fifo=00:00 wm=1 status=00 n=596 valid=322 hz=55 err=0 ovf=0 direct=0 cpu_us=210755 fault=0 a=0.516/0.523/-0.752 w=74.55/-62.86/-6.80 pose=0 raw=1:4227/4287/-6164/4771/-4023/-435 axis=USB_REAR_NEG_X_FACE_POS_Z
+[  1198.1s] G pose up=0.368/0.358/-0.858 g=0.185/0.161 quiet=0.00 motion=2 mount=1/0 bias=4.283/1.234/0.161 batch=3 dt=0.019000 poll_ms=57 resets=0 motion_rx_age_ms=28361
+[  1198.7s] MEDIA HID ready=0 auth=1 sub=1 suspended=1 report=1 release=1
+[  1199.1s] G state=1 id=05 addr=6B ctrl=60/17/57/77/03 fifo=00:00 wm=1 status=00 n=648 valid=326 hz=52 err=0 ovf=0 direct=0 cpu_us=200594 fault=0 a=-0.068/-0.559/0.822 w=1.61/1.78/-0.14 pose=0 raw=1:-553/-4577/6731/103/114/-9 axis=USB_REAR_NEG_X_FACE_POS_Z
+[  1199.1s] G pose up=0.155/-0.006/-0.988 g=-0.041/0.167 quiet=0.00 motion=2 mount=1/0 bias=4.283/1.234/0.161 batch=1 dt=0.017000 poll_ms=17 resets=0 motion_rx_age_ms=29366
+[  1200.1s] G state=1 id=05 addr=6B ctrl=60/17/57/77/03 fifo=00:00 wm=1 status=00 n=704 valid=326 hz=56 err=0 ovf=0 direct=0 cpu_us=211341 fault=0 a=-0.081/-0.521/0.934 w=37.73/54.95/-19.94 pose=0 raw=1:-661/-4264/7648/2415/3517/-1276 axis=USB_REAR_NEG_X_FACE_POS_Z
+[  1200.1s] G pose up=0.155/-0.006/-0.988 g=-0.041/0.167 quiet=0.00 motion=2 mount=1/0 bias=4.283/1.234/0.161 batch=3 dt=0.019000 poll_ms=57 resets=0 motion_rx_age_ms=30402
+[  1200.6s] CORRUPT HEAP: Bad tail at 0x3fcec9a0. Expected 0xbaad5678 got 0x01a8fd1c
+[  1200.9s] Guru Meditation Error: Core  / panic'ed (Cache error).
+[  1200.9s] MMU entry fault error
+[  1200.9s] 
+[  1200.9s] Core  0 register dump:
+[  1200.9s] PC      : 0x4037f86a  PS      : 0x00060d34  A0      : 0x82097188  A1      : 0x3fcc0cf0
+[  1200.9s] A2      : 0x00000000  A3      : 0x00000000  A4      : 0x80383d3e  A5      : 0x3fcd7e60
+[  1200.9s] A6      : 0x00060023  A7      : 0x00000003  A8      : 0x82038756  A9      : 0x3fcc0cb0
+[  1200.9s] A10     : 0x00000000  A11     : 0x00000000  A12     : 0x80383d3e  A13     : 0x3fcc0bf0
+[  1200.9s] A14     : 0x00060023  A15     : 0x3fcc0ccf  SAR     : 0x0000001c  EXCCAUSE: 0x00000007
+[  1200.9s] EXCVADDR: 0x00000000  LBEG    : 0x00000000  LEND    : 0x00000000  LCOUNT  : 0x00000000
+[  1200.9s] 
+[  1200.9s] 
+[  1200.9s] Backtrace: 0x4037f867:0x3fcc0cf0 0x42097185:0x3fcc0d10 0x40384bf7:0x3fcc0d30 0x40383aa1:0x3fcc0d50
+[  1200.9s] 
+[  1200.9s] 
+[  1200.9s] Core  1 register dump:
+[  1200.9s] PC      : 0x420984f2  PS      : 0x00060d34  A0      : 0x82098550  A1      : 0x3fcebec0
+[  1200.9s] A2      : 0x434ae418  A3      : 0x42098368  A4      : 0x3fcebee8  A5      : 0x3fce9724
+[  1200.9s] A6      : 0x434ae420  A7      : 0x434ae41c  A8      : 0x037c1a71  A9      : 0x3fcebea0
+[  1200.9s] A10     : 0x00000001  A11     : 0x037c1a70  A12     : 0x00000000  A13     : 0x3fcebee8
+[  1200.9s] A14     : 0x00000001  A15     : 0x00000000  SAR     : 0x00000005  EXCCAUSE: 0x00000007
+[  1200.9s] EXCVADDR: 0x00000000  LBEG    : 0x40056f5c  LEND    : 0x40056f72  LCOUNT  : 0xffffffff
+[  1200.9s] 
+[  1200.9s] 
+[  1200.9s] Backtrace: 0x420984ef:0x3fcebec0 0x4209854d:0x3fcebee0 0x42098203:0x3fcebf10 0x4203a200:0x3fcebf30 0x4201d804:0x3fcebf50 0x42022ced:0x3fcebf80 0x42034778:0x3fcec000 0x40383aa1:0x3fcec020
+[  1200.9s] 
+[  1200.9s] 
+[  1200.9s] 
+[  1200.9s] 
+[  1200.9s] ELF file SHA256: d50ffab87
+[  1200.9s] 
+[  1200.9s] Rebooting...
+[  1200.9s] ESP-ROM:esp32s3-20210327
+[  1200.9s] Build:Mar 27 2021
+[  1200.9s] rst:0xc (RTC_SW_CPU_RST),boot:0x2b (SPI_FAST_FLASH_BOOT)
+[  1200.9s] Saved PC:0x40382c61
+[  1200.9s] SPIWP:0xee
+[  1200.9s] mode:DIO, clock div:1
+[  1200.9s] load:0x3fce2820,len:0x10cc
+[  1200.9s] load:0x403c8700,len:0xc2c
+[  1200.9s] load:0x403cb700,len:0x30c0
+[  1200.9s] entry 0x403c88b8

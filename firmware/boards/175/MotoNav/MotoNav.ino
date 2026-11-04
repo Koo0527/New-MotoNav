@@ -53,6 +53,11 @@ void setup() {
   Serial.printf("Reset reason=%d, sleep wake=%d\n", (int)esp_reset_reason(),
                 (int)esp_sleep_get_wakeup_cause());
   Wire.begin(IIC_SDA, IIC_SCL);
+  // v7.12.10-pages.175c.13fix 根因修复：SensorLib 读 QMI8658 FIFO 时单次 I2C 请求最多 240B
+  // （SensorQMI8658.cpp kFifoReadChunk），而 Wire 的 rxBuffer 默认仅 128B（I2C_BUFFER_LENGTH），
+  // IDF 驱动会按请求长度直接写入 → 溢出 112B 原始样本包打坏相邻堆块（0x3fcec9a0，见
+  // missions/2026-11-04-175c11-reboot-investigation.md）。512B 覆盖最大单块且留 2 倍余量。
+  Wire.setBufferSize(512);
   pinMode(0,INPUT_PULLUP);
   deviceControls.bootBegin(digitalRead(0)==LOW,millis());
   touchInit();                                         // v5.2 触摸屏
