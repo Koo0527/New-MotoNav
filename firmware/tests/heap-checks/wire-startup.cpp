@@ -116,6 +116,7 @@ struct Result {
   std::string haltName;
 };
 static Result run(FakeWire w) {
+  Wire.freeWireBuffer();   // 释放上一场景遗留缓冲，再整体覆盖（否则旧 rx/tx 指针被覆盖即泄漏）
   Wire = w; Serial.lines.clear(); pinModeCalls.clear();
   Result r;
   try { setup(); } catch (const HaltException& e) { r.halted = true; r.haltName = e.what(); }
@@ -172,6 +173,7 @@ int main() {
     EXPECT(r.halted && r.haltName == "Wire recovery");
     EXPECT(pinModeCalls.empty());
   }
+  Wire.freeWireBuffer();   // 最后一个场景的缓冲同样要清理（main 返回前，LSan 零泄漏）
   std::puts("wire-startup ok");
   return 0;
 }

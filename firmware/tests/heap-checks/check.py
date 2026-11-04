@@ -40,7 +40,7 @@ def extract_setup_head(ino_text: str) -> str:
     return ino_text[start:end] + '}\n'
 
 def build_and_run(ino_text: str, workdir: pathlib.Path, tag: str):
-    """提取+编译+运行；返回 (编译成功, 退出码)。"""
+    """提取+编译+运行；返回 (编译成功, 运行退出码, 错误输出)。"""
     exe = workdir / f'wire-startup-{tag}'
     (workdir / f'setup_head-{tag}.inc').write_text(extract_setup_head(ino_text))
     comp = subprocess.run(['c++', '-std=c++17', '-fsanitize=address,undefined',
@@ -49,16 +49,19 @@ def build_and_run(ino_text: str, workdir: pathlib.Path, tag: str):
                            here / 'wire-startup.cpp', '-o', str(exe)],
                           capture_output=True, text=True)
     if comp.returncode != 0:
-        return False, comp.returncode
-    return True, subprocess.run([exe], capture_output=True).returncode
+        return False, None, comp.stderr
+    run = subprocess.run([exe], capture_output=True, text=True)
+    return True, run.returncode, run.stderr
 
 with tempfile.TemporaryDirectory() as d:
     work = pathlib.Path(d)
-    ok, rc = build_and_run(ino, work, 'real')
-    assert ok, 'wire-startup compile failed against production setup()'
-    assert rc == 0, f'wire-startup scenarios FAILED (rc={rc}) against production setup()'
+    ok, rc, err = build_and_run(ino, work, 'real')
+    assert ok, f'wire-startup compile failed against production setup()\n{err}'
+    assert rc == 0, f'wire-startup scenarios FAILED (rc={rc}) against production setup()\n{err}'
 
-    # 负向变体：在临时副本上篡改，每种必须使行为测试失败（编译失败或场景失败均算）。
+    # 负向变体：在临时副本上篡改。门槛=必须能编译（手术不得引入语法错误），且以
+    # 场景断言失败的方式被拒绝——stderr 含 'FAIL ' 行（EXPECT 宏输出）。编译错误、
+    # Sanitizer 故障或异常终止都不能冒充预期的负向测试结果。
     # 区间锚点 = 'if (Wire.setBufferSize(512)' 起至 'pinMode(0,INPUT_PULLUP);' 前；
     # 找不到锚点即变体失效，视为失败。
     def resize_region(t):
@@ -76,8 +79,16 @@ with tempfile.TemporaryDirectory() as d:
     for name, mutate in variants.items():
         mutated = mutate(ino)
         assert mutated != ino, f'variant {name}: anchor not found (mutation no-op)'
-        ok, rc = build_and_run(mutated, work, name)
-        assert not ok or rc != 0, \
-            f'variant {name} unexpectedly PASSED the behavior test'
+        ok, rc, err = build_and_run(mutated, work, name)
+        assert ok, f'{name}: mutation must compile\n{err}'
+        assert rc != 0, f'{name}: mutation unexpectedly passed'
+        assert any(line.startswith('FAIL ') for line in err.splitlines()), \
+            f'{name}: expected scenario assertion failure\n{err}'
+
+    # 手术自检：制造语法错误的副本必须让 runner 整体失败（编译失败不可计为有效负向测试）
+    a, b = resize_region(ino)
+    broken = ino[:a] + 'if (Wire.setBufferSize(512) syntax-error {\n' + ino[b:]
+    ok, rc, err = build_and_run(broken, work, 'syntax-broken')
+    assert not ok, 'syntax-broken control: expected compile failure'
 
 print('heap-checks wiring + host regression + wire-startup behavior passed')

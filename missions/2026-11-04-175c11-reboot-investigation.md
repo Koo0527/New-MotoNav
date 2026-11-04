@@ -258,6 +258,12 @@ PSRAM 较首 boot 少 ~885KB（4,265,808→3,381,064）：崩溃前用户推送�
 6. **证据（见 missions/evidence/175c11-reboot/manifest.md）**：.13/.14/.15 ELF 以 gzip -9 -n 确定性归档入 git（解压校验哈希一致）；补存 .13/.12diag app bin；.12diag 与 .13fixdiag 完整 ELF SHA256 自 bin 内嵌 app_desc（本 SDK 魔数 0xABCD5432，SHA 偏移 +144）恢复；.15 bin 内嵌 ELF SHA256 与归档 ELF 实测一致。
 7. **构建**：FW `v7.12.10-pages.175c.15`，1,344,827B（42%）/ RAM 118,100B；构建后立即归档 ELF+bin（哈希见 manifest）。
 8. **真机**：待设备回连（烧录前串口无设备）。验收门槛见计划第 4 节；完成前本节状态为**硬件待验收**，不宣称整改闭环。
+9. **测试工具修复（175c.15 收尾轮，2026-11-04 深夜）**：
+   - **桩资源泄漏**：wire-startup.cpp 的 `run()` 覆盖全局 Wire 前不释放旧缓冲、main 退出前不清理——d4b4041 版经 new[]/delete[] 计数探针实测 **14 次分配/10 次释放、4 个数组泄漏**（macOS ASan 不支持 detect_leaks，Linux LSan 见下）。修复：`run()` 前置 `Wire.freeWireBuffer()` + main 返回前再清一次；修复后探针 **14/14 平衡、0 泄漏**。
+   - **负向测试门槛**：check.py 的 `build_and_run` 改返回 (编译成功, 退出码, stderr)；负向变体必须**编译成功**（断言 ok 且带编译器输出）、**rc != 0**、且 stderr 含 `FAIL ` 开头的场景断言行——编译错误、Sanitizer 故障、异常终止均不能冒充预期失败。新增语法错误对照（临时副本注入 `syntax-error`），验证编译失败使 runner 整体失败而非计为有效负向。原"编译失败也算通过"注释已删。
+   - **构建上下文勘误**：manifest 中 .15 构建 HEAD 修正为 `git rev-parse d4b4041^` 的真实输出 `f19e758749cbc7c0ce9c3546672a6159a45ed761`（初稿全文哈希存在 54↔6 错位笔误，已用 `git cat-file -t` 验证可解析）；.13 行改为"整改代码对应 2aeaa9d，实际构建含用户 WIP，未留存完整源码快照，不声明干净树或可精确重建"。
+   - **验证**：check.py 全绿（含 6 场景 + 5 变体 FAIL 行门槛 + 语法错误对照）；.13/.14/.15 已提交 gzip 与 app bin 哈希逐一复验未变；manifest 两个构建提交均可被 git 解析。**Linux LSan（Ubuntu CI `ASAN_OPTIONS=detect_leaks=1`）本机无 runner，待 CI 首跑验收**；macOS 本机检查通过。
+   - 固件源码、版本号、CI 工作流、ELF/bin 制品本轮零改动。
 
 ## Evidence archive
 
