@@ -23,8 +23,18 @@ for path in src.rglob('*.h'):
         continue  # 工具本体，允许包含 HEAPCHK 宏定义
     assert 'HEAPCHK(' not in path.read_text(), f'diagnostic leftovers in {path}'
 
-# 根因修复布线：Wire.begin 后必须扩容 rxBuffer，否则 SensorLib FIFO 240B 单块读溢出 128B 默认缓冲
+# 根因修复布线：Wire.begin 后必须扩容 rxBuffer，否则 SensorLib FIFO 240B 单块读溢出 128B 默认缓冲。
+# 175c.14 起扩容必须带返回值检查（失败时 Wire 已 free 原缓冲，继续跑 = 静默死 I2C）：
+# 先剔除 // 注释再做正则，保证注释掉的调用、if(false)/#if 0 包裹或裸调用都无法通过；
+# 失败分支还必须含真实恢复动作（end() 重建总线 + allocFailHalt 兜底），防空壳检查。
 import re
-m = re.search(r'Wire\.begin\([^)]*\);\s*\n(.*?)Wire\.setBufferSize\((\d+)\)', ino, re.S)
-assert m and int(m.group(2)) >= 256, 'Wire.setBufferSize(>=256) must follow Wire.begin'
+stripped = re.sub(r'//[^\n]*', '', ino)
+m = re.search(r'Wire\.begin\([^)]*\);\s*\n(.*?)if\s*\(\s*!\s*Wire\.setBufferSize\(\s*(\d+)\s*\)',
+              stripped, re.S)
+assert m and int(m.group(2)) >= 256, \
+    'failure-checked if(!Wire.setBufferSize(>=256)) must follow Wire.begin'
+assert not re.search(r'if\s*\(\s*false|#if\s+0', m.group(1)), 'fix disabled by if(false)/#if 0'
+tail = stripped[m.end():m.end() + 400]
+assert 'Wire.end()' in tail and 'allocFailHalt(' in tail, \
+    'setBufferSize failure branch must rebuild bus (Wire.end) or halt (allocFailHalt)'
 print('heap-checks wiring + host regression passed')

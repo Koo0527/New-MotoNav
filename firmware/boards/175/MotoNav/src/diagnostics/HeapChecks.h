@@ -33,7 +33,7 @@ enum Stage : uint8_t {
 struct Rec {                 // 单条阶段记录（进 core dump）
   uint32_t ms;               // millis()
   uint32_t dur;              // 遍历耗时 us（未遍历为 0）
-  uint16_t stack;            // loopTask 栈余量字（仅遍历条目记录）
+  uint16_t stack;            // loopTask 栈余量字节（uxTaskGetStackHighWaterMark 本 SDK 返回字节；仅遍历条目记录）
   uint8_t stage;
   uint8_t flags;             // bit0=执行了遍历 bit1=遍历发现损坏
 };
@@ -75,7 +75,7 @@ inline void stats(uint32_t now) {
   lastStatMs = now;
   Serial.printf("HEAPCHK n=%lu walks=%lu maxus=%lu stMinB=%u\n",
                 (unsigned long)total, (unsigned long)walks,
-                (unsigned long)maxWalkUs, (unsigned)(minStack == 0xFFFF ? 0 : minStack * 4));
+                (unsigned long)maxWalkUs, (unsigned)(minStack == 0xFFFF ? 0 : minStack));
 }
 
 // 每个阶段边界调用一次。轮转策略：仅当 stage==nextWalk 时做全内部堆遍历；

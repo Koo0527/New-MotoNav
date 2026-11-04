@@ -204,11 +204,13 @@ PSRAM 较首 boot 少 ~885KB（4,265,808→3,381,064）：崩溃前用户推送�
 | 堆完整性遍历 | **122,466 次全部干净**（maxus=520），零 `HEAPCHK FAIL`、零 `CORRUPT` |
 | 重启 | 1 次 boot（烧录后首启），0 Guru/backtrace/看门狗 |
 | 堆水位 | free 81,640 / min 80,896 恒定，无劣化 |
-| loopTask 栈 | stMinB=16,064 健康 |
+| loopTask 栈 | stMinB=4,016 健康（**勘误 175c.14**：本 SDK `uxTaskGetStackHighWaterMark` 返回字节，诊断工具曾误乘 4，原记录 16,064 为虚高 4 倍值；真实余量 4,016B 仍属健康水位） |
 
 对照：175c.12diag 同等操作下两次触发（1169.2s、1200.6s），损坏确定性复现；加 `Wire.setBufferSize(512)` 后同等暴露零异常。结合根因的确定性证明（地址算术 + 内容指纹 + 阶段括号），判定修复有效。
 
 日志：`missions/evidence/175c11-reboot/fixdiag-verification-run1.log`（原始 `/tmp/motonav-175c13fixdiag-run1.log`）。
+
+**结论范围限定（审查整改补充，175c.14）**：上表仅证明**堆完整性修复有效**（零损坏、零崩溃重启）。同一日志中仍存在与堆损坏无关的其他观测：G 过采样 `err` 0–1 次/行、FIFO `ovf` 0–2 次/行、`fault` 计数（4×128 / 5×120 两档）、`resets` 最高 9、全程 `motion=2`（Unknown，无有效运动分类）。因此本验证**不构成** G 值准确性或运动姿态功能的验收；G 值表三项缺陷（自动校准吃掉真实加速度、黄点陈旧、降采样加大间隙）属另一整改线。未验收项：三姿态长测、60 分钟并行运行、道路实骑及电池负载场景；70min 空闲挂机亦不能排除供电类重启（本验证未覆盖）。
 
 ## RELEASE (175c.13 正式版)
 
@@ -219,6 +221,20 @@ PSRAM 较首 boot 少 ~885KB（4,265,808→3,381,064）：崩溃前用户推送�
 - 130s 冒烟 **PASS**：1 次 boot 3.8s ready（自报 175c.13）、0 看门狗/backtrace/ALLOC FAIL、HEAP 行每 10s 共 12 条、drop_* 全 0、`HEAPCHK` 行 0（诊断移除验证）、内部堆 free 83,172。
 - 回滚路径更新：如需回退，app-only 重刷 dist 中的 175c.11（SHA256 见档案开头）或本版之前任意包；本修复不涉及 NVS/分区，无迁移。
 
+## REVIEW REMEDIATION (175c.14, 2026-11-04)
+
+外部审查确认根因修复正确（bin/ELF 哈希吻合、正式版无诊断残留），但指出本提交三项 P2，均已整改：
+
+1. **setBufferSize 返回值未检查**（MotoNav.ino）：失败时 Wire 内部已 `freeWireBuffer()` 且指针置 NULL、`bufferSize` 已改成新值——重试同尺寸只改值不分配、`begin()` 因总线已初始化提前返回 true，两条路都会静默留下死 I2C。修复：`if (!Wire.setBufferSize(512))` → `Wire.end()` → `setBufferSize(256)`（仍 ≥ 驱动最大单块 240B）→ `begin()` 重建；再失败 `allocFailHalt`（与 laneCol 等启动关键分配同一兜底惯例）。
+2. **HeapChecks 栈余量单位错误**（HeapChecks.h）：本 SDK（IDF 5.5.4 / Arduino 3.3.10）`uxTaskGetStackHighWaterMark` 返回**字节**，stats 行曾误乘 4。已去掉 `*4`，本档案两处历史数值已加勘误（16,064→4,016；21,440→5,360），宿主测试新增 stMinB 原值断言锁回归。
+3. **证据档案缺匹配诊断 ELF**：.12diag（`d50ffab87…`）与 .13fixdiag（`72b76ee8…`）ELF 均因 `.build` 被后续构建覆盖且当时未归档而**不可复原**（仅存 16 位前缀；bin 完整保留）。整改：从覆盖前 `.build` 抢救出 .13 ELF（`a0ade6ce…`）归档；.14 构建后**立即**归档 ELF+bin；遗失事实已在 Diagnostic build 章节与 FIX 章节标注。
+
+测试加固（同审查项）：`heap-checks/check.py` 布线断言改为先剔除 `//` 注释、要求 `if (!Wire.setBufferSize(N>=256))` 失败检查形式、且失败分支必须含 `Wire.end()` + `allocFailHalt(`——注释掉的调用、`if(false)`/`#if 0` 包裹、裸调用、空壳分支、尺寸不足五种形态经负向测试全部拒绝。
+
+- 宿主套件：28 个 *Test.cpp + idle-power + game-destination-draw/lane-visibility/touch-lock + raster-smoothing + raster-work(main/receiver) + heap-checks + flush-ownership 全 PASS；**既有失败 1 项**：`raster-work/check_sources.py`（RasterContinuity.h fixture 与 production 失同步——两文件均在用户未提交 map-edge WIP 中，非本次改动引入，不越界处理）。
+- FW_VERSION `v7.12.10-pages.175c.14`；编译 PASS（1,344,751B / RAM 118,100B）；产物哈希见 Evidence archive。
+- CI 缺口备注：`release-firmware.yml` 测试步骤未包含 heap-checks/flush-ownership 两个 check.py；该文件处于用户 WIP 修改态，本次不碰，待用户 WIP 落地后补一行接入。
+
 ## Evidence archive
 
 `missions/evidence/175c11-reboot/`：
@@ -226,6 +242,8 @@ PSRAM 较首 boot 少 ~885KB（4,265,808→3,381,064）：崩溃前用户推送�
 - `coredump2.bin` / `coredump2.elf` — 事件 2 部分转储（任务栈含 a[]/w[] 指纹 0x01a8fd1c×3）
 - `fixdiag-verification-run1.log` — 修复验证全程
 - `motonav-175c13-smoke.log` — 正式版冒烟
+- `motonav-175c13.elf` — .13 匹配 ELF（SHA256 `a0ade6ce28d50ab08b53aa3fb604aa54cf48dcfe76faeaa93c36b7a97367ee89`；175c.14 从被覆盖前的 `.build` 抢救归档；23MB 仅存本机证据目录不入 git，哈希已钉死可随时校验/复投）
+- `motonav-175c14-app.bin` — 175c.14 审查整改版 app bin（SHA256 `a45951a58952269f8d934b6685b4ad58b66f60de21902e079e9d5c1f7f924644`，入 git）；匹配 `motonav-175c14.elf`（SHA256 `52e32551eb55b60802e862a104abd047284433e1064b722ff8b590f67e5865b7`，23MB 同样仅存本机；构建后立即归档——流程修正：此后每次构建先抢救 ELF 再做别的）
 
 其余大文件（.10/.11 bin/ELF、第一次 core dump）仍在 `/tmp/motonav-175c11-reboot-evidence/`（临时，可丢失；dist 保留 .11 包）。
 
@@ -240,7 +258,7 @@ Wire.setBufferSize(512);   // rx/tx 各 512B（净增 ~768B 内部堆），覆�
 - 建立在当前树（我的 .10 提交 + 用户 .11 WIP 全保留）；零协议/NVS/分区变化。
 - FW_VERSION → `v7.12.10-pages.175c.13fixdiag`（修复 + HeapChecks 验证保留；正式版再移除诊断）。
 - 宿主回归 8/8 PASS（heap-checks 布线断言新增：`Wire.setBufferSize(>=256) 必须紧跟 Wire.begin`，防止未来移除）。
-- app bin SHA256 前缀 `cafad5a7da29f42d`；匹配 ELF `firmware/.build/universal/175/build/MotoNav.ino.elf` 前缀 `72b76ee8e8ec959d`。
+- app bin SHA256 前缀 `cafad5a7da29f42d`；匹配 ELF ~~前缀 `72b76ee8e8ec959d`~~ **已遗失（175c.14 勘误）**：同 `.build` 覆盖问题，未及时归档；bin 保留在 dist 可复现构建（源码快照在提交 2aeaa9d）。
 - 烧录 app-only @0x10000；boot 3.8s；空闲 HEAPCHK 正常（maxus=410）；内部堆 free 82,904（较修复前 −300B ≈ 扩容净增，符合预期）。
 - 验证抓取：`/tmp/motonav-175c13fixdiag-run1.log`（60min 计划）。判据：≥10 轮 G 页/校准/转动（穿插 BLE 断连、息屏）零 `HEAPCHK FAIL`、零重启；通过后才宣称修复并出正式版。
 
@@ -250,11 +268,11 @@ Wire.setBufferSize(512);   // rx/tx 各 512B（净增 ~768B 内部堆），覆�
 |---|---|
 | App bin | `firmware/dist/175/panel0/MotoNav_universal_1.75_v7.12.10-pages.175c.12diag_panel0_app_0x10000.bin`（1,346,736B） |
 | App bin SHA256 前缀 | `8d0721f217b6a54f`（完整值见 dist；烧录校验 Hash of data verified） |
-| 匹配 ELF | `firmware/.build/universal/175/build/MotoNav.ino.elf`，SHA256 前缀 `d50ffab87dd86d8f`（解码诊断 abort 用） |
+| 匹配 ELF | ~~`firmware/.build/universal/175/build/MotoNav.ino.elf`，SHA256 前缀 `d50ffab87dd86d8f`~~ **已遗失（175c.14 勘误）**：该构建路径被后续 .13fixdiag/.13 构建覆盖，ELF 当时未归档；仅记录 16 位哈希前缀，无法再复原。.12diag app bin 完整保留在 dist；两次触发日志与 core 转储（`coredump2.elf` 内嵌哈希 `f8ec82942`… 为 175c.11 时代前缀）仍可独立支撑根因结论 |
 | 编译 | Arduino 3.3.10 通过：1,346,490B（42%）/ RAM 118,932B（36%） |
 | 宿主回归 | heap-checks + flush-ownership + touch-lock + HudText + FixedPages + GInstrumentRuntime + GInstrumentRecovery 全部 PASS |
 | 烧录 | app-only @0x10000（/dev/cu.usbmodem2101），NVS/分区不动，3.8s ready 自报 v7.12.10-pages.175c.12diag |
-| 自证（空闲） | `HEAPCHK n=14263 walks=4757 maxus=400 stMinB=21440`（30s 内）——遍历峰值 400µs、loopTask 栈余量最低 21.4KB、检查自活跃 |
+| 自证（空闲） | `HEAPCHK n=14263 walks=4757 maxus=400 stMinB=21440`（30s 内）——遍历峰值 400µs、检查自活跃（**勘误 175c.14**：stMinB 打印曾误乘 4，21,440 实为 5,360B；loopTask 栈最低余量 5.36KB） |
 | 抓取 | `/tmp/motonav-175c12diag-run1.log`（60min 计划，含启动复位 1 次为工具 DTR 所致） |
 | 上一段静置证据 | 恢复抓取完整跑满 4200s：1 boot、0 panic（Reset reason=11 为开串口工具所致）——静置不触发，损坏需 G 交互 |
 
@@ -306,8 +324,9 @@ https://docs.espressif.com/projects/esp-idf/en/v5.5/esp32s3/api-guides/core_dump
 | 2026-11-04 | Diagnostic contract drafted | 尚未接受；无固件源码变更 |
 | 2026-11-04 | Second-pass audit | 损坏窗口收窄至 [2557.7s,2568.1s]；coredump 任务名/全段 0x4bef2344 搜索；G 路径+第二轮改动静态审计全部有界；记录 SensorLib 单传感器分支休眠缺陷；方案维持待接受，建议 G 路径加密打点 |
 | 2026-11-04 | Contract ACCEPTED（"实施诊断吧"） | G 密集打点并入范围（DeviceInstruments.h/PageNavigation.h） |
-| 2026-11-04 | 175c.12diag 实施 | HeapChecks.h + 12 阶段打点 + 宿主测试 7/7 PASS + 编译 + app-only 烧录；空闲自证 maxus=400 stMinB=21440 |
+| 2026-11-04 | 175c.12diag 实施 | HeapChecks.h + 12 阶段打点 + 宿主测试 7/7 PASS + 编译 + app-only 烧录；空闲自证 maxus=400 stMinB=21440（打印值虚高 4 倍，勘误见上） |
 | 2026-11-04 | **两次触发，根因定位** | 事件1: S_G 遍历 FAIL @0x3fcec9a0/9ac + 阶段括号锁死 readFromFifo 调用；事件2: 同址 walk 踩雷 Cache error + coredump 任务栈取证；代码取证锁定 Wire rxBuffer 128B < FIFO 单块 240B 溢出 |
 | 2026-11-04 | 修复实施 | 用户批准（保留 .10/.11）；Wire.setBufferSize(512) + 布线断言 + FW 175c.13fixdiag；宿主 8/8；烧录后进入 ≥10 轮真机验证 |
 | 2026-11-04 | **真机验证通过** | 995s/398 条 G 行/122,466 次遍历零异常（对照 .12diag 同操作 2 次触发）；暴露窗口与触发前对等 |
 | 2026-11-04 | 发布 175c.13 | 诊断零残留（git 净改动为零）+ 130s 冒烟 PASS；证据归档 missions/evidence/175c11-reboot/；mission 置 COMPLETED |
+| 2026-11-04 | 外部审查 + P2 整改 | 审查确认修复正确；整改三 P2：返回值检查+256B 重建、stMinB ×4 单位勘误、ELF 归档流程（抢救 .13、即时归档 .14）；check.py 五形态负向加固；见 REVIEW REMEDIATION 章节 |

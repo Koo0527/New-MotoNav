@@ -57,7 +57,17 @@ void setup() {
   // （SensorQMI8658.cpp kFifoReadChunk），而 Wire 的 rxBuffer 默认仅 128B（I2C_BUFFER_LENGTH），
   // IDF 驱动会按请求长度直接写入 → 溢出 112B 原始样本包打坏相邻堆块（0x3fcec9a0，见
   // missions/2026-11-04-175c11-reboot-investigation.md）。512B 覆盖最大单块且留 2 倍余量。
-  Wire.setBufferSize(512);
+  // v7.12.10-pages.175c.14：必须检查返回值。失败时 Wire 已 free 原缓冲、指针置 NULL 且
+  // bufferSize 已改成新值（Wire.cpp setBufferSize）——重试同尺寸只改值不分配，begin() 又
+  // 因总线已初始化提前返回 true，都会静默留下死 I2C。正确恢复：end() 后退到 256B（仍 ≥240
+  // 最大单块）重建总线；再失败按启动关键分配处理（allocFailHalt：打印堆况并重启）。
+  if (!Wire.setBufferSize(512)) {
+    Serial.printf("Wire.setBufferSize(512) failed; rebuild @256B\n");
+    Wire.end();
+    Wire.setBufferSize(256);              // 双 NULL → 仅登记新尺寸，分配交给 begin()
+    if (!Wire.begin(IIC_SDA, IIC_SCL))
+      allocFailHalt("Wire.begin(256B rx/tx)", 512);
+  }
   pinMode(0,INPUT_PULLUP);
   deviceControls.bootBegin(digitalRead(0)==LOW,millis());
   touchInit();                                         // v5.2 触摸屏

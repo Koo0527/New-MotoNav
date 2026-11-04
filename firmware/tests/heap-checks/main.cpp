@@ -45,6 +45,12 @@ int main() {
     assert(HeapChecks::minStack == 100);
     assert(stubSawInternal);                                // 确实用了 MALLOC_CAP_INTERNAL+print
     assert(!Serial.lines.empty() && Serial.lines[0].rfind("HEAPCHK n=", 0) == 0);  // 首次 S_MSG 自证行
+    { // 175c.14 回归：stMinB 必须是 uxTaskGetStackHighWaterMark 的原值（本 SDK 返回字节），
+      // 曾误乘 4（当作字），导致上报余量虚高 4 倍。stub 返回 100 → 打印必须是 100 而非 400。
+      const std::string &l = Serial.lines[0];   // 行尾含 printf 的 '\n'
+      size_t p = l.rfind("stMinB=");
+      assert(p != std::string::npos && l.compare(p + 7, 3, "100") == 0);
+    }
   }
   { // 2. 轮转停摆自愈：nextWalk 停在未触发阶段时，空闲 loop 在 S_MSG 强制遍历
     reset();

@@ -1,6 +1,6 @@
 #pragma once
 // 版本、诊断选项及路口灯状态，保持原先位于 Arduino.h 之前的顺序。
-#define FW_VERSION "v7.12.10-pages.175c.13"   // 175c.13：Wire.setBufferSize(512) 修复 G 校准/转动时内部堆损坏（根因与验证见 missions/2026-11-04-175c11-reboot-investigation.md）
+#define FW_VERSION "v7.12.10-pages.175c.14"   // 175c.14：setBufferSize 失败检查+256B 重建兜底、HeapChecks 栈余量单位修正（见 missions/2026-11-04-175c11-reboot-investigation.md）
 #include "../../TrafficLightLab.h"
 TrafficLightLab trafficLightLab;
 TrafficLightFrame trafficLightFrame;
