@@ -35,12 +35,15 @@
 ## 执行结果 — 2026-11-06
 
 - 第 1–3 节生产实现已完成：连接代次窗口、认证/窗口统一发送门、`sendBulk -> Bool`、
-  当前回执 ID 的 K/N、统一失败入口、实际入队才扣预算、迟到 v2 接管在途普通 v0、
-  建筑首包保护。
-- 宿主：`ble-palette-lifecycle`、`map-source-mode`（含 20/21/22）、`screenoff-maps`、
-  `ble-bulk`（27）、`ble-capability`（22）全部通过；详细记录见
+  当前回执 ID 的 K/N、统一失败入口、按包撤销与旧 ATT token、实际入队才扣预算、
+  迟到 v2 接管在途普通 v0、建筑 v0 重试后 ACK 补发 v2、建筑最终失败补发 v2。
+- 宿主：`ble-palette-lifecycle`、`map-source-mode`（含 20/21/22/23/24）、`screenoff-maps`、
+  `ble-bulk`（28）、`ble-capability`（22）全部通过；记录见
   `docs/verification/ios-reconnect-20261106.md`。
-- 无签名 Release 构建失败于宿主 Xcode SwiftUI 宏插件（`SwiftUIMacros.StateMacro` /
-  `swift-plugin-server malformed response`），无 `.app` 产物；不是本轮源码编译错误。
-- 代码仍在共享工作树未单独提交；集成快照归档在 `output/ios-reconnect-20261106/`。
-- 设备继续暂停，未烧录、未做真机组合重连。
+- 签名 Release Build 29 构建成功：`0.16.0 (29)`，Team `H3N5LA55A3`，
+  IPA `output/ios-reconnect-20261106/candidate/MotoNav-0.16.0-build29-signed.ipa`，
+  SHA256 `9fb5ea54…`；基线 Build 28 签名包保留。
+- 代码仍在共享工作树未单独提交；集成快照归档在 `output/ios-reconnect-20261106/`
+  （source SHA256 `6191d48e…`）。
+- 设备圆屏核对为 `2c267899…`，未烧录；iPhone 仍为 Build 28，Build 29 覆盖安装与
+  三次受控重连待执行。

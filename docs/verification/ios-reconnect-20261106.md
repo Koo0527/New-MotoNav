@@ -32,37 +32,50 @@
 | 测试 | 结果 |
 | --- | --- |
 | `python3 ios/tests/ble-palette-lifecycle/run.py` | PASS：认证窗口、首个 v2、K/N、旧/当前 N、生命周期重置 |
-| `python3 ios/tests/map-source-mode/run.py` | PASS：场景 20（未认证重置/新块不入队）、21（v0 在途 v2 接管）、22（未入队不扣预算）及既有 17/17b/18/19 |
+| `python3 ios/tests/map-source-mode/run.py` | PASS：场景 20（未认证重置/新块不入队）、21（v0 在途 v2 接管）、22（未入队不扣预算）、23（建筑 v0 重试后 ACK 补发 v2）、24（建筑最终失败补发 v2）及既有 17/17b/18/19 |
 | `python3 ios/tests/screenoff-maps/run.py` | PASS：96 checks 等 5 组，建筑首包在途保护 |
-| `swiftc … ble-bulk/main.swift` | PASS 27 checks |
+| `swiftc … ble-bulk/main.swift` | PASS 28 checks，含旧 ATT token 过期与按包撤销 |
 | `swiftc … ble-capability/main.swift` | PASS 22 checks |
 
 `map-source-mode` 的重复定位断言改为统计 `fineCaptures`，避免原有离线预取时序造成的偶发 base capture 误报；这仍验证“第二次定位不再请求近景”。
 
-## Release 构建
+## 签名 Release 构建
 
-`xcodebuild -project ios/MotoNav.xcodeproj -scheme MotoNav -configuration Release -sdk iphoneos CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" -derivedDataPath <tmp> build`：
+```sh
+xcodebuild -workspace ios/MotoNav.xcworkspace -scheme MotoNav \
+  -destination generic/platform=iOS -configuration Release \
+  -allowProvisioningUpdates DEVELOPMENT_TEAM=H3N5LA55A3 \
+  CURRENT_PROJECT_VERSION=29 -derivedDataPath <tmp> \
+  "OTHER_SWIFT_FLAGS=-Xfrontend -disable-sandbox" build
+```
 
-- exit 65，失败于宿主 Xcode 的 SwiftUI 宏插件：
-  `external macro implementation type 'SwiftUIMacros.StateMacro' could not be found`;
-  `swift-plugin-server produced malformed response`。
-- 该错误发生在 `RideMapViews.swift` 的 `@State` 展开，不是本轮 MapFeeder/BleLink 代码错误。
-- 本轮没有可归档的 Release `.app`；宿主测试已通过，实际装机仍为未验证。
+- `BUILD SUCCEEDED`，App 与 Share 扩展均为 `0.16.0 (29)`，Bundle ID `com.u238zyc.motonav`；
+- 签名：`Apple Development: u238zyc@gmail.com (563K9S7RHG)`，Team `H3N5LA55A3`；
+- App UUID `EB7ACE71-FD0D-38C1-A394-E520A9FB4B11`，扩展 UUID
+  `FDF3E9F3-D712-3303-8082-CE1BE6B3C638`；
+- 签名 IPA：`output/ios-reconnect-20261106/candidate/MotoNav-0.16.0-build29-signed.ipa`，
+  SHA256 `9fb5ea5490d2e050fffe7b75ebc3ac46cbe3a09026097ba3f4dd37b38d432d4d`；
+- 基线 Build 28 签名包保留：
+  `output/g-calibration-replay-20261105/MotoNav-0.16.0-build28-signed.ipa`，
+  SHA256 `ed73c65c…`。
+
+`-Xfrontend -disable-sandbox` 仅用于宿主 Xcode 的 SwiftUI 宏插件沙箱；不修改项目配置。
 
 ## 归档
 
 `output/ios-reconnect-20261106/`
 
 - `source/ios-integration.tar.gz`：`ios/MotoNav`、`ios/tests`、`ios/MotoNav.xcodeproj`，
-  SHA256 `83a9c01a…`；
+  SHA256 `6191d48e…`；
+- `candidate/MotoNav-0.16.0-build29-signed.ipa`、`candidate/Payload/MotoNav.app`；
 - `source/git-baseline.txt`、`git-status.txt`、`diff-stat.txt`、`working.diff`；
-- `logs/`：五项宿主测试与 iOS Release 构建原始日志；
+- `logs/`：五项宿主测试、无签名构建尝试与签名 Build 29 原始日志；
 - `manifest.json`、`SHA256SUMS`。
 
 iOS 生产/测试改动仍未单独提交：它们与共享地图 WIP 交织，且测试运行器依赖未提交的 `screenoff-maps/Stubs.swift`。归档快照可复跑；提交范围需与地图 WIP 一起整理。
 
 ## 未完成
 
-- 无签名 Release 构建因宿主 Xcode 宏插件失败，需修复 Xcode/插件环境后重试；
-- 真机组合重连验收未做，设备继续暂停；
+- iPhone 上仍安装 Build 28；Build 29 尚未覆盖安装，三次受控重连未执行；
+- 设备圆屏核对为 `2c267899…`，本轮未烧录；
 - 后续顺序仍为 CPU0 诊断 → 固件单独验收 → iOS 受控重连组合验收。
