@@ -1,45 +1,68 @@
-# iOS 重连底图能力协商修复 — 2026-11-06
+# iOS 重连补图整改 — 2026-11-06
 
 ## 范围
 
-修复圆屏重连后手机在 MPAL 能力确定前以 `paletteVersion=0` 提交底图的问题，并给同一底图的全量重发设一次上限。沿用现有 BLE 帧格式、旧固件 v0 兼容和 6 秒 `NO DATA` 门槛；不改变路线、位置、转向的既有优先级。
+修复共享工作树中 iOS 重连补图的三个遗留问题：
+
+1. 地图重置/切图源绕过连接认证与能力窗口；
+2. type 3 的旧 `N` 提前清掉当前回执，失败预算在未实际入队时被消耗；
+3. 普通 v0 底图在途时，迟到 v2 只能等待而不能接管。
+
+以 `3fdebd1` 验收记录和当前共享工作树实现为基线。设备仍暂停；本轮只做 iOS 宿主与构建交付。
 
 ## 实现
 
 `ios/MotoNav/BleLink.swift`
 
-- `onLinkReady` 不再调用 `MapFeeder.resendAll()`，改调 `MapFeeder.onLinkReady()`；认证回执改调 `onAuthenticated()`。
-- 解析 `N,3,id`：清理地图回执/计时器并通知 `MapFeeder.onReject`。
-- 地图回执最终超时时通知 `MapFeeder.onReceiptTimeout`。
-- 能力通知仍只提升 `roadPaletteVersion` 并调用 `onRoadPaletteCapability`。
+- `connectionGeneration` 在 link-ready 和断连时递增；延迟能力回调只能作用于创建它的连接。
+- `sendBulk` 改为 `@discardableResult -> Bool`，只有分片真正进入 `BleBulkWriteQueue` 才返回 `true`。
+- type 3 的 `K/N` 只处理当前 `mapReceipt.current.id`；旧 `K/N` 不推进/清理当前回执。
+- 当前 `N`、最终回执超时和当前栅格 ATT 最终失败统一走 `failCurrentMap`，保留尾片探测与旧 ATT 回调槽。
 
 `ios/MotoNav/MapFeeder.swift`
 
-- 新增 `reconnectMapPending` / `reconnectMapAt`：重连后先保留当前底图；认证后等 1 秒能力协商，到期按当前最高能力发送；无 MPAL 的旧固件走 v0。
-- `sendChunk()` 在能力窗口内不提交底图；窗口内的新块只保留最新负载。
-- `onRoadPaletteCapability()`：窗口内收到 v2 立即发送；窗口外若格式确实变化，保留在途 ATT 回调槽，取消旧地图分片/回执等待，换新 ID 重发一次；重复能力不重发。
-- `mapRetryUsed`：`checkResend`、`N,3,id` 和最终回执超时共用同一预算；同一底图最多完整重试一次，连续定位不会重开预算；新块/新连接/显式 `resendAll` 重置。
-- 建筑包在途或 `bulkPending` 时仍走原有 `flushPaletteCapability` 等待路径，不打断首个建筑包。
+- `sendChunk` 是底图统一发送门：必须 `isReady`、`verified` 且不在能力窗口；成功入队后才更新 ID、发送时间、实际 wire 格式和 `lastWire`。
+- `onLinkReady` 关闭底图发送并等待首次认证；认证后开启 1 秒单调时钟窗口；v2 到达立即放行，无 MPAL 走 v0；窗口回调带连接代次。
+- `resetChunk`/切主题/切图源/`resendAll` 只替换待发底图，保留当前连接的认证状态、窗口和截止时间；未认证时不入队。
+- 首次失败用相同 `lastWire` 字节和新 8 位 ID 完整重试一次；未成功入队不扣预算；第二次失败后等待新块/新连接/显式重发。
+- 迟到 v2：普通 v0 在途时撤旧余片/回执、保留 ATT 槽、换新 ID 入队 v2；建筑首包在途时只标记待升级，等 ACK/发送结束/槽释放后处理；重复能力按实际版本去重。
 
-## 红灯与宿主回归
+## 宿主回归
 
 | 测试 | 结果 |
 | --- | --- |
-| `python3 ios/tests/ble-palette-lifecycle/run.py`（修复前） | FAIL：`auth must not resend the map before capability settles` |
-| `python3 ios/tests/ble-palette-lifecycle/run.py`（修复后） | PASS：首个 `CAP,MPAL,2` 认证不提前重发；K/N 解析与生命周期重置 |
-| `python3 ios/tests/map-source-mode/run.py` | PASS：新增 17（窗口内不发、v2 到达发一次、重复不重发）、17b（1 秒后旧固件 v0）、18（迟到 v2 换新 ID/取消旧包/只重发一次）、19（N/超时共用一次预算） |
-| `python3 ios/tests/screenoff-maps/run.py` | PASS：96 checks 等 5 组，含建筑包在途不被能力取消 |
-| `swiftc ios/MotoNav/BleBulkWriteQueue.swift ios/MotoNav/BleWritePacer.swift ios/tests/ble-bulk/main.swift` | PASS 27 checks |
-| `python3 ios/tests/reroute-recovery/run.py` | 未在本轮改动路径上，未复跑 |
+| `python3 ios/tests/ble-palette-lifecycle/run.py` | PASS：认证窗口、首个 v2、K/N、旧/当前 N、生命周期重置 |
+| `python3 ios/tests/map-source-mode/run.py` | PASS：场景 20（未认证重置/新块不入队）、21（v0 在途 v2 接管）、22（未入队不扣预算）及既有 17/17b/18/19 |
+| `python3 ios/tests/screenoff-maps/run.py` | PASS：96 checks 等 5 组，建筑首包在途保护 |
+| `swiftc … ble-bulk/main.swift` | PASS 27 checks |
+| `swiftc … ble-capability/main.swift` | PASS 22 checks |
+
+`map-source-mode` 的重复定位断言改为统计 `fineCaptures`，避免原有离线预取时序造成的偶发 base capture 误报；这仍验证“第二次定位不再请求近景”。
+
+## Release 构建
+
+`xcodebuild -project ios/MotoNav.xcodeproj -scheme MotoNav -configuration Release -sdk iphoneos CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" -derivedDataPath <tmp> build`：
+
+- exit 65，失败于宿主 Xcode 的 SwiftUI 宏插件：
+  `external macro implementation type 'SwiftUIMacros.StateMacro' could not be found`;
+  `swift-plugin-server produced malformed response`。
+- 该错误发生在 `RideMapViews.swift` 的 `@State` 展开，不是本轮 MapFeeder/BleLink 代码错误。
+- 本轮没有可归档的 Release `.app`；宿主测试已通过，实际装机仍为未验证。
+
+## 归档
+
+`output/ios-reconnect-20261106/`
+
+- `source/ios-integration.tar.gz`：`ios/MotoNav`、`ios/tests`、`ios/MotoNav.xcodeproj`，
+  SHA256 `83a9c01a…`；
+- `source/git-baseline.txt`、`git-status.txt`、`diff-stat.txt`、`working.diff`；
+- `logs/`：五项宿主测试与 iOS Release 构建原始日志；
+- `manifest.json`、`SHA256SUMS`。
+
+iOS 生产/测试改动仍未单独提交：它们与共享地图 WIP 交织，且测试运行器依赖未提交的 `screenoff-maps/Stubs.swift`。归档快照可复跑；提交范围需与地图 WIP 一起整理。
 
 ## 未完成
 
-- 未做真机组合验收；需等设备恢复后先完成 CPU0 诊断/固件候选，再用同一 Build 28 测试受控重连。
-- 未提交为独立 commit：`MapFeeder.swift` / `BleLink.swift` 与当前地图 WIP 交织，且测试运行器依赖未提交的 `screenoff-maps/Stubs.swift`；代码保留在共享工作树，等待与地图分支一起整理。
-
-## 关键文件
-
-- `ios/MotoNav/BleLink.swift`
-- `ios/MotoNav/MapFeeder.swift`
-- `ios/tests/ble-palette-lifecycle/run.py`
-- `ios/tests/map-source-mode/main.swift`、`run.py`
+- 无签名 Release 构建因宿主 Xcode 宏插件失败，需修复 Xcode/插件环境后重试；
+- 真机组合重连验收未做，设备继续暂停；
+- 后续顺序仍为 CPU0 诊断 → 固件单独验收 → iOS 受控重连组合验收。
