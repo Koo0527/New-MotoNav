@@ -15,11 +15,15 @@ void controlWake() {
   navDirty=true;wxDirty=true;musicDirty=true;
   controlCancelGestures();
   // Keep the panel black until the current page has been composed and flushed.
-  // v7.x 刷屏卡住时不再无限等：限时等待，超时也继续唤醒（面板总线驱动自身会串行化）
-  const bool panelGot = !flushDone || xSemaphoreTake(flushDone, pdMS_TO_TICKS(100)) == pdTRUE;
-  if (!panelGot) Serial.println("ctl wake: flushDone busy; panel op proceeds");
-  panel->displayOn();panel->setBrightness(0);controlBrightness=0;
-  if (panelGot && flushDone)xSemaphoreGive(flushDone);
+  // Wake uses the same flush barrier as the flush task; a busy/ambiguous flush
+  // must never bypass ownership and touch the panel directly.
+  if (flushDone) {
+    flushWait();
+    panel->displayOn();panel->setBrightness(0);controlBrightness=0;
+    xSemaphoreGive(flushDone);
+  } else {
+    panel->displayOn();panel->setBrightness(0);controlBrightness=0;
+  }
 }
 bool controlTouchGate(bool down,uint32_t now) {
   const int action=deviceControls.touchGate(down,now);

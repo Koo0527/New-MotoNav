@@ -82,6 +82,16 @@ bool fastFlushInit() {
 // v7.7 RGB565 拆成 0x0GGRRBB 形式（绿、红、蓝之间留空），一次乘法就能三个颜色一起按权重混合
 static inline uint32_t rgbSpread(uint16_t c) { return ((uint32_t)c | ((uint32_t)c << 16)) & 0x07E0F81Fu; }
 
+// 快刷进入无法收尾的状态：记录阶段，保持 CS/总线和 flushDone 的所有权，直接重启。
+// 调用点必须保证 SPI 事务描述符和 DMA 缓冲在调用期间仍然有效。
+[[noreturn]] void fastFlushFatal() {
+  Serial.printf("fast flush failed stage=%d err=%d\n", fastFlushFaultStage, fastFlushError);
+  if (fastFlushOn) saveAndRestart("fastf", 0, true);
+  Serial.println("fast flush failed; restarting");
+  ESP.restart();
+  for (;;) delay(1000);
+}
+
 bool __attribute__((optimize("O3"))) fastPush(const uint16_t *fb) {
   panel->startWrite();
   panel->writeAddrWindow(0, 0, LCD_WIDTH, LCD_HEIGHT);   // 设置写入区域（整屏）+ 写显存命令
@@ -200,7 +210,9 @@ bool __attribute__((optimize("O3"))) fastPush(const uint16_t *fb) {
     bi ^= 1;
     sent += l;
   }
-  if (transactionUnresolved) return false;
+  // 事务仍在途或完成状态不明：t 和 fastBuf[bi] 仍在作用域内，直接在这里复位。
+  // 不拉高 CS、不释放总线、不启动下一笔，也不发放 flushDone。
+  if (transactionUnresolved) fastFlushFatal();
   digitalWrite(LCD_CS, HIGH);
   spi_device_release_bus(fastDev);
   return ok;
@@ -211,13 +223,7 @@ void flushTask(void *arg) {
     xSemaphoreTake(flushReq, portMAX_DELAY);
     uint32_t t0 = millis();
     if (fastDev) {
-      if (!fastPush(flushSrc)) {
-        Serial.printf("fast flush failed stage=%d err=%d\n", fastFlushFaultStage, fastFlushError);
-        if (fastFlushOn) saveAndRestart("fastf", 0, true);
-        Serial.println("fast flush failed; restarting");
-        ESP.restart();
-        for (;;) delay(1000);
-      }
+      if (!fastPush(flushSrc)) fastFlushFatal();
     }
     else panel->draw16bitRGBBitmap(0, 0, flushSrc, LCD_WIDTH, LCD_HEIGHT);
     flushMsAcc += millis() - t0; flushCnt++;
