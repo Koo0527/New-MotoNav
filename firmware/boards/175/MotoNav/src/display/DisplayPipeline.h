@@ -11,6 +11,7 @@ volatile uint32_t flushMsAcc = 0, flushCnt = 0;
 #include "../../QuarterTurnBlit.h"
 #define FAST_PIX 4096                     // 每段像素数（8KB）
 spi_device_handle_t fastDev = nullptr;
+int fastFlushFaultStage = 0, fastFlushError = 0;
 uint8_t *fastBuf[2] = {nullptr, nullptr};
 
 int screenRot = 0;                        // v6.2 圆屏方向：0 / 1 / 2 / 3 = 0° / 90° / 180° / 270°
@@ -81,26 +82,28 @@ bool fastFlushInit() {
 // v7.7 RGB565 拆成 0x0GGRRBB 形式（绿、红、蓝之间留空），一次乘法就能三个颜色一起按权重混合
 static inline uint32_t rgbSpread(uint16_t c) { return ((uint32_t)c | ((uint32_t)c << 16)) & 0x07E0F81Fu; }
 
-void __attribute__((optimize("O3"))) fastPush(const uint16_t *fb) {
+bool __attribute__((optimize("O3"))) fastPush(const uint16_t *fb) {
   panel->startWrite();
   panel->writeAddrWindow(0, 0, LCD_WIDTH, LCD_HEIGHT);   // 设置写入区域（整屏）+ 写显存命令
   panel->endWrite();
-  spi_device_acquire_bus(fastDev, portMAX_DELAY);
+  const esp_err_t acquireErr = spi_device_acquire_bus(fastDev, portMAX_DELAY);
+  if (acquireErr != ESP_OK) {
+    fastFlushFaultStage = 1; fastFlushError = acquireErr;
+    digitalWrite(LCD_CS, HIGH);
+    return false;
+  }
   digitalWrite(LCD_CS, LOW);
-  static spi_transaction_ext_t tr[2];
+  spi_transaction_ext_t t;
   const uint32_t total = (uint32_t)LCD_WIDTH * LCD_HEIGHT;
   uint32_t sent = 0;
-  int bi = 0, inflight = 0;
-  bool first = true;
+  int bi = 0;
+  bool first = true, ok = true;
+  bool transactionUnresolved = false;
   while (sent < total) {
     uint32_t l = total - sent;
     const uint32_t block=(!rotFree && (screenRot==1 || screenRot==3))?LCD_WIDTH*8:FAST_PIX;
     if (l > block) l = block;
-    if (inflight == 2) {                                  // 两块都在传：等最早那块传完再复用
-      spi_transaction_t *r;
-      spi_device_get_trans_result(fastDev, &r, portMAX_DELAY);
-      inflight--;
-    }
+    // 每一笔事务完成后才准备/启动下一笔；同一时刻只有一笔在途。
     // 拷贝并交换高低字节（屏幕要高字节在前）
     if (rotFree) {
       // v6.4 任意角度：屏幕上的点 (px,py) 取画布上转过去的点；圆外面涂黑
@@ -167,7 +170,6 @@ void __attribute__((optimize("O3"))) fastPush(const uint16_t *fb) {
         if (++px == W) { px = 0; py++; }
       }
     }
-    spi_transaction_ext_t &t = tr[bi];
     memset(&t, 0, sizeof(t));
     if (first) {
       t.base.flags = SPI_TRANS_MODE_QIO;
@@ -179,25 +181,44 @@ void __attribute__((optimize("O3"))) fastPush(const uint16_t *fb) {
     }
     t.base.tx_buffer = fastBuf[bi];
     t.base.length = l * 16;
-    spi_device_queue_trans(fastDev, (spi_transaction_t *)&t, portMAX_DELAY);
-    inflight++;
+    const esp_err_t startErr = spi_device_polling_start(fastDev, (spi_transaction_t *)&t, portMAX_DELAY);
+    if (startErr != ESP_OK) {
+      fastFlushFaultStage = 2; fastFlushError = startErr; ok = false;
+      // ESP_ERR_INVALID_STATE 表示该设备已有一笔 polling 事务未终止；其余启动失败没有提交事务。
+      transactionUnresolved = (startErr == ESP_ERR_INVALID_STATE);
+      break;
+    }
+    const esp_err_t endErr = spi_device_polling_end(fastDev, portMAX_DELAY);
+    if (endErr != ESP_OK) {
+      fastFlushFaultStage = 3; fastFlushError = endErr; ok = false;
+      // ESP-IDF v5.5.4 的 polling_end 只在 DMA 描述符已回收后才返回 ESP_ERR_INVALID_STATE
+      // （SPI_TRANS_DMA_RX_FAIL/TX_FAIL）。超时或其他错误可能仍有事务在途：此时不能拉高 CS、
+      // 不能释放总线、不能启动下一笔，只把阶段记在描述符仍有效的这里，交给调用方重启兜底。
+      transactionUnresolved = (endErr != ESP_ERR_INVALID_STATE);
+      break;
+    }
     bi ^= 1;
     sent += l;
   }
-  while (inflight) {
-    spi_transaction_t *r;
-    spi_device_get_trans_result(fastDev, &r, portMAX_DELAY);
-    inflight--;
-  }
+  if (transactionUnresolved) return false;
   digitalWrite(LCD_CS, HIGH);
   spi_device_release_bus(fastDev);
+  return ok;
 }
 
 void flushTask(void *arg) {
   for (;;) {
     xSemaphoreTake(flushReq, portMAX_DELAY);
     uint32_t t0 = millis();
-    if (fastDev) fastPush(flushSrc);
+    if (fastDev) {
+      if (!fastPush(flushSrc)) {
+        Serial.printf("fast flush failed stage=%d err=%d\n", fastFlushFaultStage, fastFlushError);
+        if (fastFlushOn) saveAndRestart("fastf", 0, true);
+        Serial.println("fast flush failed; restarting");
+        ESP.restart();
+        for (;;) delay(1000);
+      }
+    }
     else panel->draw16bitRGBBitmap(0, 0, flushSrc, LCD_WIDTH, LCD_HEIGHT);
     flushMsAcc += millis() - t0; flushCnt++;
     xSemaphoreGive(flushDone);
@@ -208,12 +229,10 @@ void flushTask(void *arg) {
 void flushWait() {
   if (xSemaphoreTake(flushDone, pdMS_TO_TICKS(3000)) == pdTRUE) return;
   if (fastFlushOn) saveAndRestart("fastf", 0, true);
-  // v7.x 兜底不再无限死等：再等 2 秒后放弃并降级，之后的帧走库的同步推屏路径。
-  // 不在这里自己推屏（卡住的刷屏任务可能还占着数据线）；flushDone 保持"占用"，
-  // 若该任务最终恢复会自动补还信号量，后续帧自然恢复节奏。
-  if (xSemaphoreTake(flushDone, pdMS_TO_TICKS(2000)) != pdTRUE) {
-    Serial.println("flush stalled 5s; disabling fastPush, continuing degraded");
-    fastDev = nullptr;
+  if (xSemaphoreTake(flushDone, pdMS_TO_TICKS(1000)) != pdTRUE) {
+    Serial.println("flush stalled 4s; restarting");
+    ESP.restart();
+    for (;;) delay(1000); // The worker may still own the framebuffer until restart.
   }
 }
 
