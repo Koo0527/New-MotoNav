@@ -29,14 +29,17 @@
 
 ## 3. iOS 修复重连后的底图发送顺序
 
-- [ ] 先红灯：`link-ready → CAP,CTL,1 → CAP,MPAL,1 → CAP,MPAL,2 → U,1`，
+- [x] 先红灯：`link-ready → CAP,CTL,1 → CAP,MPAL,1 → CAP,MPAL,2 → U,1`，
   捕捉 MPAL 确定前提交 v0；另测 `CAP,MPAL,2` 为首个认证通知。
-- [ ] 底图补发收口一个入口：认证 + MPAL v2 发当前块一次；认证后 1 秒能力协商；
+  （宿主：`ble-palette-lifecycle` 先失败于“auth must not resend the map before capability settles”。）
+- [x] 底图补发收口一个入口：认证 + MPAL v2 发当前块一次；认证后 1 秒能力协商；
   到期用本连接最高能力；无 MPAL 走 v0；期间只保留最新底图；断连清等待/旧回调；
   迟到能力改变格式时保留在途 ATT 回调槽，取消旧包分片/回执，以新 ID 重发一次；
   重复能力通知不重发。
-- [ ] 同一底图全量重发上限一次；`N,3,id` 或最终超时允许一次完整重试；再次失败等待
+  （宿主：`MapFeeder.onLinkReady/onAuthenticated/flushReconnectMap`，`map-source-mode` 17/17b/18 覆盖。）
+- [x] 同一底图全量重发上限一次；`N,3,id` 或最终超时允许一次完整重试；再次失败等待
   替代块/能力变化/新连接；连续定位不重开预算；只有当前会话 `K` 更新确认状态。
+  （宿主：`onReject/onReceiptTimeout/mapRetryUsed`，`map-source-mode` 19 与 `ble-palette-lifecycle` K/N 覆盖。）
 
 ## 4. 回归、烧录与验收
 
