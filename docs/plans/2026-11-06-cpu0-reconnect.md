@@ -14,6 +14,14 @@
 - [x] 冻结 `381aa2a4` 构建源码：`output/build-base-381aa2a4/`，Git 基线 `df63e19`，
   快照 `0409dac`（父 `df63e19`），21 个未跟踪固件/测试文件，`source.tar.gz`
   SHA256 `a9e519df…`；候选 app/ELF 哈希已复核。
+- [x] 2026-11-06 现场复现（Build 29 直装，非计划中的 Build 28 基线）：圆屏仍为
+  `2c267899…`，串口 `E (557980) task_wdt`，`IDLE0 (CPU 0)`，`CPU 0: help`，
+  `Stack canary watchpoint triggered (help)`，`Re-entered core dump`，复位原因 6；
+  coredump CRC `26b416bf` / image `ffffffff` 无效。手机 JSON 415 事件、12 个
+  `map-send` 全为 v2、7 ACK、2 超时、3 `link-ready`，最后事件 228.78s；重启在
+  557.98s，手机记录已停止，不能对齐具体地图包。该组按计划停止，确认 CPU0 是
+  当前固件阻塞，不是 iOS 回归。证据见
+  `docs/verification/ios-reconnect-20261106.md` 与 `output/ios-reconnect-20261106/`。
 
 ## 2. 固件修复 CPU0 调度
 

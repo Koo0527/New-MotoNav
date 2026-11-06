@@ -74,8 +74,39 @@ xcodebuild -workspace ios/MotoNav.xcworkspace -scheme MotoNav \
 
 iOS 生产/测试改动仍未单独提交：它们与共享地图 WIP 交织，且测试运行器依赖未提交的 `screenoff-maps/Stubs.swift`。归档快照可复跑；提交范围需与地图 WIP 一起整理。
 
+## 真机测试中断（2026-11-06）
+
+Build 29 已覆盖安装并启动。在圆屏 `2c267899…` 上测试时再次重启，串口首段记录：
+
+- `E (557980) task_wdt: Task watchdog got triggered`，`IDLE0 (CPU 0)`；
+- `CPU 0: help`，`CPU 1: loopTask`；
+- `Stack canary watchpoint triggered (help)`；
+- `Re-entered core dump!`，随后 `rst:0xc (RTC_SW_CPU_RST)`，启动日志仍为
+  `MotoNav ready, firmware v7.12.10-pages.175c.16`；
+- 读取 `0xff0000` 的 coredump：UART 报
+  `Calculated checksum='26b416bf'`、`Image checksum='ffffffff'`，内容不可用于回溯。
+
+手机 JSON：415 个事件、`dropped=0`、12 个 `map-send` 全部 `packetVersion=2`、
+7 个 `map-ack`、2 个回执超时、3 个 `link-ready`；最后事件 `228.776s` 为
+`session-stop`。串口重启发生在 `557.980s`，手机记录已停止约 5 分钟，因此不能把
+本次重启对齐到某个具体地图包；但 CPU0 `help`/canary 签名与既有事件一致。
+
+证据：
+
+| 文件 | SHA256 |
+| --- | --- |
+| `logs/uart-reconnect.log` | `be1595a8…` |
+| `logs/uart-reconnect-first-segment.log` | `da2276e9…` |
+| `logs/map-timing-EEBA1C67-…json` | `5bee991d…` |
+| `device/coredump-reconnect-2313.bin` | `c4fdb287…` |
+| `device/coredump-reconnect-2313.elf` | `79721598…` |
+
+**结论：这是固件 CPU0 `help` 栈 canary / `IDLE0` 阻塞，不是 Build 29 的 iOS 回归。**
+按计划停止该组；三次受控重连被中断，重连补图既不能判通过，也不能归因于本轮 iOS
+改动。后续必须先完成 CPU0 诊断候选并单独通过固件短测，再重跑 iOS 组合验收。
+
 ## 未完成
 
-- iPhone 已覆盖安装并启动 Build 29（`0.16.0 (29)`，App UUID `EB7ACE71…`）；三次受控重连未执行；
-- 设备圆屏核对为 `2c267899…`，本轮未烧录；
-- 后续顺序仍为 CPU0 诊断 → 固件单独验收 → iOS 受控重连组合验收。
+- 三次受控重连因固件 CPU0 重启中断，未形成完整验收；
+- 设备圆屏 `2c267899…` 已再次复现 `IDLE0`/`help` canary；CPU0 修复为当前固件阻塞；
+- 后续顺序：CPU0 诊断候选 → 固件单独短测 → 恢复设备后重跑 Build 29 受控重连。
