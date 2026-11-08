@@ -8,6 +8,20 @@ struct GPlotPoint: Equatable {
     var gap = false
 }
 
+/// A missing interval in a replay window. Boundary flags say whether the
+/// boundary is a real sample (selectable) or a clipped window/record edge.
+struct GTimeRange: Equatable {
+    let start: Double
+    let end: Double
+    let startIsSample: Bool
+    let endIsSample: Bool
+    func contains(_ time: Double) -> Bool {
+        guard time.isFinite, start < end else { return false }
+        return (time > start || (time == start && !startIsSample)) &&
+               (time < end || (time == end && !endIsSample))
+    }
+}
+
 /// Shared by both charts; invalid samples and transport gaps split the path.
 enum GChartGeometry {
     static func clipped(lateral: Double, longitudinal: Double, range: Double) -> (Double, Double) {
@@ -59,11 +73,29 @@ enum GChartGeometry {
         }
         flush(); return output
     }
-    static func selected(_ points: [GPlotPoint], at time: Double, maxDistance: Double = 0.3) -> GPlotPoint? {
-        if let after = points.first(where: { $0.time > time }), after.gap,
-           let before = points.last(where: { $0.time < time }), time > before.time { return nil }
+    static func selected(_ points: [GPlotPoint], missing ranges: [GTimeRange] = [], at time: Double, maxDistance: Double = 0.3) -> GPlotPoint? {
+        guard time.isFinite, !ranges.contains(where: { $0.contains(time) }), !missing(points, at: time) else { return nil }
         guard let point = points.min(by: { abs($0.time - time) < abs($1.time - time) }),
               abs(point.time - time) <= maxDistance, point.valid else { return nil }
         return point
+    }
+    /// A gap row starts a missing interval at the last valid sample and ends at the next valid one.
+    /// A gap flag on a valid sample ends at that sample, so its own value stays selectable.
+    private static func missing(_ points: [GPlotPoint], at time: Double) -> Bool {
+        var nextValid = [Double?](repeating: nil, count: points.count), following: Double?
+        for index in stride(from: points.count - 1, through: 0, by: -1) {
+            nextValid[index] = following
+            if points[index].valid { following = points[index].time }
+        }
+        var previousValid: Double?
+        for (index, point) in points.enumerated() {
+            if point.gap {
+                let end = point.valid ? point.time : (nextValid[index] ?? .infinity)
+                let start = previousValid ?? -Double.infinity
+                if time > start && time < end { return true }
+            }
+            if point.valid { previousValid = point.time }
+        }
+        return false
     }
 }

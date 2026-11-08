@@ -3,7 +3,7 @@ func check(_ value:@autoclosure ()->Bool,_ message:String) {precondition(value()
 func testPacket(_ f:MapGeo.Frame,_ x:Double,_ y:Double)->Data {
     var colors=[UInt8](repeating:0,count:1200*1200)
     for row in 0..<1200 {for col in 580..<620 {colors[row*1200+col]=1}}
-    return MapGeo.encodeRaster(frameId:f.id,x0:Int(x-1200),y0:Int(y+1200),w:1200,h:1200,mmPerPx:2000,idx:colors)
+    return RoadPalette.encode(frameId:f.id,x0:Int(x-1200),y0:Int(y+1200),w:1200,h:1200,indices:colors)
 }
 func pump(_ seconds:Double = 0.1) {RunLoop.main.run(until:Date().addingTimeInterval(seconds))}
 let f=MapGeo.Frame(refLat:30.5,refLng:104,id:789)
@@ -14,6 +14,8 @@ for y in stride(from:0.0,through:2400.0,by:600) {
     let node=RouteMapPlan.Node(x:0,y:y,distance:y)
     try cache.store(testPacket(f,0,y),frame:f,source:3,node:node,style:1)
 }
+let sharedNode=RouteMapPlan.Node(x:0,y:0,distance:0)
+for theme in [1,2,3] {check(cache.read(frame:f,source:3,buildings:false,node:sharedNode,style:theme,allowLegacy:false) == testPacket(f,0,0),"Current game cache shared across themes")}
 let feeder=MapFeeder();feeder.frame=f
 feeder.offlineMaps=RouteOfflineMaps(frame:f,plan:plan,source:3,buildings:false,foregroundBusy:{false},onReady:{_ in},onStatus:{_ in})
 UIApplication.shared.applicationState = .background
@@ -66,7 +68,7 @@ func roofPacket(_ y:Double)->Data {
     var colors=[UInt8](repeating:0,count:1200*1200)
     for row in 0..<1200 {for col in 580..<620 {colors[row*1200+col]=1}}
     for row in 100..<150 {for col in 100..<150 {colors[row*1200+col]=4}}
-    return MapGeo.encodeRaster(frameId:f.id,x0:-1200,y0:Int(y+1200),w:1200,h:1200,mmPerPx:2000|RasterPacket.flag,idx:colors)
+    return RoadPalette.encode(frameId:f.id,x0:-1200,y0:Int(y+1200),w:1200,h:1200,indices:colors)
 }
 let detailed=roofPacket(600)
 check(RasterPacket.isBuilding(detailed) && !RasterPacket.isBuilding(detailed.prefix(15)),"Header-only flag probe retains short packet safety")
@@ -152,11 +154,142 @@ let monotonicBytes=roofPacket(30000)
 try cache.storeBuildingUpdate(BuildingUpdate(bytes:monotonicBytes,coverage:BuildingCoverage(checkedMask:15)),frame:f,source:3,node:monotonicNode)
 try cache.storeBuildingUpdate(BuildingUpdate(bytes:monotonicBytes,coverage:BuildingCoverage(checkedMask:1)),frame:f,source:3,node:monotonicNode)
 check(cache.buildingUpdate(frame:f,source:3,node:monotonicNode,style:1)?.coverage.isComplete==true,"Late partial cannot downgrade persisted complete coverage")
+// Older generations prefer complete coverage when no v4 update exists.
+let oldNode=RouteMapPlan.Node(x:0,y:39000,distance:0)
+struct OldSaved:Codable {let bytes:Data;let coverage:BuildingCoverage;let checksum:UInt64}
+for (quality,mask) in [(3,UInt8(1)),(2,UInt8(15))] {
+ let bytes=roofPacket(39000),coverage=BuildingCoverage(qualityVersion:quality,checkedMask:mask)
+ var material=bytes;material.append(contentsOf:"/\(quality)/\(mask)".utf8)
+ let digest=material.reduce(UInt64(14695981039346656037)){($0 ^ UInt64($1)) &* 1099511628211}
+ let folder=TestEnvironment.root.appendingPathComponent("fast4m-v\(quality)-3/\(f.refLat)_\(f.refLng)/-1200_40200")
+ try FileManager.default.createDirectory(at:folder,withIntermediateDirectories:true)
+ try JSONEncoder().encode(OldSaved(bytes:bytes,coverage:coverage,checksum:digest)).write(to:folder.appendingPathComponent("update.json"))
+}
+check(cache.buildingUpdate(frame:f,source:3,node:oldNode,style:1)?.coverage.qualityVersion==2,"old complete beats newer old partial")
 let legacyNode=RouteMapPlan.Node(x:0,y:36000,distance:0)
-let legacyBytes=roofPacket(36000)
-try cache.store(legacyBytes,frame:f,source:3,node:legacyNode,style:1)
-try cache.storeBuildingUpdate(BuildingUpdate(bytes:legacyBytes,coverage:BuildingCoverage(checkedMask:1)),frame:f,source:3,node:legacyNode)
-check(cache.buildingUpdate(frame:f,source:3,node:legacyNode,style:1)?.coverage == .legacyFull,"Compatible legacy complete cache outranks a new partial observation")
+let legacyBytes=MapGeo.encodeRaster(frameId:f.id,x0:-1200,y0:37200,w:1200,h:1200,mmPerPx:2000|RasterPacket.flag,idx:RasterPacket.decode(roofPacket(36000))!)
+let legacyURL=TestEnvironment.root.appendingPathComponent("materials-v2-1/v2-3-buildings/\(f.refLat)_\(f.refLng)/0_36000.bin")
+try FileManager.default.createDirectory(at:legacyURL.deletingLastPathComponent(),withIntermediateDirectories:true)
+try legacyBytes.write(to:legacyURL)
+try cache.storeBuildingUpdate(BuildingUpdate(bytes:roofPacket(36000),coverage:BuildingCoverage(checkedMask:1)),frame:f,source:3,node:legacyNode)
+check(cache.buildingUpdate(frame:f,source:3,node:legacyNode,style:1)?.coverage.checkedMask == 1,"Current partial outranks legacy full")
+// Current progress takes priority over the older complete cache.
+check(cache.buildingUpdate(frame:f,source:3,node:legacyNode,style:1,currentOnly:true)?.coverage.checkedMask==1,"Processing reads current partial")
+check(cache.read(frame:f,source:3,buildings:false,node:legacyNode,style:1,allowLegacy:false)==nil,"Old full is never a prepared new-generation base")
+let upgrading=MapFeeder();upgrading.frame=f;upgrading.pose=(0,36000,0)
+UIApplication.shared.applicationState = .active;ble.mapBytesPerSecond=1_000_000
+upgrading.acceptChunk(legacyBytes,cx:0,cy:36000,sat:false,type:3,info:"legacy",src:3,coverage:.legacyFull)
+upgrading.onAck(type:3,id:upgrading.chunkId)
+check(!upgrading.useCachedMap(f,node:legacyNode),"Same-region legacy full permits foreground upgrade without clearing cache")
+upgrading.onAck(type:3,id:upgrading.chunkId);pump()
+if !upgrading.chunkAcked {upgrading.onAck(type:3,id:upgrading.chunkId);pump()}
+let beforeUpgrade=AmapSdkRaster.captures
+AmapSdkRaster.buildingCompletion=true
+upgrading.onLocation(lat:f.lat(36000),lng:f.lng(0),bearing:0,kmh:0)
+for _ in 0..<40 {pump(0.02);if !upgrading.fetching && AmapSdkRaster.captures>beforeUpgrade {break}}
+check(AmapSdkRaster.captures==beforeUpgrade+1 && upgrading.chunkCurrent && upgrading.chunkCoverage?.qualityVersion==FastBuildings.qualityVersion && upgrading.chunkBuildingsComplete,"GPS at unchanged position upgrades legacy full to fresh palette full")
+AmapSdkRaster.buildingCompletion=false
+// A missing palette capability sends a true legacy packet; late capability waits for its ACK.
+let capFeeder=MapFeeder();capFeeder.frame=f;capFeeder.pose=(0,600,0)
+var tonePixels=RasterPacket.decode(detailed)!;tonePixels[0]=8;tonePixels[1]=9;tonePixels[2]=10
+let tones=RoadPalette.encode(frameId:f.id,x0:-1200,y0:1800,w:1200,h:1200,indices:tonePixels)
+ble.roadPaletteVersion=0
+capFeeder.acceptChunk(tones,cx:0,cy:600,sat:false,type:3,info:"first",src:3,coverage:BuildingCoverage(checkedMask:1))
+check(!RoadPalette.isPacket(ble.packets.last!.bytes) && RasterPacket.valid(ble.packets.last!.bytes),"Missing capability transcodes semantic tones to valid legacy RLE")
+let firstToneId=capFeeder.chunkId,capCount=ble.packets.count
+ble.bulkPending=true;ble.roadPaletteVersion=2
+capFeeder.onRoadPaletteCapability()
+check(capFeeder.chunkId==firstToneId && ble.packets.count==capCount,"Capability cannot cancel first building packet in flight")
+capFeeder.onAck(type:3,id:firstToneId);ble.bulkPending=false;capFeeder.checkResend()
+check(capFeeder.chunkId != firstToneId && ble.packets.count==capCount+1 && RoadPalette.isPacket(ble.packets.last!.bytes),"After ACK current packet resends in negotiated palette format")
+let paletteId=capFeeder.chunkId
+capFeeder.onAck(type:3,id:paletteId);capFeeder.onRoadPaletteCapability()
+check(capFeeder.chunkId==paletteId && ble.packets.count==capCount+1,"Repeated unchanged capability never interrupts or duplicates identical packet")
+let tail=FastBuildings.packet(base:tones,patches:[0:Data(repeating:1,count:90000),3:Data(repeating:1,count:90000)])
+ble.roadPaletteVersion=0
+capFeeder.acceptChunk(tail,cx:0,cy:600,sat:false,type:3,info:"tail",src:3,coverage:BuildingCoverage(checkedMask:15))
+let tailId=capFeeder.chunkId,tailCount=ble.packets.count
+ble.bulkPending=true;ble.roadPaletteVersion=2;capFeeder.onRoadPaletteCapability()
+check(capFeeder.chunkId==tailId && capFeeder.chunkBuildingsComplete,"Late capability leaves the final building batch in flight")
+capFeeder.onAck(type:3,id:tailId);ble.bulkPending=false;capFeeder.checkResend()
+check(ble.packets.count==tailCount+1 && capFeeder.chunkCoverage?.isComplete==true && RoadPalette.isPacket(ble.packets.last!.bytes),"Final ACK precedes palette reissue and complete coverage survives")
+// Real capability branches feed the production feeder while either transport phase is occupied.
+for receipt in [false,true] {
+ let cf=MapFeeder();cf.frame=f;cf.pose=(0,600,0)
+ Settings.shared.buildings=true;ble.buildingsSupported=false;ble.roadPaletteVersion=0;ble.bulkPending=false
+ cf.acceptChunk(tones,cx:0,cy:600,sat:false,type:3,info:"capability",src:3)
+ let id=cf.chunkId,count=ble.packets.count,cancels=ble.cancels
+ ble.bulkPending = !receipt;ble.receiptPending = receipt;ble.trackedMapPending = !receipt
+ if receipt {ble.notify("CAP,BLD,1",target:cf);ble.notify("CAP,MPAL,1",target:cf)}
+ else {ble.notify("CAP,MPAL,1",target:cf);ble.notify("CAP,BLD,1",target:cf)}
+ ble.notify("CAP,MPAL,2",target:cf)
+ check(cf.chunkId==id && ble.packets.count==count && ble.cancels==cancels && cf.paletteResendPending,"capabilities preserve admitted transfer and pending upgrade")
+ ble.notify("CAP,BLD,1",target:cf);ble.notify("CAP,MPAL,1",target:cf)
+ check(cf.chunkId==id && ble.packets.count==count,"duplicate and older capabilities do not resend")
+ cf.onAck(type:3,id:id);ble.bulkPending=false;ble.receiptPending=false;ble.trackedMapPending=false;cf.checkResend()
+ check(ble.packets.count==count+1 && RoadPalette.packetVersion(ble.packets.last!.bytes)==2,"combined upgrade waits for transport and sends current wire once")
+}
+// A building-only capability changes the actual wire when the retained packet has roofs.
+let bldOnly=MapFeeder();bldOnly.frame=f;bldOnly.pose=(0,600,0)
+ble.buildingsSupported=false;ble.roadPaletteVersion=0;ble.bulkPending=false
+bldOnly.acceptChunk(tones,cx:0,cy:600,sat:false,type:3,info:"buildings",src:3)
+bldOnly.chunkBytes=tail;bldOnly.lastWire=RoadPalette.forWire(tail,paletteVersion:0,buildingsSupported:false)
+let bldID=bldOnly.chunkId,bldCount=ble.packets.count
+ble.bulkPending=true;ble.notify("CAP,BLD,1",target:bldOnly)
+check(bldOnly.chunkId==bldID && ble.packets.count==bldCount,"building upgrade waits for receipt")
+bldOnly.onAck(type:3,id:bldID);ble.bulkPending=false;bldOnly.checkResend()
+check(ble.packets.count==bldCount+1 && RasterPacket.isBuilding(ble.packets.last!.bytes),"building upgrade sends changed wire")
+Settings.shared.buildings=false
+// A route prepared before BLD must schedule buildings without interrupting the base receipt.
+Settings.shared.buildings=true;ble.buildingsSupported=false;ble.roadPaletteVersion=2;ble.bulkPending=false;ble.receiptPending=false
+let lateRoute=MapFeeder();lateRoute.frame=f;lateRoute.pose=(0,60000,0)
+let routeCoords=[(lat:f.lat(60000),lng:f.lng(0)),(lat:f.lat(60600),lng:f.lng(0))]
+for y in [60000.0,60600.0] {let n=RouteMapPlan.Node(x:0,y:y,distance:0);try cache.store(testPacket(f,0,y),frame:f,source:3,node:n,style:1)}
+lateRoute.acceptChunk(testPacket(f,0,60000),cx:0,cy:60000,sat:false,type:3,info:"base",src:3)
+lateRoute.prepareRoute(key:"late-bld",coords:routeCoords)
+for _ in 0..<20 {pump(0.01)}
+check(lateRoute.offlineMaps?.buildings==false,"route starts without building capability")
+let routeID=lateRoute.chunkId,routeCancels=ble.cancels,routeCount=ble.packets.count,priorCaptures=AmapSdkRaster.captures
+ble.receiptPending=true;ble.trackedMapPending=true;AmapSdkRaster.buildingCompletion=true
+ble.notify("CAP,BLD,1",target:lateRoute)
+for _ in 0..<80 {pump(0.02);if AmapSdkRaster.captures>priorCaptures {break}}
+check(lateRoute.offlineMaps?.buildings==true && AmapSdkRaster.captures>priorCaptures,"late BLD schedules production route building work")
+check(lateRoute.chunkId==routeID && ble.cancels==routeCancels && ble.packets.count==routeCount,"route upgrade preserves admitted base receipt")
+ble.receiptPending=false;ble.trackedMapPending=false;lateRoute.onAck(type:3,id:routeID)
+for _ in 0..<100 {pump(0.02);if lateRoute.chunkId != routeID && ble.packets.last.map({RasterPacket.isBuilding($0.bytes)}) == true {break}}
+check(lateRoute.chunkId != routeID && ble.packets.last.map({RasterPacket.isBuilding($0.bytes)}) == true,"route buildings deliver after base ACK without movement")
+lateRoute.offlineMaps?.close();AmapSdkRaster.buildingCompletion=false;Settings.shared.buildings=false
+// Base-only users also upgrade old materials once, then keep their current base.
+Settings.shared.buildings=false
+let oldBase=RoadPalette.forWire(testPacket(f,0,42000),paletteVersion:0,buildingsSupported:false)
+let oldBaseURL=TestEnvironment.root.appendingPathComponent("materials-v2-1/v1-3-base/\(f.refLat)_\(f.refLng)/0_42000.bin")
+try FileManager.default.createDirectory(at:oldBaseURL.deletingLastPathComponent(),withIntermediateDirectories:true)
+try oldBase.write(to:oldBaseURL)
+let baseUpgrade=MapFeeder();baseUpgrade.frame=f;baseUpgrade.pose=(0,42000,0)
+baseUpgrade.acceptChunk(oldBase,cx:0,cy:42000,sat:false,type:3,info:"old base",src:3)
+baseUpgrade.onAck(type:3,id:baseUpgrade.chunkId)
+let baseCaptures=AmapSdkRaster.captures
+baseUpgrade.onLocation(lat:f.lat(42000),lng:f.lng(0),bearing:0,kmh:0)
+for _ in 0..<40 {pump(0.02);if !baseUpgrade.fetching && AmapSdkRaster.captures>baseCaptures {break}}
+check(baseUpgrade.chunkCurrent && AmapSdkRaster.captures>=baseCaptures+1,"Base-only mode refreshes old processing version in place")
+baseUpgrade.onAck(type:3,id:baseUpgrade.chunkId)
+baseUpgrade.onLocation(lat:f.lat(42000),lng:f.lng(0),bearing:0,kmh:0);pump(0.05)
+check((try? Data(contentsOf:oldBaseURL))==oldBase,"old offline file remains byte-for-byte after current base settles")
+Settings.shared.buildings=true
+let held=MapFeeder();held.frame=f;held.pose=(0,36000,120)
+// Use a separate legacy full with a current road base, but no current full result.
+let heldNode=RouteMapPlan.Node(x:0,y:48000,distance:0)
+let heldLegacyURL=TestEnvironment.root.appendingPathComponent("materials-v2-1/v2-3-buildings/\(f.refLat)_\(f.refLng)/0_48000.bin")
+try FileManager.default.createDirectory(at:heldLegacyURL.deletingLastPathComponent(),withIntermediateDirectories:true)
+try RoadPalette.forWire(roofPacket(48000),paletteVersion:0,buildingsSupported:true).write(to:heldLegacyURL)
+try cache.store(testPacket(f,0,48000),frame:f,source:3,node:heldNode,style:1)
+held.pose=(0,48000,120)
+check(held.useCachedMap(f,node:heldNode) && held.chunkCurrent,"Highway speed delivers current cached base ahead of old full")
+check(cache.covering(frame:f,source:3,style:1,x:0,y:48000,kmh:120).map{RouteMapCache.isCurrent($0.bytes,source:3,style:1)} == true,"Covering cache also prefers current roads")
+held.pose=(0,48000,0)
+check(!held.useCachedMap(f,node:heldNode),"Slowing down permits finishing new buildings over the prepared base")
+held.lastBuildingTry=Date()
+check(held.useCachedMap(f,node:heldNode),"Old full display honors existing building retry cooldown after a yielded or failed upgrade")
 // Empty checked patches carry coverage even when their packet has no roofs.
 let emptyChecked=MapFeeder();emptyChecked.frame=f;emptyChecked.pose=(0,600,0)
 let identicalRoads=MapDeliveryPolicy.compactBase(detailed)
@@ -168,19 +301,59 @@ emptyChecked.acceptChunk(detailed,cx:0,cy:600,sat:false,type:3,info:"full roofs 
 check(emptyChecked.chunkCoverage?.checkedMask==1 && emptyChecked.chunkBytes==identicalRoads && emptyChecked.chunkId==emptyCheckedId && emptyChecked.chunkAcked,"Identical compacted roads retain acknowledged empty-patch coverage")
 emptyChecked.acceptChunk(identicalRoads,cx:0,cy:600,sat:false,type:3,info:"all checked empty",src:3,coverage:BuildingCoverage(checkedMask:15))
 check(emptyChecked.chunkCoverage?.isComplete==true && emptyChecked.chunkBuildingsComplete,"Unmodified identical roads can advance checked coverage")
-// Complete legacy packets must survive partial observations from the new quality.
+// New quality partial replaces older complete observations.
 let fastPartialBytes=FastBuildings.packet(base:identicalRoads,patches:[0:Data(repeating:1,count:90000)])
 var legacyPending=MapHandoffBuffer()
 legacyPending.stage(.init(bytes:detailed,cx:0,cy:600,sat:false,type:3,info:"legacy full",source:3,style:1,coverage:.legacyFull))
 legacyPending.stage(.init(bytes:fastPartialBytes,cx:0,cy:600,sat:false,type:3,info:"fast partial",source:3,style:1,coverage:BuildingCoverage(checkedMask:1)))
-check(legacyPending.pending?.coverage == .legacyFull && legacyPending.pending?.bytes==detailed,"Staged legacy full bytes and coverage survive new-quality partial")
+check(legacyPending.pending?.coverage?.checkedMask == 1 && legacyPending.pending?.bytes==fastPartialBytes,"Staged new-quality partial replaces old full")
 let legacyDeferred=MapFeeder();legacyDeferred.frame=f;legacyDeferred.pose=(0,0,120)
 ble.mapBytesPerSecond=1_000_000
 legacyDeferred.acceptChunk(testPacket(f,0,0),cx:0,cy:0,sat:false,type:3,info:"base",src:3)
 legacyDeferred.onAck(type:3,id:legacyDeferred.chunkId)
 legacyDeferred.acceptChunk(detailed,cx:0,cy:600,sat:false,type:3,info:"legacy full",src:3,coverage:.legacyFull)
 legacyDeferred.acceptChunk(fastPartialBytes,cx:0,cy:600,sat:false,type:3,info:"fast partial",src:3,coverage:BuildingCoverage(checkedMask:1))
-check(legacyDeferred.deferredRoofs?.coverage == .legacyFull && legacyDeferred.deferredRoofs?.bytes==detailed,"Deferred legacy full bytes and coverage survive new-quality partial")
+check(legacyDeferred.deferredRoofs?.coverage?.checkedMask == 1 && legacyDeferred.deferredRoofs?.bytes==fastPartialBytes,"Deferred new-quality partial replaces old full")
+// Processing generation takes precedence, while an admitted transfer retains its ID until ACK.
+let generation=MapFeeder();generation.frame=f;generation.pose=(0,54000,120)
+let newRoads=testPacket(f,0,54000)
+let oldFull=RoadPalette.forWire(roofPacket(54000),paletteVersion:0,buildingsSupported:true)
+let newFull=roofPacket(54000)
+ble.mapBytesPerSecond=1_000_000;ble.trackedMapPending=false
+generation.acceptChunk(oldFull,cx:0,cy:54000,sat:false,type:3,info:"old full",src:3,coverage:.legacyFull)
+let oldID=generation.chunkId
+ble.trackedMapPending=true
+generation.acceptChunk(newRoads,cx:0,cy:54000,sat:false,type:3,info:"new roads",src:3)
+check(generation.chunkId==oldID && generation.handoff.pending?.bytes==newRoads,"Current base stages behind old full in flight")
+generation.acceptChunk(oldFull,cx:0,cy:54000,sat:false,type:3,info:"late old",src:3,coverage:.legacyFull)
+check(generation.handoff.pending?.bytes==newRoads,"Old callback cannot displace staged current roads")
+ble.trackedMapPending=false;generation.onAck(type:3,id:oldID);pump()
+check(generation.chunkCurrent && generation.chunkBytes==newRoads && generation.chunkId != oldID,"Old full ACK sends current roads at highway speed")
+let roadID=generation.chunkId
+ble.trackedMapPending=true
+generation.acceptChunk(newFull,cx:0,cy:54000,sat:false,type:3,info:"new full",src:3,coverage:BuildingCoverage(checkedMask:15))
+check(generation.chunkId==roadID && !generation.chunkAcked,"New full cannot retract current roads in flight")
+generation.acceptChunk(oldFull,cx:0,cy:54000,sat:false,type:3,info:"late old",src:3,coverage:.legacyFull)
+check(generation.chunkId==roadID && generation.chunkCurrent,"Late legacy full cannot roll back new base")
+ble.trackedMapPending=false;generation.pose=(0,54000,0);generation.onAck(type:3,id:roadID);pump()
+check(generation.chunkCurrent && generation.chunkBuildingsComplete && generation.chunkId != roadID,"Road ACK permits current full delivery")
+ble.trackedMapPending=false
+let partialUpgrade=MapFeeder();partialUpgrade.frame=f;partialUpgrade.pose=(0,54000,0)
+partialUpgrade.acceptChunk(oldFull,cx:0,cy:54000,sat:false,type:3,info:"old",src:3,coverage:.legacyFull)
+partialUpgrade.onAck(type:3,id:partialUpgrade.chunkId)
+partialUpgrade.acceptChunk(newFull,cx:0,cy:54000,sat:false,type:3,info:"partial",src:3,coverage:BuildingCoverage(checkedMask:1))
+let partialRoadID=partialUpgrade.chunkId
+check(partialUpgrade.chunkCurrent && !partialUpgrade.chunkAcked && partialUpgrade.deferredRoofs?.coverage?.checkedMask==1,"Current partial sends current roads before its roofs")
+partialUpgrade.acceptChunk(oldFull,cx:0,cy:54000,sat:false,type:3,info:"late",src:3,coverage:.legacyFull)
+check(partialUpgrade.chunkId==partialRoadID && partialUpgrade.chunkCurrent,"Late old full cannot replace current roads")
+partialUpgrade.onAck(type:3,id:partialRoadID);pump()
+check(partialUpgrade.chunkCurrent && partialUpgrade.chunkCoverage?.checkedMask==1,"Current partial follows current road ACK")
+// A newer partial also wins over old complete coverage in both queue and deferred slots.
+var generationQueue=MapHandoffBuffer()
+generationQueue.stage(.init(bytes:oldFull,cx:0,cy:54000,sat:false,type:3,info:"old",source:3,style:1,coverage:.legacyFull))
+generationQueue.stage(.init(bytes:newFull,cx:0,cy:54000,sat:false,type:3,info:"partial",source:3,style:1,coverage:BuildingCoverage(checkedMask:1)))
+generationQueue.stage(.init(bytes:oldFull,cx:0,cy:54000,sat:false,type:3,info:"late",source:3,style:1,coverage:.legacyFull))
+check(generationQueue.pending?.bytes==newFull && generationQueue.pending?.coverage?.checkedMask==1,"Staged partial outranks old full and cannot regress")
 // A cancelled graphics job may finish late; its callbacks cannot replace cached delivery.
 Settings.shared.buildings=false
 let late=MapFeeder();late.frame=f;late.pose=(0,20000,0)

@@ -3,9 +3,11 @@
 #include "../../GInstrumentMath.h"
 #include "../../GInstrumentRuntime.h"
 #include "../../FixedPageLayout.h"
+#include "GPageBudget.h"
 extern GInstrument::Estimator gEstimator;
 extern GInstrument::Output gOutput;
 extern int gState;
+GInstrument::Motion gCurrentMotion();
 unsigned gScaleIndex=1;
 float gDisplayScale(){return gScaleIndex==0?0.5f:gScaleIndex==1?1.0f:2.0f;}
 void drawGInstrument() {
@@ -41,19 +43,23 @@ void drawGInstrument() {
     snprintf(label,sizeof(label),"LAT %+.2f LONG %+.2fg",gOutput.lateral,gOutput.longitudinal);
     printCentered(label,CX,405,2,C_WHITE);
   }else {
+    const auto motion=gCurrentMotion();
+    const char *waiting=motion==GInstrument::Motion::Stopped?"WAITING FOR STATIONARY":
+      motion==GInstrument::Motion::Moving?"STOP TO RECOVER":"PARK / RETRY IN APP";
     const char *label=gState==0?"CALIBRATE IN APP":gState==3?"KEEP STILL - CALIBRATING":
-      gState==1?"WAITING FOR STATIONARY":gState==4?"CALIBRATION REJECTED":"G DATA UNAVAILABLE";
+      gState==1?waiting:gState==4?"CALIBRATION REJECTED":"G DATA UNAVAILABLE";
     printCentered(label,CX,405,2,C_GREY);
   }
-  // v7.12.10-pages.175c.9：G 页每次整屏重绘（含 100ms 刷新）都补画右侧纵向分页点，
+  // G 页每次预算内整屏重绘都补画右侧纵向分页点，
   // 下点高亮表示“下方还有一页（G 仪表在首页下方）”；不画底部横向点。
   FixedPageLayout::drawPageDots(page,wxDetail,inNav);
   needFlush=true;
 }
 void gInstrumentPageTick() {
-  static uint32_t last=0;
-  if(page!=3||callOn||pairOn||sliding||millis()-last<100)return;
-  last=millis();drawGInstrument();
+  static GPageBudget budget;
+  if(page!=3||callOn||pairOn||sliding)return;
+  if(!budget.due(millis()))return;
+  drawGInstrument();
 }
 
 // ---- v5.5 跟手换页 ----

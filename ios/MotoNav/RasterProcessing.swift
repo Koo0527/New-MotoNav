@@ -8,6 +8,7 @@ enum RasterPacket {
         Int(Int32(bitPattern: UInt32(b[p]) | UInt32(b[p+1]) << 8 | UInt32(b[p+2]) << 16 | UInt32(b[p+3]) << 24))
     }
     static func isBuilding(_ data: Data) -> Bool {
+        if RoadPalette.isPacket(data) {return RoadPalette.hasRoofs(data)}
         let b = [UInt8](data); return b.count >= 16 && u16(b, 14) == (2000 | flag)
     }
     static func valid(_ data: Data, frame: Int, x: Int, y: Int) -> Bool {
@@ -16,11 +17,15 @@ enum RasterPacket {
               u16(b, 10) == size, u16(b, 12) == size, [2000, 2000 | flag, 2000 | 0x8000].contains(u16(b, 14)) else { return false }
         let customPalette = u16(b, 14) & 0x8000 != 0
         guard !customPalette || b.count >= 49 else { return false }
-        var pos = customPalette ? 48 : 16, pixels = 0
+        let semanticVersion=RoadPalette.packetVersion(data), semantic=semanticVersion != 0
+        if customPalette && !semantic && (u16(b,44)==0x4d4e && u16(b,46)&0xff00 == 0x5200) {return false}
+        var pos = customPalette ? 48 : 16, pixels = 0, roofs=false
         let building = u16(b, 14) == (2000 | flag)
+        let maxMaterial = semantic ? (semanticVersion == 1 ? 10 : 11) : customPalette ? 15 : building ? 7 : 3
         while pos < b.count && pixels < size * size {
             let v = Int(b[pos]); pos += 1
-            if v & 15 > (customPalette ? 15 : building ? 7 : 3) { return false }
+            if v & 15 > maxMaterial { return false }
+            if (4...7).contains(v&15) {roofs=true}
             var run = (v >> 4) + 1
             if v >> 4 == 15 {
                 guard pos < b.count else { return false }
@@ -29,7 +34,7 @@ enum RasterPacket {
             guard run <= size * size - pixels else { return false }
             pixels += run
         }
-        return pixels == size * size && pos == b.count
+        return pixels == size * size && pos == b.count && (!semantic || roofs == RoadPalette.hasRoofs(data))
     }
     static func valid(_ data: Data) -> Bool {
         let b = [UInt8](data)
@@ -40,18 +45,20 @@ enum RasterPacket {
     static func hasMapContent(_ data:Data)->Bool {
         guard valid(data) else{return false}
         let b=[UInt8](data)
-        if u16(b,14)&0x8000 != 0{return true}
-        var p=16,materials=0
+        let semantic=RoadPalette.isPacket(data)
+        if u16(b,14)&0x8000 != 0 && !semantic {return true}
+        var p=semantic ? 48:16,materials=0
         let minimum=MapGeo.minMaterialPixels(w:size,h:size)
         while p<b.count {
             let v=b[p];p+=1
             var count=Int(v>>4)+1
             if v>>4==15 {count+=Int(b[p]);p+=1}
-            if v&15 != 0 {materials+=count;if materials>=minimum{return true}}
+            if v&15 != 0 && (!semantic || v&15 != 10) {materials+=count;if materials>=minimum{return true}}
         }
         return false
     }
     static func forLegacy(_ data: Data) -> Data {
+        if RoadPalette.isPacket(data) {return RoadPalette.forWire(data,paletteVersion:0,buildingsSupported:false)}
         guard isBuilding(data), valid(data) else { return data }
         var b = [UInt8](data); b[14] = UInt8(2000 & 255); b[15] = UInt8(2000 >> 8)
         var p = 16
@@ -81,6 +88,7 @@ enum MapStyleTransfer {
     static func matches(_ packet:Data,style:Int)->Bool {
         guard RasterPacket.valid(packet) else {return false}
         let bytes=[UInt8](packet),flags=RasterPacket.u16(bytes,14)
+        if RoadPalette.isPacket(packet) {return (1...3).contains(style)}
         if style==0 {return flags&0x8000 != 0}
         if style != 5 {return (1...9).contains(style) && flags&0x8000 == 0}
         if style==5 {
@@ -224,7 +232,7 @@ enum AmapBuildings {
             }
         } }
         guard retained else { return incoming }
-        let packet = MapGeo.encodeRaster(frameId: RasterPacket.u16(a, 0), x0: RasterPacket.i32(a, 2), y0: RasterPacket.i32(a, 6), w: n, h: n, mmPerPx: 2000 | RasterPacket.flag, idx: current)
+        let packet = RoadPalette.isPacket(incoming) ? RoadPalette.encode(current,like:incoming) : MapGeo.encodeRaster(frameId: RasterPacket.u16(a, 0), x0: RasterPacket.i32(a, 2), y0: RasterPacket.i32(a, 6), w: n, h: n, mmPerPx: 2000 | RasterPacket.flag, idx: current)
         return RasterPacket.valid(packet) ? packet : incoming
     }
 }
@@ -242,6 +250,7 @@ enum MapDeliveryPolicy {
     /// Unlike a colour-only legacy conversion, re-RLE the merged runs so the
     /// missing roof layer actually reduces bytes. No 1.44M-pixel expansion.
     static func compactBase(_ data:Data)->Data {
+        if RoadPalette.isPacket(data) {return RoadPalette.compactBase(data)}
         guard RasterPacket.isBuilding(data),RasterPacket.valid(data) else {return data}
         let raw=[UInt8](data)
         var result=Data(raw.prefix(16));result[14]=UInt8(2000&255);result[15]=UInt8(2000>>8)
@@ -277,7 +286,7 @@ struct BuildingUpdate { let bytes: Data; let coverage: BuildingCoverage }
 struct BuildingView { let x: Double, y: Double, bearing: Double?, radius: Double }
 struct BuildingCheckpoint { let coverage: BuildingCoverage; let patches: [Int: Data] }
 enum FastBuildings {
-    static let qualityVersion = 2
+    static let qualityVersion = 4
     static func order(cx: Double, cy: Double, view: BuildingView?) -> [Int] {
         let v = view.flatMap { $0.x.isFinite && $0.y.isFinite && $0.radius.isFinite && $0.radius>=0 ? $0 : nil }
         func score(_ i: Int) -> (Double, Double, Double) {
@@ -346,7 +355,7 @@ enum FastBuildings {
             let tile=[UInt8](patch),ox=(i%2)*300,oy=(i/2)*300
             for y in 0..<300 {for x in 0..<300 {mask[(oy+y)*600+ox+x]=tile[y*300+x]}}
         }
-        var roofs=false
+        var roofs=pixels.contains {(4...7).contains($0)}
         for y in 0..<1200 {for x in 0..<1200 {
             let p=y*1200+x,c=(y/2)*600+x/2
             guard mask[c]==1,pixels[p]==0 || pixels[p]==2 else {continue}
@@ -355,6 +364,7 @@ enum FastBuildings {
                 mask[((y-1)/2)*600+x/2] != 1 || mask[((y+1)/2)*600+x/2] != 1
             pixels[p]=(edge ? 5 : 4) | (pixels[p]&2);roofs=true
         }}
+        if RoadPalette.isPacket(base) {return RoadPalette.encode(pixels,like:base)}
         let b=[UInt8](base)
         return MapGeo.encodeRaster(frameId:RasterPacket.u16(b,0),x0:RasterPacket.i32(b,2),y0:RasterPacket.i32(b,6),w:1200,h:1200,mmPerPx:2000 | (roofs ? RasterPacket.flag : 0),idx:pixels)
     }

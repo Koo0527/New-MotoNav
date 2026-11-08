@@ -115,43 +115,195 @@ struct RouteMapPlan {
 
 /// Atomic, size-limited persistent packets. Invalid/truncated/wrong-coordinate packets are ignored.
 final class RouteMapCache {
+    /// 与 FineRoads.version 同步；新版补路算法必须同时递增两处，旧增强文件不再读取。
+    static let fineVersion = 2
+    static let fineQuadrantSize = 600
     private let root: URL
     private let lock = NSLock()
     private struct Center:Hashable {let x:Double,y:Double}
     private var known:[String:Set<Center>]=[:]
-    struct Hit {let bytes:Data,node:RouteMapPlan.Node,coverage:BuildingCoverage?}
+    struct Hit {let bytes:Data,node:RouteMapPlan.Node,coverage:BuildingCoverage?,isFine:Bool}
+    struct CachedPacket {let bytes:Data,isFine:Bool}
     static let shared = RouteMapCache()
     init(root: URL? = nil) {
         self.root = root ?? FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("route_maps")
     }
-    private func file(frame: MapGeo.Frame, source: Int, buildings: Bool, node: RouteMapPlan.Node, style: Int, legacy:Bool=false) -> URL {
+    private func file(frame: MapGeo.Frame, source: Int, buildings: Bool, node: RouteMapPlan.Node, style: Int, legacy:Bool=false, materialsVersion:Int?=nil, fine:Int=0) -> URL {
+        let suffix = fine > 0 ? "-fine\(fine)" : ""
         if !legacy,AmapCapturePolicy.supportsBuildings(style) {
-            return root.appendingPathComponent("materials-v2-\(style)/\(buildings && source == 3 ? "v2" : "v1")-\(source)-\(buildings ? "buildings" : "base")/\(frame.refLat)_\(frame.refLng)/\(Int(node.x))_\(Int(node.y)).bin")
+            let version=materialsVersion ?? (source == 3 ? 4 : 2)
+            return root.appendingPathComponent("materials-v\(version)-\(source == 3 && version == 4 ? "game" : String(style))/\(buildings && source == 3 ? "v2" : "v1")-\(source)-\(buildings ? "buildings" : "base")/\(frame.refLat)_\(frame.refLng)/\(Int(node.x))_\(Int(node.y))\(suffix).bin")
         }
         let generation = style == 1 ? 3 : (style == 0 ? 2 : 1)
-        return root.appendingPathComponent("styles-v\(generation)-\(style)/\(buildings && source == 3 ? "v2" : "v1")-\(source)-\(buildings ? "buildings" : "base")/\(frame.refLat)_\(frame.refLng)/\(Int(node.x))_\(Int(node.y)).bin")
+        return root.appendingPathComponent("styles-v\(generation)-\(style)/\(buildings && source == 3 ? "v2" : "v1")-\(source)-\(buildings ? "buildings" : "base")/\(frame.refLat)_\(frame.refLng)/\(Int(node.x))_\(Int(node.y))\(suffix).bin")
+    }
+    static func isCurrent(_ bytes:Data,source:Int,style:Int)->Bool {
+        source != 3 || !AmapCapturePolicy.supportsBuildings(style) || RoadPalette.isCurrentPacket(bytes)
+    }
+    static func isCurrent(_ update:BuildingUpdate,source:Int,style:Int)->Bool {
+        update.coverage.qualityVersion == FastBuildings.qualityVersion && isCurrent(update.bytes,source:source,style:style)
     }
     private func catalogKey(_ frame:MapGeo.Frame,_ source:Int,_ style:Int)->String {
-        "\(frame.id):\(frame.refLat):\(frame.refLng):\(source):\(style)"
+        "\(frame.id):\(frame.refLat):\(frame.refLng):\(source):\(source == 3 && AmapCapturePolicy.supportsBuildings(style) ? 1 : style)"
     }
     private func remember(_ node:RouteMapPlan.Node,frame:MapGeo.Frame,source:Int,style:Int) {
         known[catalogKey(frame,source,style),default:[]].insert(Center(x:node.x,y:node.y))
     }
     func read(frame: MapGeo.Frame, source: Int, buildings: Bool, node: RouteMapPlan.Node, style: Int = 1, allowLegacy:Bool=true) -> Data? {
+        readPacket(frame: frame, source: source, buildings: buildings, node: node, style: style, allowLegacy: allowLegacy)?.bytes
+    }
+    /// Return bytes together with whether they came from the versioned fine file.
+    /// Uses the existing lookup order and file validation; callers no longer need
+    /// a second readFine/byte comparison to identify an enhancement packet.
+    func readPacket(frame: MapGeo.Frame, source: Int, buildings: Bool, node: RouteMapPlan.Node, style: Int = 1, allowLegacy:Bool=true) -> CachedPacket? {
         lock.lock(); defer { lock.unlock() }
-        var urls = [file(frame:frame,source:source,buildings:buildings,node:node,style:style)]
-        if allowLegacy {urls.append(file(frame:frame,source:source,buildings:buildings,node:node,style:style,legacy:true))}
-        for url in urls {
+        var urls:[(URL,Bool)] = []
+        if !buildings {
+            urls.append((file(frame:frame,source:source,buildings:false,node:node,style:style,fine:Self.fineVersion), true))
+            // fine1 is a display fallback only; its coverage is unknown and it
+            // must not be treated as an input wide base.
+            urls.append((file(frame:frame,source:source,buildings:false,node:node,style:style,fine:1), true))
+        }
+        urls.append((file(frame:frame,source:source,buildings:buildings,node:node,style:style), false))
+        if allowLegacy {
+            if source == 3 { urls.append((file(frame:frame,source:source,buildings:buildings,node:node,style:style,materialsVersion:3), false)) }
+            urls.append((file(frame:frame,source:source,buildings:buildings,node:node,style:style,materialsVersion:2), false))
+            urls.append((file(frame:frame,source:source,buildings:buildings,node:node,style:style,legacy:true), false))
+        }
+        for (url,isFine) in urls {
+            if let data = validated(url, frame: frame, source: source, buildings: buildings, node: node, style: style, allowLegacy: allowLegacy) {
+                remember(node,frame:frame,source:source,style:style)
+                return CachedPacket(bytes: data, isFine: isFine)
+            }
+        }
+        return nil
+    }
+    /// Explicit wide-base read for AMap capture inputs; never returns the fine file.
+    func readWide(frame: MapGeo.Frame, source: Int, node: RouteMapPlan.Node, style: Int = 1) -> Data? {
+        lock.lock(); defer { lock.unlock() }
+        let url = file(frame: frame, source: source, buildings: false, node: node, style: style)
+        guard let data = validated(url, frame: frame, source: source, buildings: false, node: node, style: style, allowLegacy: false) else { return nil }
+        remember(node,frame:frame,source:source,style:style)
+        return data
+    }
+    private func validated(_ url: URL, frame: MapGeo.Frame, source: Int, buildings: Bool,
+                           node: RouteMapPlan.Node, style: Int, allowLegacy: Bool) -> Data? {
         guard let attrs = try? FileManager.default.attributesOfItem(atPath: url.path),
               let size = attrs[.size] as? NSNumber, (17...480000).contains(size.intValue),
               let data = try? Data(contentsOf: url), RasterPacket.isBuilding(data) == buildings,
               RasterPacket.valid(data, frame: frame.id, x: Int(node.x - 1200), y: Int(node.y + 1200)),
               MapStyleTransfer.matches(data,style:style),
-              !AmapCapturePolicy.supportsBuildings(style) || RasterPacket.hasMapContent(data) else { continue }
-        remember(node,frame:frame,source:source,style:style)
+              allowLegacy || Self.isCurrent(data,source:source,style:style),
+              !AmapCapturePolicy.supportsBuildings(style) || RasterPacket.hasMapContent(data) else { return nil }
         return data
+    }
+    /// One block's versioned fine coverage and candidate masks. The masks are
+    /// raw 600×600 byte maps (four quadrants, ~180 KB total); the packet stays
+    /// in the existing fine cache file.
+    struct FineState {
+        let qualityVersion: Int
+        let checkedMask: UInt8
+        let masks: [Int: [UInt8]]
+        let revision: Int
+        let baseDigest: String
+    }
+    private struct SavedFineState: Codable {
+        let qualityVersion: Int
+        let checkedMask: UInt8
+        let revision: Int
+        let baseDigest: String
+        let maskBytes: Int
+        let checksum: UInt64
+    }
+    private func fineStateURL(frame: MapGeo.Frame, source: Int, node: RouteMapPlan.Node,
+                             style: Int, ext: String) -> URL {
+        file(frame: frame, source: source, buildings: false, node: node, style: style,
+             fine: Self.fineVersion).deletingPathExtension().appendingPathExtension(ext)
+    }
+    /// Read coverage even when a quadrant contains no roads and therefore has
+    /// no fine packet. A base digest mismatch (different wide capture) is stale.
+    func readFineState(frame: MapGeo.Frame, source: Int, node: RouteMapPlan.Node,
+                       style: Int = 1, baseDigest: String? = nil) -> FineState? {
+        lock.lock(); defer { lock.unlock() }
+        let metaURL = fineStateURL(frame: frame, source: source, node: node, style: style, ext: "state")
+        let masksURL = fineStateURL(frame: frame, source: source, node: node, style: style, ext: "masks")
+        guard let metaData = try? Data(contentsOf: metaURL),
+              let meta = try? JSONDecoder().decode(SavedFineState.self, from: metaData),
+              meta.qualityVersion == Self.fineVersion, meta.checkedMask <= 15,
+              meta.maskBytes == ((Self.fineQuadrantSize * Self.fineQuadrantSize + 7) / 8) * 4,
+              let masksData = try? Data(contentsOf: masksURL),
+              masksData.count == meta.maskBytes,
+              Self.checksum(masksData) == meta.checksum,
+              baseDigest == nil || meta.baseDigest == baseDigest else { return nil }
+        let quadrantBits = Self.fineQuadrantSize * Self.fineQuadrantSize
+        let bytesPerQuadrant = (quadrantBits + 7) / 8
+        let packed = [UInt8](masksData)
+        var masks: [Int: [UInt8]] = [:]
+        for q in 0..<4 {
+            var mask = [UInt8](repeating: 0, count: quadrantBits)
+            let base = q * bytesPerQuadrant
+            for i in 0..<quadrantBits where packed[base + i / 8] & (1 << UInt8(i % 8)) != 0 {
+                mask[i] = 1
+            }
+            masks[q] = mask
         }
-        return nil
+        return FineState(qualityVersion: meta.qualityVersion, checkedMask: meta.checkedMask,
+                         masks: masks, revision: meta.revision, baseDigest: meta.baseDigest)
+    }
+    func storeFineState(_ state: FineState, frame: MapGeo.Frame, source: Int,
+                        node: RouteMapPlan.Node, style: Int = 1) throws {
+        guard state.qualityVersion == Self.fineVersion, state.checkedMask <= 15,
+              !state.baseDigest.isEmpty,
+              state.masks.keys.allSatisfy({ (0..<4).contains($0) }),
+              state.masks.values.allSatisfy({ $0.count == Self.fineQuadrantSize * Self.fineQuadrantSize }) else {
+            throw MapProcessingError.invalid("细路覆盖状态无效")
+        }
+        lock.lock(); defer { lock.unlock() }
+        let metaURL = fineStateURL(frame: frame, source: source, node: node, style: style, ext: "state")
+        let masksURL = fineStateURL(frame: frame, source: source, node: node, style: style, ext: "masks")
+        if let oldData = try? Data(contentsOf: metaURL),
+           let old = try? JSONDecoder().decode(SavedFineState.self, from: oldData),
+           old.qualityVersion == state.qualityVersion, old.baseDigest == state.baseDigest,
+           old.checkedMask | state.checkedMask != state.checkedMask {
+            throw MapProcessingError.invalid("细路覆盖回退被拒绝")
+        }
+        let quadrantBits = Self.fineQuadrantSize * Self.fineQuadrantSize
+        let bytesPerQuadrant = (quadrantBits + 7) / 8
+        var packed = [UInt8](repeating: 0, count: bytesPerQuadrant * 4)
+        for q in 0..<4 {
+            let mask = state.masks[q] ?? [UInt8](repeating: 0, count: quadrantBits)
+            let base = q * bytesPerQuadrant
+            for i in 0..<quadrantBits where mask[i] != 0 {
+                packed[base + i / 8] |= 1 << UInt8(i % 8)
+            }
+        }
+        let masksData = Data(packed)
+        let meta = SavedFineState(qualityVersion: state.qualityVersion,
+                                  checkedMask: state.checkedMask, revision: state.revision,
+                                  baseDigest: state.baseDigest, maskBytes: masksData.count,
+                                  checksum: Self.checksum(masksData))
+        let metaData = try JSONEncoder().encode(meta)
+        let oldBytes = (try? metaURL.resourceValues(forKeys: [.fileSizeKey]))?.fileSize ?? 0
+            + ((try? masksURL.resourceValues(forKeys: [.fileSizeKey]))?.fileSize ?? 0)
+        if totalBytesLocked() - Int64(oldBytes) + Int64(metaData.count + masksData.count) > 512 * 1024 * 1024 {
+            throw MapProcessingError.invalid("沿线离线缓存已达 512 MB")
+        }
+        try FileManager.default.createDirectory(at: metaURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try masksData.write(to: masksURL, options: .atomic)
+        try metaData.write(to: metaURL, options: .atomic)
+        #if os(iOS)
+        try FileManager.default.setAttributes([.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication], ofItemAtPath: metaURL.path)
+        try FileManager.default.setAttributes([.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication], ofItemAtPath: masksURL.path)
+        #endif
+    }
+    /// Read only the versioned fine-road packet; used to reuse an existing
+    /// enhancement without spending a near capture.
+    func readFine(frame: MapGeo.Frame, source: Int, node: RouteMapPlan.Node, style: Int = 1) -> Data? {
+        lock.lock(); defer { lock.unlock() }
+        let url = file(frame: frame, source: source, buildings: false, node: node, style: style, fine: Self.fineVersion)
+        guard let data = validated(url, frame: frame, source: source, buildings: false, node: node, style: style, allowLegacy: false) else { return nil }
+        remember(node, frame: frame, source: source, style: style)
+        return data
     }
     /// Only inspect the in-memory catalog, never enumerate disk on GPS updates.
     func covering(frame:MapGeo.Frame,source:Int,style:Int,x:Double,y:Double,kmh:Int)->Hit? {
@@ -162,20 +314,26 @@ final class RouteMapCache {
         lock.unlock()
         for center in candidates.prefix(8) {
             let node=RouteMapPlan.Node(x:Double(center.x),y:Double(center.y),distance:0)
-            let update=buildingUpdate(frame:frame,source:source,node:node,style:style)
-            if let bytes=update?.bytes ?? read(frame:frame,source:source,buildings:false,node:node,style:style) {
-                return Hit(bytes:bytes,node:node,coverage:update?.coverage)
+            let palette=source==3 && AmapCapturePolicy.supportsBuildings(style)
+            let currentPacket=palette ? readPacket(frame:frame,source:source,buildings:false,node:node,style:style,allowLegacy:false):nil
+            let currentUpdate=palette ? buildingUpdate(frame:frame,source:source,node:node,style:style,currentOnly:true):nil
+            let update=currentUpdate ?? (currentPacket == nil ? buildingUpdate(frame:frame,source:source,node:node,style:style):nil)
+            let fallback=update == nil && currentPacket == nil
+                ? readPacket(frame:frame,source:source,buildings:false,node:node,style:style) : nil
+            if let bytes=update?.bytes ?? currentPacket?.bytes ?? fallback?.bytes {
+                let packet=currentPacket ?? fallback
+                return Hit(bytes:bytes,node:node,coverage:update?.coverage,isFine:update == nil && packet?.isFine == true)
             }
         }
         return nil
     }
-    func store(_ data: Data, frame: MapGeo.Frame, source: Int, node: RouteMapPlan.Node, style: Int = 1) throws {
-        guard RasterPacket.valid(data, frame: frame.id, x: Int(node.x - 1200), y: Int(node.y + 1200)),
+    func store(_ data: Data, frame: MapGeo.Frame, source: Int, node: RouteMapPlan.Node, style: Int = 1, fine: Int = 0) throws {
+        guard Self.isCurrent(data,source:source,style:style),RasterPacket.valid(data, frame: frame.id, x: Int(node.x - 1200), y: Int(node.y + 1200)),
               MapStyleTransfer.matches(data,style:style),
               !AmapCapturePolicy.supportsBuildings(style) || RasterPacket.hasMapContent(data) else { throw MapProcessingError.invalid("离线底图校验失败") }
         guard !AmapCapturePolicy.supportsBuildings(style) || RasterPacket.hasMapContent(data) else {throw MapProcessingError.invalid("空白底图未写入缓存")}
         lock.lock(); defer { lock.unlock() }
-        let file = file(frame: frame, source: source, buildings: RasterPacket.isBuilding(data), node: node, style: style)
+        let file = file(frame: frame, source: source, buildings: RasterPacket.isBuilding(data), node: node, style: style, fine: fine)
         try FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
         var folder = root
         var values = URLResourceValues(); values.isExcludedFromBackup = true
@@ -226,6 +384,8 @@ final class RouteMapCache {
         for i in 0..<4 {
             let path=fastFile(frame:frame,source:source,node:node,name:"patch-\(i)")
             var patch=validPatch(readFast(path,limit:90008))
+            if patch == nil {patch=validPatch(readFast(fastFile(frame:frame,source:source,node:node,name:"patch-\(i)",quality:3),limit:90008))}
+            if patch == nil {patch=validPatch(readFast(fastFile(frame:frame,source:source,node:node,name:"patch-\(i)",quality:2),limit:90008))}
             if patch == nil, let old=validPatch(readFast(fastFile(frame:frame,source:source,node:node,name:"patch-\(i)",quality:1),limit:90008)) {
                 let converted=FastBuildings.clean(old)
                 var stored=converted,digest=Self.checksum(converted).littleEndian
@@ -252,7 +412,7 @@ final class RouteMapCache {
         return checksum(data)
     }
     private struct SavedBuilding: Codable {let bytes:Data;let coverage:BuildingCoverage;let checksum:UInt64}
-    func buildingUpdate(frame: MapGeo.Frame, source: Int, node: RouteMapPlan.Node, style: Int) -> BuildingUpdate? {
+    func buildingUpdate(frame: MapGeo.Frame, source: Int, node: RouteMapPlan.Node, style: Int, currentOnly:Bool=false) -> BuildingUpdate? {
         guard AmapCapturePolicy.supportsBuildings(style),validFastNode(node) else {return nil}
         func load(_ quality:Int)->BuildingUpdate? {
             lock.lock()
@@ -260,27 +420,29 @@ final class RouteMapCache {
             lock.unlock()
             guard let data=data,let saved=try? JSONDecoder().decode(SavedBuilding.self,from:data),
                 saved.checksum==Self.updateChecksum(saved.bytes,saved.coverage),saved.coverage.qualityVersion==quality,saved.coverage.checkedMask<=15,
-                RasterPacket.valid(saved.bytes,frame:frame.id,x:Int((node.x-1200).rounded()),y:Int((node.y+1200).rounded())),MapStyleTransfer.matches(saved.bytes,style:style) else {return nil}
+                RasterPacket.valid(saved.bytes,frame:frame.id,x:Int((node.x-1200).rounded()),y:Int((node.y+1200).rounded())),MapStyleTransfer.matches(saved.bytes,style:style),
+                quality != FastBuildings.qualityVersion || Self.isCurrent(saved.bytes,source:source,style:style) else {return nil}
             return BuildingUpdate(bytes:saved.bytes,coverage:saved.coverage)
         }
         let current=load(FastBuildings.qualityVersion)
-        let old=load(1)
+        if currentOnly {return current}
+        let previous=load(3),old=load(2),older=load(1)
         let legacy=read(frame:frame,source:source,buildings:true,node:node,style:style).map{BuildingUpdate(bytes:$0,coverage:.legacyFull)}
-        let selected = current?.coverage.isComplete == true ? current : old?.coverage.isComplete == true ? old : legacy ?? current ?? old
+        let selected = current ?? [previous,old,older,legacy].compactMap {$0}.first {$0.coverage.isComplete} ?? previous ?? old ?? older ?? legacy
         if selected != nil {
             lock.lock();for theme in [1,2,3] {remember(node,frame:frame,source:source,style:theme)};lock.unlock()
         }
         return selected
     }
     func storeBuildingUpdate(_ update: BuildingUpdate, frame: MapGeo.Frame, source: Int, node: RouteMapPlan.Node) throws {
-        guard validFastNode(node),update.coverage.qualityVersion==FastBuildings.qualityVersion,update.coverage.checkedMask<=15,
+        guard validFastNode(node),Self.isCurrent(update.bytes,source:source,style:1),update.coverage.qualityVersion==FastBuildings.qualityVersion,update.coverage.checkedMask<=15,
               RasterPacket.valid(update.bytes,frame:frame.id,x:Int((node.x-1200).rounded()),y:Int((node.y+1200).rounded())),MapStyleTransfer.matches(update.bytes,style:1) else {throw MapProcessingError.invalid("建筑更新无效")}
         let data=try JSONEncoder().encode(SavedBuilding(bytes:update.bytes,coverage:update.coverage,checksum:Self.updateChecksum(update.bytes,update.coverage)))
         lock.lock();defer {lock.unlock()}
         let url=fastFile(frame:frame,source:source,node:node,name:"update.json")
         if let data=readFast(url,limit:650000),let previous=try? JSONDecoder().decode(SavedBuilding.self,from:data),
            previous.checksum==Self.updateChecksum(previous.bytes,previous.coverage),previous.coverage.checkedMask<=15,
-           previous.coverage.qualityVersion==update.coverage.qualityVersion,
+           previous.coverage.qualityVersion==update.coverage.qualityVersion,Self.isCurrent(previous.bytes,source:source,style:1),
            RasterPacket.valid(previous.bytes,frame:frame.id,x:Int((node.x-1200).rounded()),y:Int((node.y+1200).rounded())),
            update.coverage.checkedMask | previous.coverage.checkedMask != update.coverage.checkedMask {return}
         try writeFast(data,to:url)
@@ -328,9 +490,16 @@ struct MapHandoffBuffer {
     mutating func clear() { pending=nil }
     mutating func stage(_ packet:Packet) {
         if let old=pending,old.source==packet.source,old.style==packet.style,old.type==packet.type,
+           abs(old.cx-packet.cx)<1,abs(old.cy-packet.cy)<1 {
+            let oldCurrent=RouteMapCache.isCurrent(old.bytes,source:old.source,style:old.style)
+            let newCurrent=RouteMapCache.isCurrent(packet.bytes,source:packet.source,style:packet.style)
+            if oldCurrent && !newCurrent {return}
+            if !oldCurrent && newCurrent {pending=packet;return}
+        }
+        if let old=pending,old.source==packet.source,old.style==packet.style,old.type==packet.type,
            abs(old.cx-packet.cx)<1,abs(old.cy-packet.cy)<1,let previous=old.coverage {
             guard let incoming=packet.coverage else {return}
-            if previous.isComplete && !incoming.isComplete {return}
+            if previous.qualityVersion > incoming.qualityVersion {return}
             if previous.qualityVersion==incoming.qualityVersion,
                incoming.checkedMask | previous.checkedMask != incoming.checkedMask {return}
         }

@@ -53,7 +53,7 @@ jobs:
           cmp ios/tests/building-continuity/fixture/RasterBuildingCarry.h firmware/boards/175/MotoNav/RasterBuildingCarry.h
           cmp ios/tests/building-continuity/fixture/RasterContinuity.h firmware/boards/175/MotoNav/RasterContinuity.h
           cmp ios/tests/building-continuity/fixture/src/map/RasterDecoder.h firmware/boards/175/MotoNav/src/map/RasterDecoder.h
-          swiftc -O ios/MotoNav/MapGeo.swift ios/MotoNav/RasterProcessing.swift ios/MotoNav/BleBulkWriteQueue.swift ios/MotoNav/BleWritePacer.swift ios/tests/map-wire/main.swift -o /tmp/map-wire
+          swiftc -O ios/MotoNav/MapGeo.swift ios/MotoNav/RasterProcessing.swift ios/MotoNav/RoadPalette.swift ios/MotoNav/BleBulkWriteQueue.swift ios/MotoNav/BleWritePacer.swift ios/tests/map-wire/main.swift -o /tmp/map-wire
           /tmp/map-wire
           clang++ -std=c++17 ios/tests/map-wire/receiver.cpp -o /tmp/bulk-receiver
           /tmp/bulk-receiver
@@ -94,6 +94,11 @@ jobs:
         run: |
           python3 ios/tests/reroute-recovery/run.py
           python3 ios/tests/screenoff-maps/run.py
+      - name: Verify cruise/navigation source split and fine roads
+        run: |
+          python3 ios/tests/map-source-mode/run.py
+          python3 ios/tests/fine-roads/run.py
+          python3 ios/tests/fine-roads/cache.py
       - name: Verify progressive building capture and delivery
         run: |
           python3 ios/tests/building-capture/check.py
@@ -101,13 +106,21 @@ jobs:
           python3 ios/tests/building-offline/check.py
           python3 ios/tests/map-smoothing/check.py
           python3 ios/tests/smoothing-cache/check.py
-          swiftc -O ios/MotoNav/MapGeo.swift ios/MotoNav/RasterProcessing.swift ios/MotoNav/RouteMapPlan.swift ios/tests/building-progress/main.swift -o /tmp/building-progress
+          swiftc -O ios/MotoNav/MapGeo.swift ios/MotoNav/RasterProcessing.swift ios/MotoNav/RoadPalette.swift ios/MotoNav/RouteMapPlan.swift ios/tests/building-progress/main.swift -o /tmp/building-progress
           /tmp/building-progress
+      - name: Verify OpenFreeMap vector map generation
+        run: |
+          python3 ios/tests/vector-map/check.py
+      - name: Verify vector feeder background gating
+        run: |
+          python3 ios/tests/vector-feeder/check.py
+          python3 ios/tests/vector-reliability/check.py
+          python3 ios/tests/cruise-cache/check.py
       - name: Verify navigation, BLE clock and route history
         run: |
           set -euo pipefail
           python3 ios/tests/webmotor/check.py | tee parity-tests.log
-          swiftc -O ios/MotoNav/MapGeo.swift ios/MotoNav/RasterProcessing.swift ios/MotoNav/RouteMapPlan.swift ios/tests/maps/main.swift -o /tmp/maps
+          swiftc -O ios/MotoNav/MapGeo.swift ios/MotoNav/RasterProcessing.swift ios/MotoNav/RoadPalette.swift ios/MotoNav/RouteMapPlan.swift ios/tests/maps/main.swift -o /tmp/maps
           /tmp/maps
           swiftc ios/MotoNav/BleWritePacer.swift ios/tests/ble-pacing/main.swift -o /tmp/pacing
           /tmp/pacing
@@ -122,9 +135,9 @@ jobs:
           swiftc ios/MotoNav/ArrivalPolicy.swift ios/MotoNav/NaviSessionCallbacks.swift ios/tests/arrival-relay/SDKStubs.swift ios/tests/arrival-relay/main.swift -o /tmp/relay
           /tmp/relay
           python3 ios/tests/lane-guidance/check.py
-          swiftc -O ios/MotoNav/MapGeo.swift ios/MotoNav/RasterProcessing.swift ios/MotoNav/MapStyles.swift ios/tests/four-styles/main.swift -o /tmp/styles
+          swiftc -O ios/MotoNav/MapGeo.swift ios/MotoNav/RasterProcessing.swift ios/MotoNav/RoadPalette.swift ios/MotoNav/MapStyles.swift ios/tests/four-styles/main.swift -o /tmp/styles
           /tmp/styles
-          swiftc -O ios/MotoNav/MapGeo.swift ios/MotoNav/RasterProcessing.swift ios/MotoNav/MapStyles.swift ios/MotoNav/RouteMapPlan.swift ios/tests/map-delivery/main.swift -o /tmp/map-delivery
+          swiftc -O ios/MotoNav/MapGeo.swift ios/MotoNav/RasterProcessing.swift ios/MotoNav/RoadPalette.swift ios/MotoNav/MapStyles.swift ios/MotoNav/RouteMapPlan.swift ios/tests/map-delivery/main.swift -o /tmp/map-delivery
           /tmp/map-delivery
           swiftc ios/MotoNav/BleBulkWriteQueue.swift ios/MotoNav/BleWritePacer.swift ios/tests/ble-bulk/main.swift -o /tmp/bulk
           /tmp/bulk

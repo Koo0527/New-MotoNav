@@ -23,7 +23,19 @@ int main(){
  assert(FifoStatus::count(3,0)==0); // Half of an accel/gyro pair: wait, do not reset.
  assert(FifoStatus::count(9,0)==0);
  assert(FifoStatus::count(6,0)==1);assert(FifoStatus::count(0,0x10)==0);
- assert(FifoStatus::count(1,0)==-1);assert(FifoStatus::count(0,0x20)==-2);assert(FifoStatus::count(0,0x80)==-2);
+ assert(FifoStatus::kind(0,0x10)==FifoStatus::Kind::Empty);
+ assert(FifoStatus::kind(3,0)==FifoStatus::Kind::Half);
+ assert(FifoStatus::kind(9,0)==FifoStatus::Kind::Half);
+ assert(FifoStatus::kind(1,0)==FifoStatus::Kind::Half);
+ assert(FifoStatus::kind(6,0)==FifoStatus::Kind::Complete);
+ assert(FifoStatus::kind(0,0x20)==FifoStatus::Kind::Overflow);
+ assert(FifoStatus::kind(0,0x80)==FifoStatus::Kind::Overflow);
+ assert(FifoStatus::kind(0,0x03)==FifoStatus::Kind::Overflow); // 128 pairs exceed the 32-slot consumer.
+ assert(FifoStatus::count(1,0)==0);
+ assert(FifoStatus::count(0,0x20)==-2);assert(FifoStatus::count(0,0x80)==-2);
+ FifoWait wait;assert(wait.wait(0));assert(wait.wait(20));assert(!wait.wait(40));
+ wait.reset();assert(wait.wait(1000));assert(!wait.wait(1100));
+ wait.reset();assert(wait.wait(0));wait.reset();assert(wait.wait(10));
  BatchClock cadence;assert(fabsf(cadence.interval(0,1)-1.0f/56)<0.00001f);
  Estimator tilt;assert(makeMount({0,0,1},{},1,0,tilt.mount));tilt.initialized=true;tilt.up={0,0,1};
  uint32_t physical=0;float angle=0;
@@ -33,6 +45,10 @@ int main(){
  }
  assert(tilt.available&&fabsf(tilt.lateral)<0.005f&&fabsf(tilt.longitudinal)<0.005f);
  assert(cadence.interval(physical+501,6)==0);cadence.reset();assert(cadence.interval(1,1)>0);assert(cadence.interval(102,1)==0);
+ cadence.reset();assert(cadence.interval(100,1)>0);
+ assert(cadence.interval(420,4)==0); // Too few pairs to cover a delayed poll.
+ cadence.reset();assert(cadence.interval(100,1)>0);
+ assert(cadence.interval(420,18)>0); // A complete backlog preserves the integration clock.
  CalibrationWindow fast;fast.begin(0);for(int i=0;i<300;i++)assert(fast.sample({0,0,1},{},i*10)==0);
  assert(fast.sample({0,0,1},{},2999)==0);assert(fast.sample({0,0,1},{},3000)==1);
  CalibrationWindow c;c.begin(10);for(int i=0;i<100;i++)assert(c.sample({0,0,1},{},10+i*18)==0);
@@ -70,4 +86,10 @@ int main(){
  Output o;assert(o.update(0,true,0.25f,0.5f));assert(!o.update(49,true,1,1));assert(o.update(50,true,-0.75f,-0.6f));
  assert(o.accel==0.5f&&o.brake==0.6f&&o.left==0.75f&&o.right==0.25f);
  assert(o.update(100,false,0,0));assert(!o.valid&&o.count==3);o.clear();assert(o.count==0&&o.accel==0);
+ Output phase;unsigned frames=0;
+ for(uint32_t t=0;t<1000;t+=18)if(phase.update(t,true,float(t)/1000,0))++frames;
+ assert(frames==20); // Sensor cadence must not accumulate a new 50ms delay per frame.
+ assert(!phase.update(980,true,0,0)); // An older buffered timestamp cannot go backwards.
+ assert(phase.update(1600,true,0,0));
+ assert(!phase.update(1600,true,0,0)); // A scheduling delay never fabricates catch-up samples.
 }

@@ -41,6 +41,116 @@ int main() {
   entry.finish();
   entry.poll(false,false,Motion::Unknown);
   assert(entry.poll(true,false,Motion::Unknown));
+  // Navigation auto-record and reconnect subscriptions are not a deliberate page entry.
+  // An unknown motion state must never re-create the installation mount by itself.
+  AutoMount subscription;
+  assert(!subscription.poll(false,true,Motion::Unknown));
+  subscription.finish();
+  subscription.poll(false,false,Motion::Unknown);
+  assert(!subscription.poll(false,true,Motion::Unknown));
+  subscription.finish();
+  AutoMount stoppedSubscription;
+  assert(stoppedSubscription.poll(false,true,Motion::Stopped));
+  // A later page entry remains a deliberate calibration request even without motion evidence.
+  AutoMount laterEntry;
+  laterEntry.poll(false,true,Motion::Unknown);
+  assert(laterEntry.poll(true,true,Motion::Unknown));
+  // Calibration source gates: trusted stops require Stopped for the whole window,
+  // explicit pages/manual may proceed on Unknown but never on Moving.
+  assert(!CalibrationPolicy::mayRun(CalibrationSource::TrustedStop,Motion::Unknown));
+  assert(!CalibrationPolicy::mayRun(CalibrationSource::TrustedStop,Motion::Moving));
+  assert(CalibrationPolicy::mayRun(CalibrationSource::TrustedStop,Motion::Stopped));
+  assert(CalibrationPolicy::mayRun(CalibrationSource::PhonePage,Motion::Unknown));
+  assert(CalibrationPolicy::mayRun(CalibrationSource::ScreenPage,Motion::Unknown));
+  assert(CalibrationPolicy::mayRun(CalibrationSource::Manual,Motion::Unknown));
+  assert(!CalibrationPolicy::mayRun(CalibrationSource::PhonePage,Motion::Moving));
+  assert(!CalibrationGate::mayStart(CalibrationSource::TrustedStop,Motion::Stopped,false));
+  assert(!CalibrationGate::maySave(CalibrationSource::PhonePage,Motion::Unknown,false));
+  assert(CalibrationGate::mayStart(CalibrationSource::PhonePage,Motion::Unknown,true));
+  assert(CalibrationGate::maySave(CalibrationSource::Manual,Motion::Unknown,true));
+  assert(!CalibrationGate::mayStart(CalibrationSource::ScreenPage,Motion::Moving,true));
+  // Manual calibration is bound to the authenticated connection that queued #GC.
+  ManualCalibrationSession manual;
+  assert(!manual.receive(false,1,true,1));
+  assert(!manual.receive(true,1,false,1));
+  assert(!manual.receive(true,1,true,2));
+  assert(manual.receive(true,1,true,1));
+  assert(manual.valid(true,1));
+  assert(!manual.valid(false,1));
+  assert(!manual.valid(true,2));
+  int writes=0;
+  if(CalibrationGate::maySave(CalibrationSource::Manual,Motion::Stopped,manual.valid(true,1)))++writes;
+  assert(writes==1);
+  if(CalibrationGate::maySave(CalibrationSource::Manual,Motion::Stopped,manual.valid(true,2)))++writes;
+  assert(writes==1); // A new connection cannot save the old candidate.
+  manual.clear();
+  assert(!manual.valid(true,1));
+  // Phone entry is bound to the authenticated session, current stream token and 3 s queue age.
+  PhoneEntry phone;uint32_t phoneToken;bool phoneEnter;
+  assert(PhoneEntry::parse("#GE,1234aBcD,1",phoneToken,phoneEnter)&&phoneToken==0x1234abcd&&phoneEnter);
+  assert(PhoneEntry::parse("#GE,1234ABCD,0",phoneToken,phoneEnter)&&phoneToken==0x1234abcd&&!phoneEnter);
+  for(const char *bad:{"#GE,1234ABCD","#GE,1234ABCD,2","#GE,1234ABC,1","#GE,1234ABCDE,1","#GE,1234ABCD,1\n","#GE,ZZZZZZZZ,1"})
+    assert(!PhoneEntry::parse(bad,phoneToken,phoneEnter));
+  const uint32_t phoneId=0x1234abcd;
+  assert(!phone.receive("#GE,1234ABCD,1",100,false,1,true,phoneId));
+  assert(!phone.receive("#GE,1234ABCD,1",100,true,1,false,phoneId));
+  assert(!phone.receive("#GE,1234ABCD,1",100,true,1,true,0xdeadbeef));
+  assert(phone.receive("#GE,1234ABCD,1",100,true,1,true,phoneId));
+  assert(phone.at==100&&phone.current(true,1,true,phoneId));
+  assert(phone.receive("#GE,1234ABCD,1",200,true,1,true,phoneId));
+  assert(phone.at==100); // A repeated 1 is not a new entry event.
+  assert(phone.generation()==1);
+  assert(!phone.receive("#GE,1234ABCD,0",300,true,1,true,0xdeadbeef));
+  assert(phone.current(true,1,true,phoneId));
+  assert(phone.receive("#GE,1234ABCD,0",300,true,1,true,phoneId));
+  assert(!phone.current(true,1,true,phoneId));
+  assert(phone.receiveQueued("#GE,1234ABCD,1",1000,true,1,1001,true,1,true,phoneId));
+  assert(phone.generation()==2);
+  assert(phone.current(true,1,true,phoneId));
+  assert(!phone.receiveQueued("#GE,1234ABCD,1",1000,true,1,4000,true,1,true,phoneId));
+  phone.maintain(true,2,true,phoneId);
+  assert(!phone.current(true,2,true,phoneId));
+  phone.receive("#GE,1234ABCD,1",5000,true,2,true,phoneId);
+  phone.maintain(true,2,false,phoneId);
+  assert(!phone.current(true,2,true,phoneId));
+  phone.receive("#GE,1234ABCD,1",5000,true,2,true,phoneId);
+  phone.maintain(false,2,true,phoneId);
+  assert(!phone.current(true,2,true,phoneId));
+  phone.receive("#GE,1234ABCD,1",6000,true,2,true,phoneId);
+  phone.maintain(true,2,true,0xdeadbeef);
+  assert(!phone.current(true,2,true,phoneId));
+  // Phone page entry is a deliberate Unknown calibration source, but a repeated
+  // request cannot re-arm after completion; leaving and re-entering can.
+  AutoMount phoneMount;
+  assert(!phoneMount.poll(false,false,Motion::Unknown,false));
+  assert(phoneMount.poll(false,false,Motion::Unknown,true));
+  assert(phoneMount.source==CalibrationSource::PhonePage);
+  phoneMount.finish();
+  assert(!phoneMount.poll(false,false,Motion::Unknown,true));
+  phoneMount.poll(false,false,Motion::Unknown,false);
+  assert(phoneMount.poll(false,false,Motion::Unknown,true));
+  phoneMount.cancel();
+  assert(!phoneMount.poll(false,false,Motion::Unknown,true));
+  phoneMount.poll(false,false,Motion::Unknown,false);
+  assert(phoneMount.poll(false,false,Motion::Unknown,true));
+  AutoMount quickEntry;
+  assert(quickEntry.poll(false,true,Motion::Unknown,true,1));
+  quickEntry.finish();
+  assert(!quickEntry.poll(false,true,Motion::Unknown,true,1)); // duplicate 1
+  assert(quickEntry.poll(false,true,Motion::Unknown,true,2));  // new token's explicit request
+  quickEntry.finish();
+  assert(!quickEntry.poll(false,true,Motion::Unknown,true,2)); // an open page does not authorize fault recovery
+  AutoMount installed;
+  assert(!installed.poll(false,true,Motion::Stopped,false,0,false));
+  assert(!installed.pending); // A saved mount only needs runtime recovery.
+  assert(installed.poll(true,true,Motion::Unknown,false,0,false)); // Actual entry still calibrates.
+  // An explicit phone page entry promotes a subscription waiting for a stop,
+  // because the user has asserted they are parked even without motion evidence.
+  AutoMount mixed;
+  assert(!mixed.poll(false,true,Motion::Moving,false));
+  assert(mixed.source==CalibrationSource::TrustedStop);
+  assert(mixed.poll(false,true,Motion::Unknown,true));
+  assert(mixed.source==CalibrationSource::PhonePage);
   // A sampling gap cannot count as three seconds of continuous quiet.
   CalibrationWindow window;window.begin(0);
   for(unsigned i=0;i<150;i++)assert(window.sample({0,0,1},{},i*18)==0);

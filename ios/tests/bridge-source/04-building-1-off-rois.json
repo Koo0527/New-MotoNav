@@ -1,0 +1,38 @@
+[
+  {
+    "name": "crossing-detail",
+    "rect": [
+      405,
+      340,
+      450,
+      385
+    ],
+    "profile": [
+      "y",
+      359,
+      408,
+      445
+    ],
+    "interpretation": "Gray white medians and street edges at actual crossing. Blue centre transit line excluded; no upper or lower road assigned.",
+    "probes": [
+      {
+        "name": "gray-divider-local-erosion",
+        "samplePoints": [
+          [
+            419,
+            371
+          ],
+          [
+            421,
+            371
+          ],
+          [
+            423,
+            371
+          ]
+        ],
+        "evidenceScope": "Selected gray pixel only; inspect profile before assigning separator topology."
+      }
+    ]
+  }
+]

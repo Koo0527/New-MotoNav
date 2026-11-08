@@ -1,7 +1,9 @@
 # MotoNav 导航重启与重连补图修复计划
 
-> 执行状态：设备暂停在回退镜像 `2c267899`；本轮只完成取证勘误和修复底座冻结。
-> CPU0 诊断、基线复跑、烧录和 iOS 组合验收待设备恢复。
+> 2026-11-07：诊断 R2 捕获两次 IDLE0 TWDT 的完整 RTC 快照，已落地帧间空闲窗口。
+> 板上候选 `36e41316…` 的 USB 导航对照最长 idle 间隔为 295 ms，无意外复位。
+> Build 29 三次受控重连均目检出图，其中一次可闭合新底图的提交及回执证据。
+> 详细记录见 `docs/verification/cpu0diag-r2-20261107.md`，电池与长测继续暂停。
 
 ## 1. 固定基线与取证
 
@@ -18,21 +20,19 @@
   `2c267899…`，串口 `E (557980) task_wdt`，`IDLE0 (CPU 0)`，`CPU 0: help`，
   `Stack canary watchpoint triggered (help)`，`Re-entered core dump`，复位原因 6；
   coredump CRC `26b416bf` / image `ffffffff` 无效。手机 JSON 415 事件、12 个
-  `map-send` 全为 v2、7 ACK、2 超时、3 `link-ready`，最后事件 228.78s；重启在
-  557.98s，手机记录已停止，不能对齐具体地图包。该组按计划停止，确认 CPU0 是
-  当前固件阻塞，不是 iOS 回归。证据见
+  `map-send` 全为 v2、7 ACK、2 超时、3 `link-ready`，最后事件是录制后 228.78s；
+  UART 的 557980 是固件开机后的毫秒数，两端无法直接对时。匹配 ELF 显示
+  canary 发生于写 coredump 时。该组已停止，首发的 CPU0 IDLE0 超时待取证。证据见
   `docs/verification/ios-reconnect-20261106.md` 与 `output/ios-reconnect-20261106/`。
 
 ## 2. 固件修复 CPU0 调度
 
-- [ ] 诊断版：CPU0 轻量 idle hook（时间/计数）、`help` 起止、`flush` 帧起止、
+- [x] 诊断版：CPU0 轻量 idle hook（时间/计数）、`help` 起止、`flush` 帧起止、
   SPI acquire 与每笔 `polling_start/end` 最大耗时/最后阶段、任务栈水位（字节），
   正常任务每秒汇总；以首段 TWDT 为主证据。
-- [ ] 若帧/分片持续完成但 CPU0 无空闲：导航首帧后每 250 ms 在下一帧前 `flushWait()`，
+- [x] 帧/分片持续完成而 CPU0 无空闲：导航首帧后每 250 ms 在下一帧前 `flushWait()`，
   保持 `flushDone` 所有权，阻塞 2 个 RTOS tick 再归还；无双缓冲也留窗口。
-- [ ] 若某阶段停止：`polling_end` 卡住时在确认余量后设 100 ms 有界等待，超时走
-  `fastFlushFatal()` 并保持所有权；`polling_start` 保持 `portMAX_DELAY`；若 acquire/
-  start 卡住查面板/快刷持有顺序；若 `help` 单项卡住先重现再修。保留 5 秒 TWDT 和栈尺寸。
+- R2 的两次快照中刷屏、渲染和 SPI 分片持续完成，保持现有 SPI 超时、5 秒 TWDT 和任务栈。
 - [ ] 转储故障单列；后续需要完整转储时另用诊断镜像扩大 coredump 栈并做受控注入。
 
 ## 3. iOS 修复重连后的底图发送顺序

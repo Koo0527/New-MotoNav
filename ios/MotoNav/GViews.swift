@@ -27,7 +27,8 @@ struct GDashboardView: View {
                     Text(ble.isReady && ble.verified ? "已连接圆屏 · 数据来自车辆传感器" : "圆屏未连接，等待设备数据")
                         .font(.caption).foregroundColor(AppTheme.sub)
                     Text(settings.deviceCalibrationStatus).font(.caption).foregroundColor(AppTheme.sub)
-                    Text("按实际装车倾角固定圆屏，充电口默认朝后。进入本页或圆屏 G 值页后，停车静置约 3 秒自动校准；无需水平安装。充电口朝下接近竖直时，以屏幕背面为前。转动或抖动会重新计时。请只在停车后校准。可靠定位显示行驶时会暂停校准；定位不可信、后台或断连时采用保守策略，可能需要停车后重新进入 G 页或手动校准。")
+                    Text("定位依据：" + ble.motionDiagnosis).font(.caption2).foregroundColor(AppTheme.sub)
+                    Text("按实际装车倾角固定圆屏，充电口默认朝后。进入本页或圆屏 G 值页后，停车静置约 3 秒自动校准；无需水平安装。充电口朝下接近竖直时，以屏幕背面为前。转动或抖动会重新计时。可靠定位显示行驶时会暂停校准。定位不可信且姿态丢失时，请停车后重新请求校准。")
                         .font(.caption).foregroundColor(AppTheme.sub)
                     HStack {
                         if recorder.recording {
@@ -44,10 +45,19 @@ struct GDashboardView: View {
                     }
                     Text("手动记录无需 GPS；真实导航会自动记录并关联导航详情。断连、校准和传感器异常会标为数据间断。")
                         .font(.caption).foregroundColor(AppTheme.sub)
+                    if recorder.phoneEntryAvailable {
+                        Button { recorder.requestPhonePage() } label: {
+                            Label("重新请求校准", systemImage: "arrow.clockwise")
+                        }
+                        .font(.caption.weight(.semibold))
+                        .disabled(!visible || scenePhase != .active || !ble.isReady || !ble.verified || !recorder.canRequestPhonePage)
+                        Text("圆屏停在 WAITING 或校准被中断时使用；点击后请保持静止约 3 秒。")
+                            .font(.caption2).foregroundColor(AppTheme.sub)
+                    }
                     if !recorder.error.isEmpty { Text(recorder.error).font(.caption).foregroundColor(AppTheme.red) }
                 }
-                GReplayCharts(points: gPoints(recorder.liveSamples), duration: 60, live: true,
-                              available: recorder.ready, sessionPeaks: recorder.recording && (recorder.activeRecord?.sampleCount ?? 0) > 0 ? recorder.activePeaks : nil)
+                GReplayCharts(points: gPoints(recorder.liveSamples), missing: [], duration: 60, live: true,
+                              available: recorder.liveAvailable, sessionPeaks: recorder.recording && (recorder.activeRecord?.sampleCount ?? 0) > 0 ? recorder.activePeaks : nil)
                 NavigationLink(destination: GHistoryView()) {
                     Label("G 记录历史（\(recorder.records.count)）", systemImage: "clock.arrow.circlepath")
                         .frame(maxWidth: .infinity, alignment: .leading).padding(16)
@@ -59,9 +69,24 @@ struct GDashboardView: View {
         }
         .background(AppTheme.bg.ignoresSafeArea())
         .navigationTitle("G 仪表与记录").navigationBarTitleDisplayMode(.inline).navigationBarHidden(false)
-        .onAppear { visible = true; recorder.setPreview(scenePhase == .active); if ble.isReady && ble.verified { ble.sendOnce("#GQ") } }
-        .onDisappear { visible = false; recorder.setPreview(false) }
-        .onChange(of: scenePhase) { recorder.setPreview(visible && $0 == .active) }
+        .onAppear {
+            visible = true
+            let active = scenePhase == .active
+            LocationService.shared.setMotionEvidence(active)
+            recorder.setPreview(active)
+            if active { recorder.enterPhonePage() }
+            if ble.isReady && ble.verified { ble.sendOnce("#GQ") }
+        }
+        .onDisappear {
+            visible = false
+            LocationService.shared.setMotionEvidence(false)
+            recorder.setPreview(false)
+        }
+        .onChange(of: scenePhase) { phase in
+            let active = visible && phase == .active
+            LocationService.shared.setMotionEvidence(active)
+            recorder.setPreview(active)
+        }
     }
 }
 
@@ -91,7 +116,7 @@ struct GHistoryView: View {
 struct GRecordDetailView: View {
     let record: GRecord
     @ObservedObject private var recorder = GRecorder.shared
-    @State private var points: [GPlotPoint] = []
+    @State private var replay = GReplayWindow()
     @State private var loading = true
     @State private var loadGeneration = UUID()
     @State private var confirmDelete = false
@@ -102,8 +127,14 @@ struct GRecordDetailView: View {
                 Text(record.started, style: .date).font(.headline)
                 Text("\(record.sampleCount) 个采样 · \(Int(record.duration)) 秒\(record.interrupted ? " · 曾中断" : "")")
                     .font(.caption).foregroundColor(AppTheme.sub)
+                if record.sampleCount > 0 {
+                    Text("全程峰值 加速 \(gValue(record.peaks.acceleration)) g · 制动 \(gValue(record.peaks.braking)) g · 左 \(gValue(record.peaks.left)) g · 右 \(gValue(record.peaks.right)) g")
+                        .font(.caption).foregroundColor(AppTheme.sub)
+                }
                 if loading { ProgressView("读取时间窗口…") }
-                GReplayCharts(points: points, duration: max(1, record.duration), live: false, available: true,
+                GReplayCharts(points: gPoints(replay.samples), missing: replay.missing,
+                              duration: max(1, record.duration), live: false, available: true,
+                              windowPeaks: replay.peaks, mergedGaps: replay.mergedGaps,
                               requestWindow: { from, to in load(from: from, to: to) })
                 if !recorder.error.isEmpty { Text(recorder.error).foregroundColor(AppTheme.red).font(.caption) }
                 Button("删除这条 G 记录", role: .destructive) { confirmDelete = true }
@@ -118,9 +149,9 @@ struct GRecordDetailView: View {
     }
     private func load(from: Double, to: Double) {
         let generation = UUID(); loadGeneration = generation; loading = true
-        recorder.loadSamples(for: record, from: from, to: to, limit: 2400) { samples in
+        recorder.loadReplayWindow(for: record, from: from, to: to, limit: 2400) { window in
             guard loadGeneration == generation else { return }
-            points = gPoints(samples); loading = false
+            replay = window; loading = false
         }
     }
 }
@@ -128,10 +159,13 @@ struct GRecordDetailView: View {
 /// Both plots share one time window and cursor. No chart interpolates invalid data.
 struct GReplayCharts: View {
     let points: [GPlotPoint]
+    let missing: [GTimeRange]
     let duration: Double
     let live: Bool
     let available: Bool
     var sessionPeaks: GPeaks? = nil
+    var windowPeaks: GPeaks? = nil
+    var mergedGaps = false
     var requestWindow: ((Double, Double) -> Void)? = nil
     @State private var range = 1.0
     @State private var width = 30.0
@@ -145,10 +179,27 @@ struct GReplayCharts: View {
     }
     private var window: ClosedRange<Double> { GChartGeometry.window(end: end ?? bounds.upperBound, duration: width, bounds: bounds) }
     private var shown: [GPlotPoint] { points.filter { window.contains($0.time) } }
-    private var plotRange: Double { max(range, shown.filter(\.valid).map { max(abs($0.lateral), abs($0.longitudinal)) }.max() ?? range) }
-    private var selectedTime: Double { cursor ?? window.upperBound }
-    private var selected: GPlotPoint? { available ? GChartGeometry.selected(shown, at: selectedTime, maxDistance: live ? 0.3 : .infinity) : nil }
-    private var peaks: GPeaks { sessionPeaks ?? gWindowPeaks(shown) }
+    private var plotRange: Double {
+        let peak = peaks
+        let raw = max(abs(peak.acceleration), abs(peak.braking), abs(peak.left), abs(peak.right))
+        let visible = shown.filter(\.valid).map { max(abs($0.lateral), abs($0.longitudinal)) }.max() ?? 0
+        return max(range, raw, visible)
+    }
+    private var selectedTime: Double {
+        if live, let cursor, !window.contains(cursor) { return window.upperBound }
+        return cursor ?? window.upperBound
+    }
+    /// Live mode follows the newest valid sample unless the user deliberately
+    /// selected a time inside the current window. History keeps the nearest
+    /// valid point but rejects times inside a missing range.
+    private var selected: GPlotPoint? {
+        guard available else { return nil }
+        if live, cursor == nil || selectedTime == window.upperBound {
+            return shown.last(where: \.valid)
+        }
+        return GChartGeometry.selected(shown, missing: missing, at: selectedTime, maxDistance: live ? 0.3 : .infinity)
+    }
+    private var peaks: GPeaks { sessionPeaks ?? windowPeaks ?? gWindowPeaks(shown) }
     var body: some View {
         VStack(spacing: 14) {
             CardView {
@@ -180,6 +231,10 @@ struct GReplayCharts: View {
                     Spacer()
                     Button("上一采样") { step(-0.1) }; Button("下一采样") { step(0.1) }
                 }.font(.caption)
+                if mergedGaps {
+                    Text("缺口较密，已合并显示，放大查看细节")
+                        .font(.caption).foregroundColor(AppTheme.amber)
+                }
                 Text("拖动曲线选择时刻，双指缩放时间窗口；滑块移动窗口。间断区间保留空白。")
                     .font(.caption).foregroundColor(AppTheme.sub)
             }
@@ -215,7 +270,7 @@ struct GReplayCharts: View {
                         return CGPoint(x: center.x + normalized.0 * radius, y: center.y + normalized.1 * radius)
                     }
                     for segment in GChartGeometry.segments(shown, maxGap: live ? 0.35 : .infinity) {
-                        let reduced = GChartGeometry.decimate(segment, pixels: 300)
+                        let reduced = GChartGeometry.decimate(segment, pixels: live ? 120 : 300)
                         var path = Path()
                         for (index, point) in reduced.enumerated() { if index == 0 { path.move(to:position(point)) } else { path.addLine(to:position(point)) } }
                         context.stroke(path, with:.color(.gray.opacity(0.35)), lineWidth: 1)
@@ -242,7 +297,7 @@ struct GReplayCharts: View {
         .accessibilityLabel("G 仪表，\(selected.map { "横向 \(gValue($0.lateral)) g，纵向 \(gValue($0.longitudinal)) g" } ?? "数据不可用")，加速峰值 \(gValue(peaks.acceleration)) g，制动 \(gValue(peaks.braking)) g，左向 \(gValue(peaks.left)) g，右向 \(gValue(peaks.right)) g")
     }
     private func peakLabel(_ title: String, _ value: Double) -> some View {
-        VStack(spacing: 2) { Text(title).font(.caption2); Text(sessionPeaks != nil || shown.contains(where: \.valid) ? "\(gValue(value)) g" : "— g").font(.caption.monospacedDigit().weight(.semibold)) }
+        VStack(spacing: 2) { Text(title).font(.caption2); Text(sessionPeaks != nil || windowPeaks != nil || shown.contains(where: \.valid) ? "\(gValue(value)) g" : "— g").font(.caption.monospacedDigit().weight(.semibold)) }
             .foregroundColor(AppTheme.text)
     }
     private var timePlot: some View {
@@ -253,7 +308,7 @@ struct GReplayCharts: View {
                 func y(_ value: Double) -> CGFloat { size.height/2 - CGFloat(value/plotRange)*size.height*0.45 }
                 var zero = Path(); zero.move(to:CGPoint(x:0,y:size.height/2)); zero.addLine(to:CGPoint(x:size.width,y:size.height/2)); context.stroke(zero,with:.color(AppTheme.stroke))
                 for segment in GChartGeometry.segments(shown, maxGap: live ? 0.35 : .infinity) {
-                    let reduced = GChartGeometry.decimate(segment,pixels:max(1,Int(size.width)))
+                    let reduced = GChartGeometry.decimate(segment,pixels:max(1,Int(size.width) / (live ? 3 : 1)))
                     for axis in 0..<2 {
                         var path = Path()
                         for (index, point) in reduced.enumerated() {
@@ -266,9 +321,12 @@ struct GReplayCharts: View {
                 var selection=Path();selection.move(to:CGPoint(x:x(selectedTime),y:0));selection.addLine(to:CGPoint(x:x(selectedTime),y:size.height));context.stroke(selection,with:.color(AppTheme.text.opacity(0.6)),style:StrokeStyle(lineWidth:1,dash:[4,3]))
             }
             .contentShape(Rectangle())
-            .gesture(DragGesture(minimumDistance:0).onChanged { value in
+            .simultaneousGesture(DragGesture(minimumDistance: 8).onChanged { value in
+                // Let the enclosing ScrollView own vertical scrolling; only a
+                // predominantly horizontal drag selects a replay cursor.
+                guard abs(value.translation.width) > abs(value.translation.height) else { return }
                 let time=window.lowerBound+Double(min(geometry.size.width,max(0,value.location.x))/max(1,geometry.size.width))*(window.upperBound-window.lowerBound)
-                cursor=GChartGeometry.selected(shown, at:time, maxDistance: live ? 0.3 : .infinity)?.time ?? time
+                cursor=GChartGeometry.selected(shown, missing: missing, at:time, maxDistance: live ? 0.3 : .infinity)?.time ?? time
             })
             .simultaneousGesture(MagnificationGesture().onChanged { value in
                 if pinchWidth == nil { pinchWidth = width }

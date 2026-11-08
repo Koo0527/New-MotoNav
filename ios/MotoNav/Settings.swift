@@ -6,6 +6,7 @@ import Foundation
 final class Settings: ObservableObject {
     static let shared = Settings()
     private let ud = UserDefaults.standard
+    private var initialized = false
 
     /// 风格编号（和固件一样）；列表顺序
     static let themeOrder = [1, 0, 5, 11, 2, 3, 4, 6, 7, 8, 9, 10]
@@ -52,6 +53,7 @@ final class Settings: ObservableObject {
         didSet {
             ud.set(theme, forKey: "map_theme")
             BleLink.shared.send(MapStyleTransfer.command(theme))
+            syncMapSource()
             // 卫星图和普通地图的数据不一样：切换时重新下载
             if oldValue != theme {
                 MapSampleReport.shared.failIfWaiting("风格已切换，请重新生成对照图。")
@@ -71,7 +73,25 @@ final class Settings: ObservableObject {
     @Published var buildings: Bool = MapDefaults.buildings() {
         didSet { ud.set(buildings, forKey: "map_buildings"); MapFeeder.shared.resetChunk() }
     }
-    @Published private(set) var mapSource: Int { didSet { ud.set(mapSource, forKey: "map_src"); MapFeeder.shared.resetChunk() } }
+    @Published private(set) var mapSource: Int { didSet { ud.set(mapSource, forKey: "map_src"); if initialized { MapFeeder.shared.resetChunk() } } }
+    /// 巡航/导航会话模式：只控制圆屏底图和地图预下载，不影响算路、路线、定位和导航提示。
+    @Published private(set) var navigationActive = false
+    /// 图源跟随主题与会话：巡航时普通主题 1-9 用 OpenFreeMap，导航时用高德；
+    /// 高德原版/卫星图保持高德，龙珠雷达沿用无底图行为。
+    static func source(forTheme t: Int) -> Int { source(forTheme: t, navigating: false) }
+    static func source(forTheme t: Int, navigating: Bool) -> Int {
+        MapSourceMode.source(theme: t, navigating: navigating)
+    }
+    private func syncMapSource() {
+        let s = Self.source(forTheme: theme, navigating: navigationActive)
+        if mapSource != s { mapSource = s }
+    }
+    /// 导航入口在 start/finish 时调用；source 变化会取消在途取图并重建预下载任务。
+    func setNavigationActive(_ active: Bool) {
+        guard navigationActive != active else { return }
+        navigationActive = active
+        syncMapSource()
+    }
     /// 走过的路线：1 变灰，2 擦除
     @Published var trail: Int { didSet { ud.set(trail, forKey: "map_trail"); BleLink.shared.send("#r,\(trail)") } }
     /// 清爽模式：小地图保留，去掉红绿灯、电子眼、安全提示、测速牌和行程信息
@@ -229,6 +249,8 @@ final class Settings: ObservableObject {
         mapSource = MapDefaults.source(ud)
         trail = ud.object(forKey: "map_trail") as? Int ?? 1
         clean = ud.bool(forKey: "clean_mode")
+        syncMapSource()
+        initialized = true
     }
 
     private var brightTimer: Timer?
@@ -277,7 +299,7 @@ final class Settings: ObservableObject {
 
     /// 连上圆屏时把所有设置发一遍
     func syncBuildingContinuity() {
-        BleLink.shared.send(AmapCapturePolicy.supportsBuildings(theme) && buildings && mapOn && mapSource==MapFeeder.SRC_AMAP ? "#BC,1":"#BC,0")
+        BleLink.shared.send(AmapCapturePolicy.supportsBuildings(theme) && buildings && mapOn && [MapFeeder.SRC_AMAP, MapFeeder.SRC_VECTOR].contains(mapSource) ? "#BC,1":"#BC,0")
     }
     func pushAll() {
         let b = BleLink.shared

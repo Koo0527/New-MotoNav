@@ -1,0 +1,12 @@
+[
+  {
+    "name": "ramp-divider-detail",
+    "rect": [
+      400,
+      0,
+      560,
+      55
+    ],
+    "interpretation": "Independent OFF2 parallel roads and ramp divider source detail; no bridge assignment."
+  }
+]

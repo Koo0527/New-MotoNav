@@ -20,13 +20,17 @@ final class AmapCaptureHost {
   if fail == i { completion(.failure(MapProcessingError.invalid("fake failure")));return }
   var pixels=[UInt32](repeating:0xffeeeeee,count:600*600)
   if !empty.contains(i) { for y in 20..<40 { for x in 20..<40 { pixels[y*600+x]=0xffff00ff } } }
+  if size == 1200 {
+   pixels=[UInt32](repeating:0xffeeeeee,count:600*600)
+   for y in 0..<600 {for x in 280..<320 {pixels[y*600+x]=0xffffaa33}}
+  }
   if anomaly {pixels=[UInt32](repeating:0xffff00ff,count:600*600)}
   if cancelAfterShot {cancelled=true}
   completion(.success(Shot(pixels:pixels,withoutBuildings:nil,width:600,height:600,left:0,top:0,right:600,bottom:600,north:0.001,south:0)))
  }
 }
 let frame=MapGeo.Frame(refLat:0,refLng:0,id:1)
-let base=MapGeo.encodeRaster(frameId:1,x0:-1200,y0:1200,w:1200,h:1200,mmPerPx:2000,idx:[UInt8](repeating:0,count:1200*1200))
+let base=RoadPalette.encode(frameId:1,x0:-1200,y0:1200,w:1200,h:1200,indices:[UInt8](repeating:0,count:1200*1200))
 let host=AmapCaptureHost.shared
 let node=RouteMapPlan.Node(x:0,y:0,distance:0)
 func cache()->RouteMapCache { RouteMapCache(root:URL(fileURLWithPath:CommandLine.arguments[1]).appendingPathComponent(UUID().uuidString)) }
@@ -34,15 +38,22 @@ func build(_ cache:RouteMapCache,yield:(()->Bool)?=nil,ready:((BuildingUpdate)->
  try AmapSdkRaster.build(frame,cx:0,cy:0,includeBuildings:true,shouldCancel:{host.cancelled},onBaseReady:onBase,preparedBase:prepared,onBuildingReady:ready,shouldYield:yield,cache:cache)
 }
 func reset(){host.calls=[];host.sizes=[];host.empty=[];host.fail=nil;host.cancelled=false;host.cancelAfterShot=false;host.anomaly=false}
-func oldCache(mask:UInt8) throws -> RouteMapCache {
+func oldCache(mask:UInt8,quality:Int=1,masks:Bool=false) throws -> RouteMapCache {
  let root=URL(fileURLWithPath:CommandLine.arguments[1]).appendingPathComponent(UUID().uuidString)
- let folder=root.appendingPathComponent("fast4m-v1-3/0.0_0.0/-1200_1200")
+ let folder=root.appendingPathComponent("fast4m-v\(quality)-3/0.0_0.0/-1200_1200")
  try FileManager.default.createDirectory(at:folder,withIntermediateDirectories:true)
- let coverage=BuildingCoverage(qualityVersion:1,checkedMask:mask)
- var digestBytes=base;digestBytes.append(contentsOf:"/1/\(mask)".utf8)
+ let coverage=BuildingCoverage(qualityVersion:quality,checkedMask:mask)
+ let oldBase=RoadPalette.forWire(base,paletteVersion:0,buildingsSupported:true)
+ var digestBytes=oldBase;digestBytes.append(contentsOf:"/\(quality)/\(mask)".utf8)
  let digest=digestBytes.reduce(UInt64(14695981039346656037)){($0 ^ UInt64($1)) &* 1099511628211}
  struct Saved:Codable {let bytes:Data;let coverage:BuildingCoverage;let checksum:UInt64}
- try JSONEncoder().encode(Saved(bytes:base,coverage:coverage,checksum:digest)).write(to:folder.appendingPathComponent("update.json"))
+ try JSONEncoder().encode(Saved(bytes:oldBase,coverage:coverage,checksum:digest)).write(to:folder.appendingPathComponent("update.json"))
+ if masks {for i in 0..<4 where mask & (1<<i) != 0 {
+  var patch=Data(repeating:0,count:90000)
+  let digest=patch.reduce(UInt64(14695981039346656037)){($0 ^ UInt64($1)) &* 1099511628211}
+  var little=digest.littleEndian;withUnsafeBytes(of:&little){patch.append(contentsOf:$0)}
+  try patch.write(to:folder.appendingPathComponent("patch-\(i)"))
+ }}
  return RouteMapCache(root:root)
 }
 func tests() throws {
@@ -52,8 +63,24 @@ func tests() throws {
  reset();let staleFull=try oldCache(mask:15)
  var bases=0
  let oldComplete=try build(staleFull,prepared:nil,onBase:{_ in bases += 1})
- assert(bases==0,"legacy fallback must not be published as newly processed base")
- assert(host.sizes.isEmpty && oldComplete.coverage?.qualityVersion==1,"old full update remains usable fallback")
+ assert(bases==1 && host.sizes == [1200,600,600,600,600],"old full cannot mark new processing done")
+ assert(RoadPalette.isPacket(oldComplete.bytes) && oldComplete.coverage?.qualityVersion==4)
+ reset();let compatible=try oldCache(mask:15,quality:2,masks:true)
+ let upgraded=try build(compatible,prepared:nil)
+ assert(host.sizes == [1200] && upgraded.coverage?.isComplete == true && RoadPalette.isPacket(upgraded.bytes),"v2 masks reuse after one fresh tone screenshot; never recapture four near views")
+ reset();let compatible3=try oldCache(mask:15,quality:3,masks:true)
+ let upgraded3=try build(compatible3,prepared:nil)
+ assert(host.sizes == [1200] && upgraded3.coverage?.isComplete == true,"v3 masks are reused without new building captures")
+ reset();let stalePrepared=RoadPalette.forWire(base,paletteVersion:0,buildingsSupported:true)
+ _=try build(cache(),yield:{true},prepared:stalePrepared)
+ assert(host.sizes == [1200],"old preparedBase cannot masquerade as current")
+ reset();let v1Prepared=RoadPalette.forWire(base,paletteVersion:1,buildingsSupported:true)
+ _=try build(cache(),yield:{true},prepared:v1Prepared)
+ assert(host.sizes == [1200],"v1 preparedBase cannot masquerade as current")
+ reset();let forged=try oldCache(mask:15,quality:4)
+ assert(forged.buildingUpdate(frame:frame,source:3,node:node,style:1,currentOnly:true)==nil,"valid old-format bytes in v4 directory never count as current")
+ let repaired=try build(forged,yield:{true},prepared:base)
+ assert(repaired.coverage?.checkedMask==0 && forged.buildingUpdate(frame:frame,source:3,node:node,style:1,currentOnly:true)?.coverage.checkedMask==0,"forged current complete cannot suppress persisted new partial")
 
  reset();let c=cache();var callbacks=[Int]()
  let r=try build(c,ready:{_ in callbacks.append(host.calls.count)})
@@ -65,7 +92,7 @@ func tests() throws {
  let empty=try build(cache(),ready:{_ in callbacks.append(host.calls.count)})
  assert(callbacks == [4] && empty.coverage!.isComplete && !RasterPacket.isBuilding(empty.bytes))
  reset();callbacks=[]
- let roadsOnly=MapGeo.encodeRaster(frameId:1,x0:-1200,y0:1200,w:1200,h:1200,mmPerPx:2000,idx:[UInt8](repeating:1,count:1440000))
+ let roadsOnly=RoadPalette.encode(frameId:1,x0:-1200,y0:1200,w:1200,h:1200,indices:[UInt8](repeating:1,count:1440000))
  let clipped=try build(cache(),ready:{_ in callbacks.append(host.calls.count)},prepared:roadsOnly)
  assert(callbacks == [4] && !RasterPacket.isBuilding(clipped.bytes) && clipped.coverage!.isComplete)
  reset();let resumed=cache()
@@ -101,6 +128,6 @@ while done.wait(timeout:.now()) != .success {RunLoop.main.run(until:Date().addin
 '''
 with tempfile.TemporaryDirectory() as d:
  p=Path(d);(p/'main.swift').write_text(swift)
- sources=['MapGeo','RasterProcessing','RouteMapPlan','MapStyles','SatelliteRaster','AmapSdkRaster']
+ sources=['MapGeo','RasterProcessing','RoadPalette','RouteMapPlan','MapStyles','SatelliteRaster','AmapSdkRaster']
  subprocess.run(['swiftc','-module-cache-path',str(p/'modules'),'-swift-version','5',*[str(root/'ios/MotoNav'/f'{s}.swift') for s in sources],str(p/'main.swift'),'-o',str(p/'check')],check=True)
  subprocess.run([str(p/'check'),str(p/'cache')],check=True)

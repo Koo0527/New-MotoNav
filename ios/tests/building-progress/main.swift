@@ -23,13 +23,13 @@ let cache=RouteMapCache(root:root)
 let patch=Data(repeating:0,count:90000)
 try cache.storeBuildingPatch(patch,index:0,frame:frame,source:3,node:node)
 check(cache.buildingCheckpoint(frame:frame,source:3,node:node).coverage.checkedMask==1)
-let base=MapGeo.encodeRaster(frameId:frame.id,x0:-1200,y0:1200,w:1200,h:1200,mmPerPx:2000,idx:[UInt8](repeating:0,count:1440000))
+let base=RoadPalette.encode(frameId:frame.id,x0:-1200,y0:1200,w:1200,h:1200,indices:[UInt8](repeating:0,count:1440000))
 try cache.storeBuildingUpdate(BuildingUpdate(bytes:base,coverage:BuildingCoverage(checkedMask:15)),frame:frame,source:3,node:node)
 check(cache.buildingUpdate(frame:frame,source:3,node:node,style:3)?.coverage.isComplete==true)
 check(cache.buildingUpdate(frame:frame,source:3,node:node,style:5)==nil)
 var pixels=[UInt8](repeating:0,count:1440000)
 pixels[0]=1;pixels[1]=3
-let roads=MapGeo.encodeRaster(frameId:frame.id,x0:-1200,y0:1200,w:1200,h:1200,mmPerPx:2000,idx:pixels)
+let roads=RoadPalette.encode(frameId:frame.id,x0:-1200,y0:1200,w:1200,h:1200,indices:pixels)
 let roof=Data(repeating:1,count:90000)
 let merged=RasterPacket.decode(FastBuildings.packet(base:roads,patches:[0:roof]))!
 check(merged[0]==1 && merged[1]==3 && merged[2]>=4)
@@ -44,7 +44,7 @@ let job=RouteMapPreparationPolicy.next(base:[true,true,true,true],complete:[fals
 check(job?.index==0 && job?.buildings==true)
 // Capture rounds its origin, including fractional route centers.
 let fractional=RouteMapPlan.Node(x:0.75,y:0.75,distance:0)
-let fractionalPacket=MapGeo.encodeRaster(frameId:frame.id,x0:-1199,y0:1201,w:1200,h:1200,mmPerPx:2000,idx:pixels)
+let fractionalPacket=RoadPalette.encode(frameId:frame.id,x0:-1199,y0:1201,w:1200,h:1200,indices:pixels)
 try cache.storeBuildingUpdate(BuildingUpdate(bytes:fractionalPacket,coverage:BuildingCoverage(checkedMask:1)),frame:frame,source:3,node:fractional)
 check(cache.buildingUpdate(frame:frame,source:3,node:fractional,style:2)?.bytes==fractionalPacket)
 var rejected=false
@@ -55,7 +55,9 @@ do {try cache.storeBuildingPatch(patch,index:0,frame:frame,source:3,node:RouteMa
 check(rejected)
 // Existing complete roof packets remain readable through the legacy path.
 let legacy=MapGeo.encodeRaster(frameId:frame.id,x0:-1200,y0:1200,w:1200,h:1200,mmPerPx:2000 | RasterPacket.flag,idx:[UInt8](repeating:5,count:1440000))
-try cache.store(legacy,frame:frame,source:3,node:node,style:1)
+let legacyURL=root.appendingPathComponent("materials-v2-1/v2-3-buildings/\(frame.refLat)_\(frame.refLng)/0_0.bin")
+try FileManager.default.createDirectory(at:legacyURL.deletingLastPathComponent(),withIntermediateDirectories:true)
+try legacy.write(to:legacyURL)
 check(cache.buildingUpdate(frame:frame,source:3,node:node,style:1)?.coverage == .legacyFull)
 // A sparse file exercises the existing quota without allocating 512MB of memory.
 let quota=root.appendingPathComponent("quota")

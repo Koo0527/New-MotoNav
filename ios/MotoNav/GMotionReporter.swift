@@ -1,20 +1,31 @@
 import Foundation
 
 /// Only raw Core Location measurements belong here; navigation/simulation speed is not evidence of a stop.
+enum GMotionClassification: Equatable {
+    case stopped, moving
+    case unknown(String)
+}
 struct GMotionFix {
     let timestamp: TimeInterval
     let horizontalAccuracy: Double
     let speed: Double
     let speedAccuracy: Double
 
-    func status(now: TimeInterval) -> Int {
+    func classification(now: TimeInterval) -> GMotionClassification {
         let age=now-timestamp
-        guard age.isFinite, (0...2).contains(age),
-              horizontalAccuracy.isFinite, (0...20).contains(horizontalAccuracy),
-              speed.isFinite, speed>=0,
-              speedAccuracy.isFinite, (0...0.5).contains(speedAccuracy) else { return 2 }
-        if speed<=0.3 { return 0 }
-        return speed>=1 ? 1 : 2
+        guard age.isFinite, (0...2).contains(age) else { return .unknown("定位年龄超出 0–2 秒") }
+        guard horizontalAccuracy.isFinite, (0...20).contains(horizontalAccuracy) else { return .unknown("水平精度超出 20 米") }
+        guard speed.isFinite, speed>=0 else { return .unknown("速度无效") }
+        guard speedAccuracy.isFinite, (0...0.5).contains(speedAccuracy) else { return .unknown("速度精度超出 0.5 m/s") }
+        if speed<=0.3 { return .stopped }
+        return speed>=1 ? .moving : .unknown("速度介于 0.3–1 m/s")
+    }
+    func status(now: TimeInterval) -> Int {
+        switch classification(now: now) {
+        case .stopped: return 0
+        case .moving: return 1
+        case .unknown: return 2
+        }
     }
 }
 
@@ -41,6 +52,20 @@ final class GMotionReporter {
         let fix=sample()
         let status = active && (fix?.timestamp ?? -Double.infinity)>=resumedAt ? fix?.status(now:now()) ?? 2 : 2
         return "#GM,\(status)"
+    }
+    /// Raw fields behind the current #GM status, for on-device diagnosis without changing thresholds.
+    var diagnosis: String {
+        guard supported else { return "旧固件未协商 GM 能力" }
+        guard active else { return "App 非前台：不发送停车依据" }
+        guard let fix=sample() else { return "无原始定位：检查定位权限、系统开关和模拟源" }
+        let stamp=now(), age=stamp-fix.timestamp
+        let detail=String(format:"年龄 %.2fs · 水平 ±%.1fm · 速度 %.2f±%.2fm/s", age, fix.horizontalAccuracy, fix.speed, fix.speedAccuracy)
+        guard fix.timestamp>=resumedAt else { return "未知：定位早于本次前台 · \(detail)" }
+        switch fix.classification(now: stamp) {
+        case .stopped: return "可信停车 · \(detail)"
+        case .moving: return "可信行驶 · \(detail)"
+        case .unknown(let reason): return "未知：\(reason) · \(detail)"
+        }
     }
     func setCapability() {
         supported=true

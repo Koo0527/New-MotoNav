@@ -20,6 +20,8 @@ enum MapStyles {
             let r = Int((c >> 16) & 255), g = Int((c >> 8) & 255), b = Int(c & 255)
             return (r >= 254 && g >= 254 && b >= 254) || (r >= 200 && g >= 125 && g <= 245 && b+25 < g && r >= g && r-b >= 45) ? 1 : 0
         }
-        return MapGeo.cleanRaster(mask, w: size, h: size).map { $0 == 1 ? 1 : 0 }
+        // 极简黑白是独立道路掩码，保留一格宽细路；16 格（约 64 m²）以下仍按杂点清除。
+        return MapGeo.cleanRaster(mask, w: size, h: size, minRoad: 16, fineRoads: true)
+            .map { $0 == 1 ? 1 : 0 }
     }
 }

@@ -1,0 +1,12 @@
+[
+  {
+    "name": "north-yellow-crossing",
+    "rect": [
+      410,
+      15,
+      480,
+      75
+    ],
+    "interpretation": "Independent OFF0 crossing and median details; source crop only, no bridge assignment."
+  }
+]

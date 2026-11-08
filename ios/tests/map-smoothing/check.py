@@ -82,7 +82,7 @@ for p in [9*300+20,30*300+20,20*300+9] {building[p]=1}
 topology(Data(building))
 check(FastBuildings.clean(Data([1]))==Data([1]),"bad-sized patches unchanged")
 check(FastBuildings.clean(Data(repeating:2,count:90000))==Data(repeating:2,count:90000),"non-binary patches unchanged")
-check(FastBuildings.qualityVersion==2 && BuildingCoverage().qualityVersion==2 && BuildingCoverage.legacyFull.qualityVersion==0,"quality migration constant")
+check(FastBuildings.qualityVersion==4 && BuildingCoverage().qualityVersion==FastBuildings.qualityVersion && BuildingCoverage.legacyFull.qualityVersion==0,"quality migration constant")
 var seed:UInt64=7
 for _ in 0..<30 {
     var mask=[UInt8](repeating:0,count:90000)
@@ -131,6 +131,6 @@ with tempfile.TemporaryDirectory(prefix='motonav-map-smoothing-') as temp:
     main.write_text(swift)
     exe=tmp/'check'
     subprocess.run(['swiftc','-O','-module-cache-path',str(tmp/'modules'),
-                    str(root/'ios/MotoNav/MapGeo.swift'),str(root/'ios/MotoNav/RasterProcessing.swift'),
+                    str(root/'ios/MotoNav/MapGeo.swift'),str(root/'ios/MotoNav/RasterProcessing.swift'),str(root/'ios/MotoNav/RoadPalette.swift'),
                     str(main),'-o',str(exe)],check=True)
     subprocess.run([str(exe)],check=True)

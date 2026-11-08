@@ -93,6 +93,9 @@ final class MapFeeder {
     var frame: (id: Int, x: Int, y: Int)?
     func onNaviStart() { naviStarts += 1 }
     func onNaviEnd() { naviEnds += 1 }
+    func beginNavigation() { onNaviStart() }
+    func beginCruise() { onNaviStart() }
+    func endSession() { onNaviEnd() }
     func prepareRoute(key: String, coords: [(lat: Double, lng: Double)]) { preparedRoutes.append(key) }
     func onRoute(key: String, coords: [(lat: Double, lng: Double)], lights: [(lat: Double, lng: Double)]) -> Bool {
         guard coords.count >= 2 else { return false }

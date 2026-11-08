@@ -144,7 +144,7 @@ final class RideBridge: NSObject, ObservableObject {
         destLat = .nan; destLng = .nan; planOrigin = nil; endName = ""; historyEligible = true
         uiDir = ""; uiDist = -1; uiRoad = ""; uiRemainM = 0; uiRemainS = 0
         lastRouteKey = ""; screen.reset()
-        MapFeeder.shared.onNaviEnd()               // 选路时预下载的沿线地图一并停掉（和驾车一致）
+        MapFeeder.shared.endSession()               // 选路时预下载的沿线地图一并停掉（和驾车一致）
         info = "（还没开始骑行导航）"
     }
 
@@ -335,7 +335,7 @@ final class RideBridge: NSObject, ObservableObject {
         routeOptions = []; selectedRouteID = -1
         routeSummary = ""; routeGroup = nil
         lastRouteKey = ""; screen.reset()
-        MapFeeder.shared.onNaviEnd()
+        MapFeeder.shared.endSession()
         info = "（还没开始骑行导航）"
     }
 
@@ -374,7 +374,7 @@ final class RideBridge: NSObject, ObservableObject {
             if !emulate { RideRecorder.shared.start("骑行导航"); LocationService.shared.setPrecise(true) }
             screen.reset()
             BleLink.shared.send("C")               // 圆屏先回待机，再接收本次导航的读数
-            MapFeeder.shared.onNaviStart()
+            MapFeeder.shared.beginNavigation()
             info = emulate ? "模拟骑行导航中" : "骑行导航中"
         } else if !ok && arrival.acceptsGuidance(token) {
             finish("导航没能开始", arrived: false, event: nil)
@@ -422,7 +422,7 @@ final class RideBridge: NSObject, ObservableObject {
         Settings.shared.resetTunnel()
         RideRecorder.shared.finish()                       // 真实导航结束轨迹（没在记录时是空操作）
         LocationService.shared.setPrecise(false)           // 模拟结束立即恢复真实定位来源
-        MapFeeder.shared.onNaviEnd()
+        MapFeeder.shared.endSession()
         arriveSeq += 1
         showArrived = arrived                              // 先设这个再设 navigating：界面据此决定等 4 秒
         navigating = false

@@ -65,4 +65,18 @@ inline Palette palette(int theme,bool night) {
  rgb(theme==3?0x72F5AC:0xFFFFFF),rgb(theme==1?0xFF72C2:theme==2?0xA45CFF:0xF4F6B0),
  rgb(theme==1?0xC64D9E:theme==2?0x515257:0x42CBD0),rgb(theme==3?0x42CBD0:route),rgb(theme==3?0x163A3C:0x38283B)};
 }
+// Slots 0...7 are supplied by the existing material palette; protected casing stays ground.
+inline void roadPalette(int theme,bool night,uint16_t *colors, uint8_t version=1) {
+ const int k=night?(theme==1?45:75):100;
+ colors[8]=colors[9]=colors[11]=colors[1];colors[10]=colors[0];
+ if(theme<1 || theme>3)return;
+ if(version==2) {
+  colors[8]=rgb(dim(theme==1?0x202023:theme==2?0x707A7A:0x214648,k));
+  colors[9]=rgb(dim(theme==1?0x404044:theme==2?0x9AA4A4:0x388281,k));
+  colors[11]=rgb(dim(theme==1?0x606065:theme==2?0xC6CACA:0x50AAA8,k));
+  return;
+ }
+ colors[8]=rgb(dim(theme==1?0x101012:theme==2?0xC6CACA:0x388281,k));
+ colors[9]=rgb(dim(theme==1?0x444448:theme==2?0x707A7A:0x214648,k));
+}
 }

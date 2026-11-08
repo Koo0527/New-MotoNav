@@ -21,20 +21,31 @@ final class AmapCaptureHost: NSObject {
     private var emptyBuildingChecks = 0
     private var timer: Timer?
     private var observer: NSObjectProtocol?
+    #if DEBUG
+    private var edgeStyle = MapEdgeStyleState()
+    private var edgeStyleFrame: Int?
+    #endif
     private var satelliteCapture=false
+    private var pairBuildings = true
     private var mpp: Double { satelliteCapture ? 3.5 : 2.0 }
 
     func attach(_ view: UIView) {
         container = view
         #if DEBUG
         MapCaptureCheck.startIfRequested()
+        MapEdgeCapture.shared.startIfRequested()
         #endif
         if observer == nil {
             observer = NotificationCenter.default.addObserver(forName: UIApplication.willResignActiveNotification, object: nil, queue: .main) { [weak self] _ in self?.cancel() }
         }
     }
     func detach(_ view: UIView) {
-        if container === view { cancel(); map?.removeFromSuperview(); map = nil; container = nil }
+        if container === view {
+            cancel(); map?.removeFromSuperview(); map = nil; container = nil
+            #if DEBUG
+            edgeStyle = MapEdgeStyleState(); edgeStyleFrame = nil
+            #endif
+        }
     }
     private func ensureMap(size: CGFloat) throws -> MAMapView {
         guard UIApplication.shared.applicationState == .active, let view = container, view.window != nil else {
@@ -51,6 +62,9 @@ final class AmapCaptureHost: NSObject {
             m.isZoomEnabled = false; m.isScrollEnabled = false; m.isRotateEnabled = false; m.isRotateCameraEnabled = false
             m.isAccessibilityElement = false; m.accessibilityElementsHidden = true
             class_addProtocol(AmapCaptureHost.self, MAMapViewDelegate.self)
+            #if DEBUG
+            edgeStyle = MapEdgeStyleState(); edgeStyleFrame = nil; map = m
+            #endif
             m.delegate = (self as AnyObject) as? MAMapViewDelegate
             view.addSubview(m); map = m
         }
@@ -65,7 +79,7 @@ final class AmapCaptureHost: NSObject {
         m.renderringDisabled = false
         m.isAllowDecreaseFrame = false
         #if DEBUG
-        if ProcessInfo.processInfo.arguments.contains("--map-capture-check"),
+        if (ProcessInfo.processInfo.arguments.contains("--map-capture-check") || MapEdgeCapture.requested),
            !ProcessInfo.processInfo.arguments.contains("--map-capture-hidden"), let window = view.window {
             window.addSubview(m)
             m.frame = CGRect(x: 0, y: 0, width: size, height: size)
@@ -77,17 +91,65 @@ final class AmapCaptureHost: NSObject {
     func mapLoadFailed(_ map: MAMapView, error: NSError) {
         finish(.failure(MapProcessingError.invalid("高德地图加载失败：\(error.domain) \(error.code)")))
     }
-    func capture(_ frame: MapGeo.Frame, x: Int, y: Int, size n: Int, satellite: Bool = false, style: Int = 1, completion: @escaping (Result<Shot, Error>) -> Void) {
+    #if DEBUG
+    @objc(mapInitComplete:)
+    func mapInitialized(_ mapView: MAMapView) {
+        guard MapEdgeCapture.styleRequested else { return }
+        DispatchQueue.main.async { [weak self, weak mapView] in
+            guard let self = self, let m = mapView, self.map === m else { return }
+            self.edgeStyle.initialized = true
+            self.configureEdgeStyle(m)
+        }
+    }
+    private func configureEdgeStyle(_ m: MAMapView) {
+        guard pending != nil, let frame = edgeStyleFrame,
+              let data = MapEdgeCapture.shared.customStyleData(frame: frame) else { return }
+        if edgeStyle.configure(frame: frame) {
+            let options = MAMapCustomStyleOptions(); options.styleData = data
+            m.setCustomMapStyleOptions(options); m.customMapStyleEnabled = true
+        }
+        do { try MapEdgeCapture.shared.recordStyleStatus(frame: frame, evidence: styleEvidence(map: m, frame: frame)) }
+        catch { finish(.failure(error)) }
+    }
+    func styleEvidence(map m: MAMapView, frame: Int) -> [String: Any] {
+        ["requested": MapEdgeCapture.styleRequested,
+         "mapInitComplete": edgeStyle.initialized,
+         "configuredForFrame": edgeStyle.configuredFrame == frame,
+         "customMapStyleEnabledGetter": m.customMapStyleEnabled,
+         "verifiedAssetSHA": MapEdgeCapture.styleRequested ? MapEdgeStyle.verifiedAssetSHA : "",
+         "renderedStyleChangeVerified": false]
+    }
+    @objc(customMapStyleAuthFailedWithErrorCode:message:)
+    func customStyleFailed(_ errorCode: Int32, message: String?) {
+        guard MapEdgeCapture.styleRequested, pending != nil, edgeStyleFrame != nil else { return }
+        let id = serial
+        DispatchQueue.main.async {
+            guard self.serial == id, self.pending != nil, self.edgeStyleFrame != nil else { return }
+            MapEdgeCapture.shared.styleAuthFailed(code: errorCode)
+            self.finish(.failure(MapProcessingError.invalid("诊断样式SDK错误：\(errorCode)")))
+        }
+    }
+    #endif
+    func capture(_ frame: MapGeo.Frame, x: Int, y: Int, size n: Int, satellite: Bool = false, style: Int = 1, pairBuildings: Bool = true, completion: @escaping (Result<Shot, Error>) -> Void) {
         precondition(Thread.isMainThread)
         guard UIApplication.shared.applicationState == .active else {completion(.failure(MapProcessingError.cancelled));return}
         guard pending == nil else { completion(.failure(MapProcessingError.invalid("高德截图正在处理上一块"))); return }
         do {
             let m = try ensureMap(size: CGFloat(AmapCapturePolicy.renderSize(for: n)))
+            #if DEBUG
+            edgeStyleFrame = MapEdgeCapture.shared.customStyleData(frame: frame.id) == nil ? nil : frame.id
+            if edgeStyleFrame == nil { m.customMapStyleEnabled = false }
+            #endif
             satelliteCapture=satellite
+            self.pairBuildings = pairBuildings
             m.mapType = satellite ? .satellite : .standard
             m.isShowsLabels = style == 0
             pending = completion; reference = nil; referenceProjection = nil; emptyBuildingChecks = 0; started = Date(); serial += 1
             let id = serial
+            #if DEBUG
+            configureEdgeStyle(m)
+            guard serial == id, pending != nil else { return }
+            #endif
             // Native style keeps the SDK's own building layer; Vice City uses its separate extraction pass.
             m.isShowsBuildings = style == 0; m.rotationDegree = 0; m.cameraDegree = n == 600 ? 0.05 : 0
             let margin = n == 600 ? 20.0 : 100.0
@@ -106,6 +168,11 @@ final class AmapCaptureHost: NSObject {
             }
             timer = Timer.scheduledTimer(withTimeInterval: n == 600 ? 24 : 40, repeats: false) { [weak self] _ in
                 guard let self = self, self.serial == id else { return }
+                #if DEBUG
+                if let frame = self.edgeStyleFrame, !self.edgeStyle.ready(frame: frame, enabled: m.customMapStyleEnabled) {
+                    self.finish(.failure(MapProcessingError.invalid("诊断样式等待地图初始化或启用超时"))); return
+                }
+                #endif
                 self.finish(.failure(MapProcessingError.invalid("高德取图超时，保留已有地图")))
             }
         } catch { completion(.failure(error)) }
@@ -113,6 +180,16 @@ final class AmapCaptureHost: NSObject {
     private func snapshot(_ id: Int, frame: MapGeo.Frame, x: Int, y: Int, n: Int) {
         guard serial == id, pending != nil, let m = map else { return }
         guard UIApplication.shared.applicationState == .active else { cancel(); return }
+        #if DEBUG
+        if let styleFrame = edgeStyleFrame {
+            guard MapEdgeCapture.shared.customStyleData(frame: styleFrame) != nil else { cancel(); return }
+            do { try MapEdgeCapture.shared.recordStyleStatus(frame: styleFrame, evidence: styleEvidence(map: m, frame: styleFrame)) }
+            catch { finish(.failure(error)); return }
+            guard edgeStyle.ready(frame: styleFrame, enabled: m.customMapStyleEnabled) else {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { self.snapshot(id, frame: frame, x: x, y: y, n: n) }; return
+            }
+        }
+        #endif
         m.takeSnapshot(in: m.bounds, timeoutInterval: 3) { [weak self] image, state in
             DispatchQueue.main.async {
                 guard let self = self, self.serial == id, self.pending != nil else { return }
@@ -148,7 +225,8 @@ final class AmapCaptureHost: NSObject {
                     }
                     let projection = [Double(tl.x) * sx, Double(tl.y) * sy, Double(tr.x) * sx, Double(bl.y) * sy]
                     // Both shots share exactly the same camera. Only the SDK building layer changes.
-                    if n == 600, self.reference == nil {
+                    // 近景补路只取第一张无建筑图，跳过第二张，避免额外截图开销。
+                    if n == 600, self.reference == nil, self.pairBuildings {
                         self.reference = pixels; self.referenceProjection = projection; m.isShowsBuildings = true
                         DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { self.snapshot(id, frame: frame, x: x, y: y, n: n) }; return
                     }
@@ -162,8 +240,12 @@ final class AmapCaptureHost: NSObject {
                             DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { self.snapshot(id, frame: frame, x: x, y: y, n: n) }; return
                         }
                     }
-                    self.finish(.success(Shot(pixels: pixels, withoutBuildings: self.reference, width: width, height: height,
-                                             left: Double(tl.x) * sx, top: Double(tl.y) * sy, right: Double(tr.x) * sx, bottom: Double(bl.y) * sy, north: north, south: south)))
+                    let shot = Shot(pixels: pixels, withoutBuildings: self.reference, width: width, height: height,
+                                             left: Double(tl.x) * sx, top: Double(tl.y) * sy, right: Double(tr.x) * sx, bottom: Double(bl.y) * sy, north: north, south: south)
+                    #if DEBUG
+                    try MapEdgeCapture.shared.record(shot, frame: frame, x: x, y: y, size: n, originalProjection: self.referenceProjection, map: m)
+                    #endif
+                    self.finish(.success(shot))
                 } catch { self.finish(.failure(error)) }
             }
         }
@@ -171,10 +253,12 @@ final class AmapCaptureHost: NSObject {
     private func finish(_ result: Result<Shot, Error>) {
         guard let done = pending else { return }
         pending = nil; serial += 1; reference = nil; referenceProjection = nil; timer?.invalidate(); timer = nil
+        pairBuildings = true
         if UIApplication.shared.applicationState == .active { map?.isShowsBuildings = false }
         map?.renderringDisabled = true; map?.isAllowDecreaseFrame = true
         #if DEBUG
-        if ProcessInfo.processInfo.arguments.contains("--map-capture-check"), let m = map, let view = container { view.addSubview(m) }
+        edgeStyleFrame = nil
+        if (ProcessInfo.processInfo.arguments.contains("--map-capture-check") || MapEdgeCapture.requested), let m = map, let view = container { view.addSubview(m) }
         #endif
         done(result)
     }
@@ -185,7 +269,7 @@ final class AmapCaptureHost: NSObject {
 /// Explicit developer launch only; captures SDK output without changing navigation or saved settings.
 private enum MapCaptureCheck {
     private static var started = false
-    private static var enabled: Bool { ProcessInfo.processInfo.arguments.contains("--map-capture-check") }
+    private static var enabled: Bool { ProcessInfo.processInfo.arguments.contains("--map-capture-check") && !MapEdgeCapture.requested }
     private static let folder = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0].appendingPathComponent("map-capture-check")
     static func record(image: UIImage?, map: MAMapView, tile: Int, buildings: Bool) {
         guard enabled else { return }

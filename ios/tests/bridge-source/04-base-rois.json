@@ -1,0 +1,47 @@
+[
+  {
+    "name": "central-source-absent",
+    "rect": [
+      530,
+      550,
+      640,
+      660
+    ],
+    "profile": [
+      "y",
+      600,
+      550,
+      630
+    ],
+    "interpretation": "Central yellow road faces already merge in this base source; no continuous crossing outline demonstrated. No layer identity.",
+    "probes": [
+      {
+        "name": "yellow-face-no-boundary",
+        "samplePoints": [
+          [
+            571,
+            600
+          ],
+          [
+            572,
+            600
+          ],
+          [
+            573,
+            600
+          ]
+        ]
+      }
+    ]
+  },
+  {
+    "name": "ordinary-junction-negative",
+    "rect": [
+      475,
+      760,
+      565,
+      830
+    ],
+    "interpretation": "Ordinary street junction negative control; no generic road-outline-to-bridge inference."
+  }
+]

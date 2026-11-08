@@ -32,7 +32,7 @@ final class BleLink {
     func send(_ text: String) { commands.append((text, Date())) }
     var brightness: [Int] { commands.compactMap { $0.0.hasPrefix("#b,") ? Int($0.0.dropFirst(3)) : nil } }
 }
-final class MapFeeder { static let SRC_AMAP=3; static let shared=MapFeeder(); func resetChunk() {}; func resendAll() {} }
+final class MapFeeder { static let SRC_AMAP=3; static let SRC_VECTOR=4; static let shared=MapFeeder(); init() { _ = Settings.shared.mapSource }; func resetChunk() {}; func resendAll() {} }
 enum MapStyleTransfer { static func command(_ style:Int)->String { "#t,\(style),1" } }
 final class MapSampleReport { static let shared=MapSampleReport(); func failIfWaiting(_ text:String) {} }
 enum MapDefaults { static func buildings()->Bool { false }; static func source(_ ud:UserDefaults)->Int { 3 } }

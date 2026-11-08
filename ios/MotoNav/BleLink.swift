@@ -36,13 +36,17 @@ final class BleLink: NSObject, ObservableObject {
     @Published private(set) var mediaHIDReady = false
     @Published private(set) var mediaHIDMode = false
     @Published private(set) var verified = false
+    /// Increments on every ready transition; MapFeeder's delayed capability callbacks
+    /// capture it so an old connection cannot open the new connection's send gate.
+    private(set) var connectionGeneration = 0
     private var buildingProbe = BleCapabilityProbe()
     private var buildingQueries: Int { buildingProbe.attempts }
     private var txNotifyReady = false
     @Published private(set) var buildingsSupported = false
+    @Published private(set) var roadPaletteVersion = 0
     @Published var isReady = false {
         didSet {
-            if !isReady { resetGMotion() }
+            if !isReady { resetGMotion(); roadPaletteVersion = 0 }
             if oldValue && !isReady { Settings.shared.deviceDisconnected(); GRecorder.shared.linkLost() }
         }
     }
@@ -69,12 +73,14 @@ final class BleLink: NSObject, ObservableObject {
     private var queue: [Out] = []
     private var bulkQ = BleBulkWriteQueue()
     private var bulkWriteSerial = 0
+    private var attWriteToken: UInt64?
     private var bulkBarrier = BleBulkBarrier()
     private var mapReceipt=BleMapReceipt()
     private var mapMeter=BleMapWireMeter()
     private var lastWasCommand=false
     private var lastBackpressureAt=0.0
     var mapBytesPerSecond:Double? {mapMeter.rate}
+    var motionDiagnosis: String { gMotion.diagnosis }
     private var lastState: [String: String] = [:]          // 文字状态（重连后补发）
     private var stateOrder: [String] = []
     private var lastImg: [Int: (w: Int, h: Int, data: Data)] = [:]
@@ -250,6 +256,7 @@ final class BleLink: NSObject, ObservableObject {
     }
 
     func disconnect() {
+        roadPaletteVersion = 0
         resetGMotion()
         wantConnected = false
         handshake.begin(.idle,now:ProcessInfo.processInfo.systemUptime)
@@ -261,7 +268,7 @@ final class BleLink: NSObject, ObservableObject {
         isReady = false; txNotifyReady = false
         screenName=p.name ?? "MotoNav";screenBattery=nil;screenCharging=false
         buildingsSupported = false
-        mediaHIDSupported = false; mediaHIDReady = false; mediaHIDMode = false; mediaLyricsSupported = false; mediaLyricsActive = false; mediaAMSControls = 0; verified = false; buildingProbe.reset()
+        mediaHIDSupported = false; mediaHIDReady = false; mediaHIDMode = false; mediaLyricsSupported = false; mediaLyricsActive = false; mediaAMSControls = 0; roadPaletteVersion = 0; verified = false; buildingProbe.reset()
         MusicBridge.shared.resetAMS()
         peripheral = p
         p.delegate = self
@@ -296,7 +303,8 @@ final class BleLink: NSObject, ObservableObject {
 
     private func resetGMotion() {
         gMotion.reset()
-        queue.removeAll { $0.key == "#GM" }
+        GRecorder.shared.resetPhoneEntry()
+        queue.removeAll { $0.key == "#GM" || $0.key == "#GE" }
     }
 
     private func requestBuildingCapability() {
@@ -366,6 +374,19 @@ final class BleLink: NSObject, ObservableObject {
         pump()
     }
 
+    /// Phone page entry is a non-persistent, latest-only command. Never queue it
+    /// across a disconnected/reconnecting link; the user must enter the page again.
+    func sendGPhoneEntry(_ token: UInt32, _ enter: Bool) -> Bool {
+        guard isReady, verified else { return false }
+        let message = String(format: "#GE,%08X,%d", token, enter ? 1 : 0)
+        guard message.utf8.count <= 20 else { return false }
+        enqueue("#GE", Data(message.utf8))
+        pump()
+        return true
+    }
+
+    func discardGPhoneEntry() { queue.removeAll { $0.key == "#GE" } }
+
     func discardLegacyDisplayCommands() {
         let keys: Set<String> = ["#b", "#n"]
         queue.removeAll { keys.contains($0.key ?? "") }
@@ -426,13 +447,15 @@ final class BleLink: NSObject, ObservableObject {
 
     /// 发一份小地图大块数据（地图块 / 路线）。同类型还没发完的旧数据直接作废。
     /// 每片：'M' 类型 编号 总片数(2) 片序号(2) 总字节(4) 偏移(4) + 数据
-    func sendBulk(type: Int, id: Int, data: Data) {
-        guard isReady else { return }
-        if type==3,bulkPending(type:type,id:id) {return}
+    /// 返回 true 只有当分片实际进入队列；调用方据此更新发送状态和重试预算。
+    @discardableResult
+    func sendBulk(type: Int, id: Int, data: Data) -> Bool {
+        guard isReady else { return false }
+        if type==3,bulkPending(type:type,id:id) {return false}
         let payload = maxWrite - BULK_HEADER
-        if payload < 100 { return }                     // 没协商到大数据包就不发
+        if payload < 100 { return false }               // 没协商到大数据包就不发
         let parts = (data.count + payload - 1) / payload
-        if parts == 0 || parts > 4000 { return }
+        if parts == 0 || parts > 4000 { return false }
         let total = data.count
         MapPipelineTrace.event("bulk-queued",["type":type,"id":id,"bytes":total,"parts":parts,"maxWrite":maxWrite,"payload":payload])
         var packets: [Data] = []
@@ -453,6 +476,7 @@ final class BleLink: NSObject, ObservableObject {
         bulkQ.replace(type:type,id:id,packets:packets,prioritize:type==MapFeeder.TYPE_ROUTE)
         bulkKB += total / 1024
         pump()
+        return true
     }
 
     /// 还有大块数据没发完
@@ -535,6 +559,7 @@ final class BleLink: NSObject, ObservableObject {
                 return
             }
             if choice == .bulk, let part = bulkQ.next() {
+                attWriteToken = bulkQ.inFlightToken
                 let clockCommand=part.type == 0
                 let seq = clockCommand ? 0 : Int(part.data[5]) | Int(part.data[6]) << 8
                 let parts = clockCommand ? 1 : Int(part.data[3]) | Int(part.data[4]) << 8
@@ -555,6 +580,7 @@ final class BleLink: NSObject, ObservableObject {
                 } else {
                     p.writeValue(part.data, for: rx, type: .withoutResponse)
                     _ = bulkQ.complete(success: true)
+                    attWriteToken=nil
                     mapPartCompleted(part)
                 }
             } else {
@@ -584,11 +610,17 @@ final class BleLink: NSObject, ObservableObject {
             DispatchQueue.main.asyncAfter(deadline:.now()+0.3){[weak self] in self?.pollMapReceipt()}
         }
     }
+    private func failCurrentMap(_ id:Int) {
+        guard mapReceipt.current?.id == id else { return }
+        bulkQ.cancel(type:3,id:id)
+        mapReceipt.reset(); mapMeter.cancel()
+        MapFeeder.shared.onReject(type:3,id:id)
+    }
     private func pollMapReceipt() {
         guard isReady,mapReceipt.waiting else {return}
         let now=ProcessInfo.processInfo.systemUptime
         if let id=mapReceipt.expire(now:now) {
-            MapPipelineTrace.event("map-receipt-timeout",["id":id]);return
+            MapPipelineTrace.event("map-receipt-timeout",["id":id]);bulkQ.cancel(type:3,id:id);mapMeter.cancel();MapFeeder.shared.onReceiptTimeout(id:id);return
         }
         if let probe=mapReceipt.probe(now:now) {
             MapPipelineTrace.event("map-receipt-probe",["id":probe.id,"probe":probe.probes,"bytes":probe.tail.count])
@@ -613,6 +645,7 @@ final class BleLink: NSObject, ObservableObject {
     private func onLinkReady() {
         guard !isReady, txNotifyReady else { return }
         isReady = true
+        connectionGeneration &+= 1
         MapPipelineTrace.event("link-ready",["maxWrite":maxWrite,"ready":true])
         handshake.begin(.ready,now:ProcessInfo.processInfo.systemUptime)
         connectionRetries=0
@@ -629,7 +662,7 @@ final class BleLink: NSObject, ObservableObject {
         Settings.shared.pushAll()
         requestBuildingCapability()
         syncPhoneClock(force:true)
-        MapFeeder.shared.resendAll()                    // 圆屏可能重启过：地图块和路线重发
+        MapFeeder.shared.onLinkReady()                  // 圆屏可能重启过：路线先发，底图等能力协商
     }
 }
 
@@ -638,7 +671,7 @@ final class BleLink: NSObject, ObservableObject {
 extension BleLink: CBCentralManagerDelegate, CBPeripheralDelegate {
     func centralManagerDidUpdateState(_ c: CBCentralManager) {
         if c.state != .poweredOn {
-            isReady = false; txNotifyReady = false; buildingsSupported = false; mediaHIDSupported = false; mediaHIDReady = false; mediaHIDMode = false; mediaLyricsSupported = false; mediaLyricsActive = false; mediaAMSControls = 0; verified = false; buildingProbe.reset()
+            isReady = false; txNotifyReady = false; buildingsSupported = false; mediaHIDSupported = false; mediaHIDReady = false; mediaHIDMode = false; mediaLyricsSupported = false; mediaLyricsActive = false; mediaAMSControls = 0; roadPaletteVersion = 0; verified = false; buildingProbe.reset()
         MusicBridge.shared.resetAMS()
         }
         switch c.state {
@@ -674,7 +707,7 @@ extension BleLink: CBCentralManagerDelegate, CBPeripheralDelegate {
     func centralManager(_ c: CBCentralManager, didFailToConnect p: CBPeripheral, error: Error?) {
         guard p === peripheral else { return }
         status = "连接失败，重试中…"
-        mediaHIDSupported = false; mediaHIDReady = false; mediaHIDMode = false; mediaLyricsSupported = false; mediaLyricsActive = false; mediaAMSControls = 0; verified = false; buildingProbe.reset(); txNotifyReady = false
+        mediaHIDSupported = false; mediaHIDReady = false; mediaHIDMode = false; mediaLyricsSupported = false; mediaLyricsActive = false; mediaAMSControls = 0; roadPaletteVersion = 0; verified = false; buildingProbe.reset(); txNotifyReady = false
         MusicBridge.shared.resetAMS()
         isReady = false
         connectionRetries+=1
@@ -689,10 +722,11 @@ extension BleLink: CBCentralManagerDelegate, CBPeripheralDelegate {
         screenBattery=nil;screenCharging=false
         MapPipelineTrace.event("link-disconnected",["ready":false])
         isReady = false
+        connectionGeneration &+= 1
         bulkQ.reset(); bulkBarrier.reset(); bulkWriteSerial += 1
         mapReceipt.reset();mapMeter.reset();lastWasCommand=false
         buildingsSupported = false
-        mediaHIDSupported = false; mediaHIDReady = false; mediaHIDMode = false; mediaLyricsSupported = false; mediaLyricsActive = false; mediaAMSControls = 0; verified = false; buildingProbe.reset(); txNotifyReady = false
+        mediaHIDSupported = false; mediaHIDReady = false; mediaHIDMode = false; mediaLyricsSupported = false; mediaLyricsActive = false; mediaAMSControls = 0; roadPaletteVersion = 0; verified = false; buildingProbe.reset(); txNotifyReady = false
         MusicBridge.shared.resetAMS()
         MapFeeder.shared.onBuildingCapability()
         rxChar = nil;txChar=nil
@@ -734,7 +768,9 @@ extension BleLink: CBCentralManagerDelegate, CBPeripheralDelegate {
     func peripheralIsReady(toSendWriteWithoutResponse p: CBPeripheral) { pump() }
 
     func peripheral(_ p: CBPeripheral, didWriteValueFor ch: CBCharacteristic, error: Error?) {
-        guard p === peripheral, ch === rxChar, let part = bulkQ.inFlight else { return }
+        guard p === peripheral, ch === rxChar, let token = attWriteToken,
+              let part = bulkQ.inFlight, bulkQ.inFlightToken == token else { return }
+        attWriteToken = nil
         let now=ProcessInfo.processInfo.systemUptime
         if part.type != 0,now-lastATTTraceAt>=1 {
             lastATTTraceAt=now
@@ -742,9 +778,9 @@ extension BleLink: CBCentralManagerDelegate, CBPeripheralDelegate {
         }
         traceBulk(part, event: error == nil ? "bulk-write-response" : "bulk-write-error")
         bulkBarrier.reset()
-        let result=bulkQ.complete(success:error == nil)
+        let result=bulkQ.complete(token: token, success:error == nil)
         if error==nil {mapPartCompleted(part)}
-        else if result == .failed,part.type==3 {mapReceipt.reset();mapMeter.cancel()}
+        else if result == .failed,part.type==3 {failCurrentMap(part.id)}
         pump()
     }
 
@@ -756,11 +792,12 @@ extension BleLink: CBCentralManagerDelegate, CBPeripheralDelegate {
         guard let raw = String(data: d, encoding: .utf8) else { return }
         let s = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         if BleAuthenticatedReply.accepts(s), !verified {
-            verified = true; Settings.shared.deviceAuthenticated(); syncPhoneClock(force:true); buildingProbe.reset(); requestBuildingCapability(); Settings.shared.pushAll(); MapFeeder.shared.resendAll()
+            verified = true; Settings.shared.deviceAuthenticated(); syncPhoneClock(force:true); buildingProbe.reset(); requestBuildingCapability(); Settings.shared.pushAll(); MapFeeder.shared.onAuthenticated()
         }
         if s == "CAP,GMOT,1" { gMotion.setCapability(); return }
         if s == "CAP,GLOG,1" { GRecorder.shared.setCapability(); return }
-        if s.hasPrefix("GS,") { GRecorder.shared.receiveAck(s); return }
+        if s == "CAP,GENT,1" { GRecorder.shared.setPhoneEntryCapability(); return }
+        if s.hasPrefix("GS,") { if verified { GRecorder.shared.receiveAck(s) }; return }
         if s == "U,1" {return}
         if s == "CAP,HID,1" {
             mediaHIDSupported = true
@@ -770,6 +807,11 @@ extension BleLink: CBCentralManagerDelegate, CBPeripheralDelegate {
         if s == "CAP,LYR,1" {
             mediaLyricsSupported = true
             MusicBridge.shared.syncMode(); MusicBridge.shared.refresh(force: true); return
+        }
+        if (s == "CAP,MPAL,1" || s == "CAP,MPAL,2"), verified {
+            let version = s == "CAP,MPAL,2" ? 2 : 1
+            if version > roadPaletteVersion { roadPaletteVersion = version; MapFeeder.shared.onRoadPaletteCapability() }
+            return
         }
         if s == "CAP,BLD,1" {
             // Firmware emits capabilities only on an authenticated link; U,1 can be missed during restoration.
@@ -794,15 +836,28 @@ extension BleLink: CBCentralManagerDelegate, CBPeripheralDelegate {
             MusicBridge.shared.refresh(force: true); return
         }
         if parts.first == "K", parts.count >= 3, let t = Int(parts[1]), let id = Int(parts[2]) {
-            MapPipelineTrace.event("map-receipt",["type":t,"id":id])
-            if t==3 {
+            if t == 3 {
+                // A late K for an old map has no authority over the current receipt.
+                guard mapReceipt.current?.id == id else { return }
+                MapPipelineTrace.event("map-receipt",["type":t,"id":id])
                 if let result=mapMeter.finish(id:id,at:ProcessInfo.processInfo.systemUptime) {
                     MapPipelineTrace.event("map-wire-finished",["id":id,"bytes":result.bytes,"seconds":result.seconds,"rate":mapMeter.rate ?? 0])
                 }
                 mapReceipt.acknowledge(id:id)
+                bulkQ.acknowledge(type: t, id: id)
+                MapFeeder.shared.onAck(type: t, id: id)
+                return
             }
+            MapPipelineTrace.event("map-receipt",["type":t,"id":id])
             bulkQ.acknowledge(type: t, id: id)
             MapFeeder.shared.onAck(type: t, id: id)
+            return
+        }
+        if parts.first == "N", parts.count >= 3, let t = Int(parts[1]), let id = Int(parts[2]) {
+            // Type 3 rejection only applies to the current receipt/connection.
+            guard t == 3, mapReceipt.current?.id == id else { return }
+            MapPipelineTrace.event("map-reject",["type":t,"id":id])
+            failCurrentMap(id)
             return
         }
         if parts.first == "S", parts.count >= 4 {

@@ -249,7 +249,7 @@ final class NaviBridge: NSObject, ObservableObject {
         routeOptions = []; selectedRouteID = -1; shareMatch = ""; routeSummary = ""
         destLat = .nan; destLng = .nan
         planOrigin = nil; shareRoute = nil; vias = []
-        MapFeeder.shared.onNaviEnd()
+        MapFeeder.shared.endSession()
         info = "（还没开始导航）"
     }
 
@@ -323,7 +323,7 @@ final class NaviBridge: NSObject, ObservableObject {
         arrival.cancel(arrival.generation)
         if holdingArrival { manager.stopNavi() }
         invalidateArrival()
-        MapFeeder.shared.onNaviEnd()
+        MapFeeder.shared.endSession()
         planSeq += 1
         destLat = .nan; destLng = .nan
         planOrigin = nil
@@ -442,7 +442,7 @@ final class NaviBridge: NSObject, ObservableObject {
         installCallbacks()
         navigating = true // Arm before start: SDK callbacks may be synchronous.
         BleLink.shared.send("C")
-        MapFeeder.shared.onNaviStart()
+        MapFeeder.shared.beginNavigation()
         let me = myPosition()
         ShareGuide.shared.start(shareRoute, avoidHighway: Settings.shared.avoidHighway, emulate: emulate,
                                 myLat: me?.lat ?? .nan, myLng: me?.lng ?? .nan)          // 偏航跟随原路线 + 圆屏原路线细线
@@ -495,7 +495,7 @@ final class NaviBridge: NSObject, ObservableObject {
         emulating = false; emuPaused = false
         RideRecorder.shared.finish()
         LocationService.shared.setPrecise(false)
-        MapFeeder.shared.onNaviEnd()
+        MapFeeder.shared.endSession()
         ShareGuide.shared.stop()
         Settings.shared.resetTunnel()
         tick?.invalidate(); tick = nil
@@ -929,7 +929,7 @@ final class NaviBridge: NSObject, ObservableObject {
         arrival.beginCruise()
         installCallbacks()
         resetState()
-        MapFeeder.shared.onNaviStart()
+        MapFeeder.shared.beginCruise()
         manager.detectedMode = .cameraAndSpecialRoad          // 电子眼和特殊道路设施都提醒
         cruising = true
         RideRecorder.shared.start("巡航")
@@ -958,7 +958,7 @@ final class NaviBridge: NSObject, ObservableObject {
         cruising = false
         RideRecorder.shared.finish()
         cruiseIdle.stop()
-        MapFeeder.shared.onNaviEnd()
+        MapFeeder.shared.endSession()
         cruiseTick?.invalidate(); cruiseTick = nil
         manager.detectedMode = .none
         LocationService.shared.setPrecise(false)

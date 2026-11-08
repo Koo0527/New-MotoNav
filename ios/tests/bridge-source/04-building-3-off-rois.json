@@ -1,0 +1,83 @@
+[
+  {
+    "name": "crossing-visible-divider",
+    "rect": [
+      70,
+      105,
+      130,
+      155
+    ],
+    "profile": [
+      "y",
+      125,
+      75,
+      120
+    ],
+    "interpretation": "Gray/white divider exists in source. These probes measure a central carriageway median and its edge, not a verified bridge boundary. Pink transit line excluded.",
+    "probes": [
+      {
+        "name": "gray-median-retained",
+        "samplePoints": [
+          [
+            90,
+            124
+          ],
+          [
+            92,
+            124
+          ],
+          [
+            94,
+            124
+          ]
+        ]
+      },
+      {
+        "name": "gray-median-edge-smoothing-loss",
+        "samplePoints": [
+          [
+            92,
+            125
+          ],
+          [
+            94,
+            125
+          ],
+          [
+            96,
+            125
+          ]
+        ],
+        "evidenceScope": "Local erosion only; does not prove entire separator closure."
+      },
+      {
+        "name": "white-divider-classification-loss",
+        "samplePoints": [
+          [
+            94,
+            121
+          ],
+          [
+            97,
+            121
+          ],
+          [
+            100,
+            121
+          ]
+        ],
+        "evidenceScope": "Pure white source distinction maps to road. White streets have the same colour; cannot mask all white as separators."
+      }
+    ]
+  },
+  {
+    "name": "ordinary-junction-negative",
+    "rect": [
+      120,
+      285,
+      190,
+      345
+    ],
+    "interpretation": "Ordinary street junction far from candidate crossing; source-only negative control."
+  }
+]

@@ -4,7 +4,7 @@ import Foundation
 enum AmapSdkRaster {
     private static let lease = NSLock()
     static func build(_ f: MapGeo.Frame, cx: Double, cy: Double, includeBuildings: Bool,
-                      shouldCancel: @escaping () -> Bool, onBaseReady: ((Data) -> Void)? = nil, onBuildingStatus: ((String) -> Void)? = nil, satellite: Bool = false, style: Int = 1, preparedBase:Data? = nil, buildingView: BuildingView? = nil, onBuildingReady: ((BuildingUpdate) -> Void)? = nil, shouldYield: (() -> Bool)? = nil, cache: RouteMapCache = .shared) throws -> RasterResult {
+                      shouldCancel: @escaping () -> Bool, onBaseReady: ((Data) -> Void)? = nil, onBuildingStatus: ((String) -> Void)? = nil, satellite: Bool = false, style: Int = 1, preparedBase:Data? = nil, buildingView: BuildingView? = nil, onBuildingReady: ((BuildingUpdate) -> Void)? = nil, shouldYield: (() -> Bool)? = nil, cache: RouteMapCache = .shared, fineRoads: Bool = false, fineQuadrant: Int? = nil) throws -> RasterResult {
         precondition(!Thread.isMainThread)
         func check() throws { if shouldCancel() { throw MapProcessingError.cancelled } }
         let job = Int.random(in: 1...Int(Int32.max))
@@ -41,25 +41,60 @@ enum AmapSdkRaster {
                 throw error
             }
         }
+        /// 一次 600² 无建筑近景，只取第一张；与建筑路径共用同一截图租约和取消门。
+        func takeFine(x: Int, y: Int) throws -> [UInt32] {
+            while !lease.try() { try check(); Thread.sleep(forTimeInterval: 0.1) }
+            defer { lease.unlock() }
+            try check()
+            let started = Date()
+            MapPipelineTrace.event("fine-tile-start", ["job": job, "size": 600])
+            let box = CaptureResultBox(), sem = DispatchSemaphore(value: 0)
+            DispatchQueue.main.async {
+                if shouldCancel() { box.set(.failure(MapProcessingError.cancelled)); sem.signal(); return }
+                AmapCaptureHost.shared.capture(f, x: x, y: y, size: 600, style: style, pairBuildings: false) { result in
+                    box.set(result); sem.signal()
+                }
+            }
+            var elapsed = 0.0
+            do {
+                while sem.wait(timeout: .now() + 0.15) == .timedOut {
+                    try check(); elapsed += 0.15
+                    if elapsed > 45 { throw MapProcessingError.invalid("高德近景截图超时") }
+                }
+                try check()
+                let shot = try box.get().get()
+                let sampled = try AmapSampleGrid.sample(shot.pixels, withoutBuildings: nil,
+                                                       width: shot.width, height: shot.height, left: shot.left,
+                                                       top: shot.top, right: shot.right, bottom: shot.bottom,
+                                                       north: shot.north, south: shot.south, size: 600)
+                MapPipelineTrace.event("fine-tile-ready", ["job": job, "seconds": Date().timeIntervalSince(started)])
+                return sampled
+            } catch {
+                MapPipelineTrace.event("fine-tile-failed", ["job": job, "seconds": Date().timeIntervalSince(started), "error": error.localizedDescription])
+                DispatchQueue.main.async { AmapCaptureHost.shared.cancel() }
+                throw error
+            }
+        }
         let half = satellite ? 700.0 : 1200.0
         let n = satellite ? 400 : 1200, x = Int((cx - half).rounded()), y = Int((cy + half).rounded())
         let node = RouteMapPlan.Node(x: cx, y: cy, distance: 0)
         let cachedUpdate = includeBuildings && !satellite && AmapCapturePolicy.supportsBuildings(style)
-            ? cache.buildingUpdate(frame:f,source:3,node:node,style:style) : nil
+            ? cache.buildingUpdate(frame:f,source:3,node:node,style:style,currentOnly:true) : nil
         try check()
-        if let cached = cachedUpdate, cached.coverage.isComplete {
+        if let cached = cachedUpdate, cached.coverage.isComplete, RouteMapCache.isCurrent(cached,source:3,style:style) {
             MapPipelineTrace.event("buildings-cache-hit", ["job":job,"checked":cached.coverage.checkedMask,"bytes":cached.bytes.count])
-            if cached.coverage.qualityVersion == FastBuildings.qualityVersion {
-                onBaseReady?(MapDeliveryPolicy.compactBase(cached.bytes))
-            }
+            onBaseReady?(MapDeliveryPolicy.compactBase(cached.bytes))
             onBuildingReady?(cached)
             return RasterResult(bytes:cached.bytes,tiles:0,fromCache:1,coverage:cached.coverage)
         }
         let availableBase = preparedBase ?? cachedUpdate.flatMap {
             $0.coverage.qualityVersion == FastBuildings.qualityVersion ? MapDeliveryPolicy.compactBase($0.bytes) : nil
         }
-        let roads:[UInt8],base:Data
-        if includeBuildings,!satellite,AmapCapturePolicy.supportsBuildings(style),let cached=availableBase,
+        var roads: [UInt8]
+        var base: Data
+        var fineApplied = false
+        if !satellite,AmapCapturePolicy.supportsBuildings(style),let cached=availableBase,
+           RoadPalette.isCurrentPacket(cached),
            RasterPacket.valid(cached,frame:f.id,x:x,y:y),!RasterPacket.isBuilding(cached),
            MapStyleTransfer.matches(cached,style:style),let decoded=RasterPacket.decode(cached) {
             roads=decoded;base=cached
@@ -81,8 +116,13 @@ enum AmapSdkRaster {
             guard RasterPacket.valid(packet) else { throw MapProcessingError.invalid("黑白道路数据无效") }
             onBaseReady?(packet); return RasterResult(bytes: packet, tiles: 1, fromCache: 0)
         }
-        roads=MapGeo.classifyAmapBase(raw,w:n,h:n,style:style)
-        base=MapGeo.encodeRaster(frameId:f.id,x0:x,y0:y,w:n,h:n,mmPerPx:2000,idx:roads)
+        if AmapCapturePolicy.supportsBuildings(style) {
+            roads=RoadPalette.classify(raw,w:n,h:n)
+            base=RoadPalette.encode(frameId:f.id,x0:x,y0:y,w:n,h:n,indices:roads)
+        } else {
+            roads=MapGeo.classifyAmapBase(raw,w:n,h:n,style:style)
+            base=MapGeo.encodeRaster(frameId:f.id,x0:x,y0:y,w:n,h:n,mmPerPx:2000,idx:roads)
+        }
         MapSampleReport.shared.capture(raw:raw,indices:roads,packet:base,w:n,h:n,style:style)
         guard MapGeo.materialPixelCount(roads)>=MapGeo.minMaterialPixels(w:n,h:n) else {
             throw MapProcessingError.invalid("底图尚未准备完整，保留已有地图")
@@ -93,7 +133,49 @@ enum AmapSdkRaster {
         }
         MapPipelineTrace.event("base-ready", ["job": job, "bytes": base.count])
         onBaseReady?(base)
-        guard includeBuildings else { return RasterResult(bytes: base, tiles: 1, fromCache: 0) }
+        // 局部近景补路在宽底图已上屏后执行：失败/取消/超时都沿用已可用的宽底图。
+        var fineUpdate: FineRoads.Update?
+        if fineRoads, !satellite, !includeBuildings, (1...3).contains(style), !shouldCancel(),
+           let quadrant = fineQuadrant ?? FineRoads.quadrant(view: buildingView, cx: cx, cy: cy) as Int? {
+            let digest = FineRoads.baseDigest(base)
+            let cached = cache.readFineState(frame: f, source: 3, node: node, style: style, baseDigest: digest)
+            var coverage = FineRoads.FineRoadCoverage(
+                qualityVersion: cached?.qualityVersion ?? FineRoads.version,
+                checkedMask: cached?.checkedMask ?? 0)
+            var masks = cached?.masks ?? [:]
+            if !coverage.contains(quadrant) {
+                do {
+                    let sampled = try takeFine(x: x + (quadrant % 2) * 1200,
+                                               y: y - (quadrant / 2) * 1200)
+                    let near = MapGeo.classifyFineRoads(sampled, w: FineRoads.nearSize, h: FineRoads.nearSize)
+                    masks[quadrant] = FineRoads.candidateMask(near: near, colors: sampled)
+                    let merged = FineRoads.mergeAll(base: roads, candidates: masks)
+                    coverage.mark(quadrant)
+                    let revision = (cached?.revision ?? 0) + 1
+                    if merged.added > 0,
+                       let packet = FineRoads.encode(merged.pixels, like: base, frameId: f.id, x0: x, y0: y) {
+                        base = packet
+                        fineApplied = true
+                        MapPipelineTrace.event("fine-roads-ready", ["job": job, "quadrant": quadrant,
+                            "added": merged.added, "rejected": merged.rejected, "bytes": packet.count])
+                    } else {
+                        MapPipelineTrace.event("fine-roads-empty", ["job": job, "quadrant": quadrant,
+                            "added": merged.added, "rejected": merged.rejected])
+                    }
+                    try? cache.storeFineState(RouteMapCache.FineState(
+                        qualityVersion: coverage.qualityVersion, checkedMask: coverage.checkedMask,
+                        masks: masks, revision: revision, baseDigest: digest),
+                        frame: f, source: 3, node: node, style: style)
+                    fineUpdate = FineRoads.Update(coverage: coverage, pixels: merged.pixels,
+                        added: merged.added, rejected: merged.rejected, revision: revision)
+                } catch {
+                    MapPipelineTrace.event("fine-roads-failed", ["job": job, "quadrant": quadrant,
+                        "error": error.localizedDescription])
+                }
+            }
+        }
+        guard includeBuildings else { return RasterResult(bytes: base, tiles: 1, fromCache: 0,
+            fineRoads: fineApplied, fineUpdate: fineUpdate) }
         onBuildingStatus?("正在从高德近景截图提取建筑轮廓…")
         var checkpoint = cache.buildingCheckpoint(frame: f, source: 3, node: node)
         var captures = 0

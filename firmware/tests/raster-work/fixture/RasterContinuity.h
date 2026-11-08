@@ -12,6 +12,8 @@ struct RasterHeader {
   size_t bytes;
   bool palette;
   bool buildings;
+  bool semantic;
+  uint8_t semanticVersion;
 };
 static inline uint16_t rasterU16(const uint8_t *p) { return (uint16_t)(p[0] | ((uint16_t)p[1] << 8)); }
 static inline int32_t rasterI32(const uint8_t *p) {
@@ -29,17 +31,26 @@ static inline bool rasterCheck(const uint8_t *p, uint32_t len, RasterHeader &h, 
   h.bytes=(size_t)h.blocksWide*((h.height+15)/16)*128;
   h.dataStart=h.palette ? 48 : 16;
   if (h.bytes>capacity || len<h.dataStart) return false;
+  h.semantic=h.palette && rasterU16(p+44)==0x4D4E && (rasterU16(p+46)&0xff00)==0x5200;
+  h.semanticVersion=h.semantic ? (rasterU16(p+46)&15) : 0;
+  if(h.semantic && (len>480000 || h.width!=1200 || h.height!=1200 || h.mm!=2000 ||
+      (rasterU16(p+46)!=0x5201 && rasterU16(p+46)!=0x5211 && rasterU16(p+46)!=0x5202 && rasterU16(p+46)!=0x5212)))return false;
+  if(h.semantic)h.buildings=(rasterU16(p+46)&0x10)!=0;
+  bool roofs=false;
   uint32_t pos=h.dataStart, count=0;
   while (pos<len && count<n) {
     uint8_t b=p[pos++]; uint32_t run=(b>>4)+1;
     if ((b>>4)==15) { if (pos>=len) return false; run=16+p[pos++]; }
     if ((!h.palette && (b&15)>(h.buildings ? 7 : 3)) || run>n-count) return false;
+    if(h.semantic && (b&15)>(h.semanticVersion==2 ? 11 : 10))return false;
+    roofs=roofs || ((b&15)>=4 && (b&15)<=7);
     count+=run;
   }
-  if (count!=n) return false;
+  if (count!=n || (h.semantic && (h.buildings!=roofs || pos!=len))) return false;
   h.dataEnd=pos;
   return true;
 }
+static inline bool rasterSemanticMaterials(const RasterHeader &h) { return !h.palette || h.semantic; }
 // RLE spans stay within one 16-pixel tile row. Write packed pairs in one
 // contiguous operation instead of recomputing tiled addresses per pixel.
 struct RasterDecodeCursor {

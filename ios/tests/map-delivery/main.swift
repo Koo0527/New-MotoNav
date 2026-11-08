@@ -73,10 +73,11 @@ let oldCache=folder.appendingPathComponent("styles-v2-1/v1-3-base/30.0_104.0/0_0
 try FileManager.default.createDirectory(at:oldCache.deletingLastPathComponent(),withIntermediateDirectories:true)
 try packet.write(to:oldCache)
 check(cache.read(frame:frame,source:3,buildings:false,node:node,style:1)==nil,"old over-broad gray classification cache must not be reused")
-try cache.store(packet,frame:frame,source:3,node:node,style:1)
+let currentPacket=RoadPalette.encode(frameId:1,x0:-1200,y0:1200,w:size,h:size,indices:pixels)
+try cache.store(currentPacket,frame:frame,source:3,node:node,style:1)
 check(FileManager.default.fileExists(atPath:oldCache.path),"new processing must not delete existing offline packages")
 do {try cache.store(empty,frame:frame,source:3,node:node,style:1);fatalError("blank cache overwrite accepted")}catch{}
-check(cache.read(frame:frame,source:3,buildings:false,node:node,style:1)==packet,"valid cached map survives rejected blank update")
+check(cache.read(frame:frame,source:3,buildings:false,node:node,style:1)==currentPacket,"valid cached map survives rejected blank update")
 try? FileManager.default.removeItem(at:folder)
 print("PASS real-sample pale-land colours, resampling-mesh rejection, near-white roads, gray highways, old cache rejection and 60/80/100/120 km/h handovers")
 

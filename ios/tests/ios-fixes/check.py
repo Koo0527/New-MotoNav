@@ -578,6 +578,8 @@ final class BleLink {
     var stateOrder: [String] = []
     var lastImg: [Int: (w: Int, h: Int, data: Data)] = [:]
     // Only CoreBluetooth's write-credit boundary is blocked; queue and cache logic are production code.
+    var isReady = true
+    var verified = true
     func pump() {}
     func sendClock(_ message: String) {}
     var writes: [String] { queue.map { String(data: $0.data, encoding: .utf8)! } }

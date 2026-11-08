@@ -81,16 +81,44 @@ GInstrument::BatchClock gBatchClock;
 GInstrument::Output gOutput;
 GInstrument::Stream gStream;
 GInstrument::MotionEvidence gMotion;
+GInstrument::PhoneEntry gPhoneEntry;
+GInstrument::ManualCalibrationSession gManualSession;
 GInstrument::AutoMount gAutoMount;
-bool gSensorPresent=false,gSampling=false,gCalibration=false,gCalibrationAuto=false,gSaturated=false;
+bool gSensorPresent=false,gSampling=false,gCalibration=false,gSaturated=false;
+GInstrument::CalibrationSource gCalSource=GInstrument::CalibrationSource::Manual;
 int gState=0,gCalRef=0,gCalAngle=0,gAddress=0x6b,gLastFault=0;
+uint8_t gLastFifoLow=0,gLastFifoStatus=0;
+int gLastFifoBytes=0,gLastFifoStage=0;
+GInstrument::FifoWait gFifoWait;
 uint32_t gPollAt=0,gDataAt=0,gDiagnosticUntil=0,gLastDiagAt=0;
-uint32_t gSamples=0,gValidSamples=0,gErrors=0,gOverflows=0,gFallbacks=0,gLastSamples=0,gCpuUs=0;
+uint32_t gSamples=0,gValidSamples=0,gErrors=0,gOverflows=0,gLastSamples=0,gCpuUs=0,gNotifyMaxUs=0;
 GInstrument::Vec gRawA{},gRawW{};
 uint32_t gResets=0,gLastPollGap=0;unsigned gLastBatchSamples=0;float gLastBatchDt=0;
 GInstrument::Motion gCurrentMotion(){return gMotion.current(millis(),bleConnected&&bleAuthed,mediaConnectionEpoch);}
+bool gSessionValidFor(GInstrument::CalibrationSource source){
+  const bool authenticated=bleConnected&&bleAuthed;
+  switch(source){
+    case GInstrument::CalibrationSource::TrustedStop:
+      return gStream.holdsPower(millis(),authenticated);
+    case GInstrument::CalibrationSource::PhonePage:
+      return gStream.holdsPower(millis(),authenticated)&&
+        gPhoneEntry.current(authenticated,mediaConnectionEpoch,gStream.active,gStream.token);
+    case GInstrument::CalibrationSource::ScreenPage:
+      return page==3&&!deviceControls.asleep;
+    case GInstrument::CalibrationSource::Manual:
+      return gManualSession.valid(authenticated,mediaConnectionEpoch);
+  }
+  return false;
+}
+bool gCalibrationSessionValid(){return gSessionValidFor(gCalSource);}
+bool gCalibrationMayContinue(GInstrument::Motion motion){
+  return gCalibrationSessionValid()&&GInstrument::CalibrationPolicy::mayRun(gCalSource,motion);
+}
 void gInvalidate(){
-  gEstimator.reset();gQuiet.pose.reset();gOutput.valid=false;gStream.pending=false;++gResets;
+  gEstimator.reset();gQuiet.pose.reset();gFifoWait.reset();gOutput.valid=false;gStream.clearPending();++gResets;
+}
+void gLoseFifo(){
+  gSensor.resetFifo();gBatchClock.reset();gInvalidate();gState=gCalibration?3:5;
 }
 
 bool gRead(uint8_t reg,uint8_t *data,size_t n) {
@@ -108,11 +136,11 @@ void gDiagnostic(bool force=false) {
   uint8_t fifo[2]={},raw[12]={};bool ok=gRead(0x15,fifo,2);
   bool rawOk=gRead(0x35,raw,sizeof(raw));
   int16_t xyz[6]={};for(int i=0;i<6;i++)xyz[i]=int16_t(uint16_t(raw[i*2])|(uint16_t(raw[i*2+1])<<8));
-  Serial.printf("G state=%d id=%02X addr=%02X ctrl=%02X/%02X/%02X/%02X/%02X fifo=%02X:%02X wm=%d status=%02X n=%lu valid=%lu hz=%lu err=%lu ovf=%lu direct=%lu cpu_us=%lu fault=%d a=%.3f/%.3f/%.3f w=%.2f/%.2f/%.2f pose=%d raw=%d:%d/%d/%d/%d/%d/%d axis=USB_REAR_NEG_X_FACE_POS_Z\n",
+  Serial.printf("G state=%d id=%02X addr=%02X ctrl=%02X/%02X/%02X/%02X/%02X fifo=%02X:%02X lastfifo=%02X:%02X/%d stage=%d wm=%d status=%02X n=%lu valid=%lu hz=%lu err=%lu ovf=%lu cpu_us=%lu fault=%d a=%.3f/%.3f/%.3f w=%.2f/%.2f/%.2f pose=%d raw=%d:%d/%d/%d/%d/%d/%d axis=USB_REAR_NEG_X_FACE_POS_Z\n",
     gState,gReg(0x00),gAddress,gReg(0x02),gReg(0x03),gReg(0x04),gReg(0x06),gReg(0x08),
-    ok?fifo[1]:255,ok?fifo[0]:255,gReg(0x13),gReg(0x2e),
+    ok?fifo[1]:255,ok?fifo[0]:255,gLastFifoLow,gLastFifoStatus,gLastFifoBytes,gLastFifoStage,gReg(0x13),gReg(0x2e),
     (unsigned long)gSamples,(unsigned long)gValidSamples,(unsigned long)(gSamples-gLastSamples),(unsigned long)gErrors,
-    (unsigned long)gOverflows,(unsigned long)gFallbacks,(unsigned long)gCpuUs,gLastFault,
+    (unsigned long)gOverflows,(unsigned long)gCpuUs,gLastFault,
     gRawA.x,gRawA.y,gRawA.z,gRawW.x,gRawW.y,gRawW.z,gQuiet.active?gQuiet.pose.stable:gEstimator.stable,rawOk,xyz[0],xyz[1],xyz[2],xyz[3],xyz[4],xyz[5]);
   Serial.printf("G pose up=%.3f/%.3f/%.3f g=%.3f/%.3f quiet=%.2f motion=%d mount=%d/%d bias=%.3f/%.3f/%.3f batch=%u dt=%.6f poll_ms=%lu resets=%lu motion_rx_age_ms=%lu\n",
     gEstimator.up.x,gEstimator.up.y,gEstimator.up.z,gEstimator.lateral,gEstimator.longitudinal,
@@ -138,10 +166,23 @@ void gInstrumentBegin(){
   gDiagnostic(true);
 }
 String gInstrumentStatus(){return String("GC,")+gState+","+gEstimator.mount.ref+","+gEstimator.mount.angle;}
-void gBeginCalibration(int ref,int angle,bool automatic) {
-  gCalRef=ref;gCalAngle=angle;gCalibration=true;gCalibrationAuto=automatic;
-  gQuiet.continuous=automatic;gQuiet.begin(millis());gState=3;gOutput.valid=false;
+void gCancelCalibration() {
+  const bool manual=gCalSource==GInstrument::CalibrationSource::Manual;
+  gCalibration=false;gQuiet.active=false;
+  gState=manual?4:(gEstimator.mount.valid?1:0);
+  gEstimator.reset();gOutput.valid=false;gOutput.clear();
+  gManualSession.clear();
+  gAutoMount.cancel();
+  pendingInstrumentStatus=gInstrumentStatus();
+}
+bool gBeginCalibration(int ref,int angle,GInstrument::CalibrationSource source) {
+  const GInstrument::Motion motion=gCurrentMotion();
+  if(!gSensorPresent||!GInstrument::CalibrationGate::mayStart(source,motion,gSessionValidFor(source)))return false;
+  gCalRef=ref;gCalAngle=angle;gCalSource=source;gCalibration=true;
+  gQuiet.continuous=source!=GInstrument::CalibrationSource::Manual;
+  gQuiet.begin(millis());gState=3;gOutput.valid=false;
   if(gSampling){gSensor.resetFifo();gBatchClock.reset();}
+  return true;
 }
 void gStreamSessionTick() {
   const bool authenticated=bleConnected&&bleAuthed;
@@ -151,6 +192,9 @@ void gStreamSessionTick() {
   if(!sameSession||!authenticated)pendingGStreamStatus="";
   const uint32_t token=gStream.token;
   gStream.maintain(millis(),authenticated,mediaConnectionEpoch,idlePowerOffTimer);
+  gPhoneEntry.maintain(authenticated,mediaConnectionEpoch,gStream.active,gStream.token);
+  if(gCalibration&&gCalSource==GInstrument::CalibrationSource::PhonePage&&
+     !gPhoneEntry.current(authenticated,mediaConnectionEpoch,gStream.active,gStream.token))gCancelCalibration();
   if(wasActive&&!gStream.active&&authenticated&&sameSession) {
     char reply[20];snprintf(reply,sizeof(reply),"GS,%08lX,0",(unsigned long)token);pendingGStreamStatus=reply;
   }
@@ -162,6 +206,8 @@ String gInstrumentCommand(String command){
     const bool wasActive=gStream.active;
     const bool fresh=rate==20&&(!gStream.active||gStream.token!=token);
     if(gStream.command(token,rate,millis(),bleConnected&&bleAuthed)){pendingGStreamStatus="";if(fresh)gOutput.clear();}
+    if(fresh||!gStream.active)gPhoneEntry.clear();
+    if(gCalibration&&gCalSource==GInstrument::CalibrationSource::PhonePage&&(fresh||!gStream.active))gCancelCalibration();
     if(wasActive&&!gStream.active)idlePowerOffReset(&idlePowerOffTimer,millis());
     char reply[20];snprintf(reply,sizeof(reply),"GS,%08lX,%d",(unsigned long)token,gStream.active&&gStream.token==token?1:0);return reply;
   }
@@ -171,52 +217,110 @@ String gInstrumentCommand(String command){
     return String("GD,")+gState+","+gSamples+","+gErrors;
   }
   if(command=="GQ")return gInstrumentStatus();
-  if(!command.startsWith("GC,"))return "";
+  // Manual calibration must enter through gInstrumentManualCommand with the
+  // BLE queue's authentication/epoch metadata; an unbound command is rejected.
+  if(command.startsWith("GC,")){gState=4;return gInstrumentStatus();}
+  return "";
+}
+String gInstrumentManualCommand(const char *raw,bool receivedAuthenticated,uint32_t receivedEpoch,
+                                bool currentAuthenticated,uint32_t currentEpoch) {
+  const char *command=raw;
+  if(command[0]=='#')++command;
   int ref,angle;
-  if(gCurrentMotion()==GInstrument::Motion::Moving||!InstrumentCommands::pair(command.c_str(),"GC,",ref,angle)||ref>2||angle>359){gState=4;return gInstrumentStatus();}
-  if(!gSensorPresent){gState=5;return gInstrumentStatus();}
-  gAutoMount.finish();gBeginCalibration(ref,angle,false);
+  if(!gManualSession.receive(receivedAuthenticated,receivedEpoch,currentAuthenticated,currentEpoch)||
+     !InstrumentCommands::pair(command,"GC,",ref,angle)||ref>2||angle>359) {
+    gManualSession.clear();gState=4;return gInstrumentStatus();
+  }
+  if(gCurrentMotion()==GInstrument::Motion::Moving){gManualSession.clear();gState=4;return gInstrumentStatus();}
+  if(!gSensorPresent){gManualSession.clear();gState=5;return gInstrumentStatus();}
+  gAutoMount.finish();
+  if(!gBeginCalibration(ref,angle,GInstrument::CalibrationSource::Manual)){gManualSession.clear();gState=4;}
   return gInstrumentStatus();
 }
 void gInstrumentNotify() {
-  if(!gStream.holdsPower(millis(),bleConnected&&bleAuthed)){gStream.pending=false;return;}
-  if(gStream.pending){txChar->setValue(gStream.bytes,sizeof(gStream.bytes));txChar->notify();gStream.pending=false;}
+  if(!gStream.holdsPower(millis(),bleConnected&&bleAuthed)){if(gStream.pending)gStream.recordNotifySkipped();gStream.clearPending();return;}
+  while(gStream.pending){
+    gStream.recordNotifyAttempt();
+    txChar->setValue(gStream.front(),sizeof(gStream.bytes));
+    const uint32_t at=micros();txChar->notify();const uint32_t us=micros()-at;
+    if(us>gNotifyMaxUs)gNotifyMaxUs=us;
+    gStream.pop();
+  }
+}
+void gFlowTick(uint32_t now) {
+  static bool started=false;
+  static uint32_t at=0,gen=0,ovr=0,att=0,skip=0,n=0,valid=0,err=0,resets=0,discarded=0;
+  if(!started){started=true;at=now;gen=gStream.generated;ovr=gStream.overwritten;att=gStream.notifyAttempts;skip=gStream.notifySkipped;n=gSamples;valid=gValidSamples;err=gErrors;resets=gResets;return;}
+  if(uint32_t(now-at)<1000)return;
+  const uint32_t dt=now-at;
+  const uint32_t dgen=gStream.generated-gen,dovr=gStream.overwritten-ovr;
+  const uint32_t datt=gStream.notifyAttempts-att,dskip=gStream.notifySkipped-skip;
+  const uint32_t dn=gSamples-n,dvalid=gValidSamples-valid,derr=gErrors-err,dresets=gResets-resets;
+  const uint32_t notifyUs=gNotifyMaxUs;gNotifyMaxUs=0;
+  Serial.printf("GFLOW,%lu,%lu,%lu,%lu,%lu,%lu,%lu,%lu,%lu,%lu,%lu,%d,%d,%d,%lu,%lu,%u\n",
+    (unsigned long)dt,(unsigned long)dgen,(unsigned long)dovr,(unsigned long)datt,(unsigned long)dskip,
+    (unsigned long)dn,(unsigned long)dvalid,(unsigned long)derr,(unsigned long)dresets,
+    (unsigned long)gCpuUs,(unsigned long)notifyUs,gLastFault,gLastFifoStage,gLastFifoBytes,
+    (unsigned long)gLastPollGap,(unsigned long)(gStream.discarded-discarded),gStream.size);
+  at=now;gen=gStream.generated;ovr=gStream.overwritten;att=gStream.notifyAttempts;skip=gStream.notifySkipped;
+  n=gSamples;valid=gValidSamples;err=gErrors;resets=gResets;
+  discarded=gStream.discarded;
 }
 void gInstrumentSample(GInstrument::Vec av,GInstrument::Vec wv,uint32_t now,float dt,GInstrument::Motion motion) {
   gRawA=av;gRawW=wv;++gSamples;
   gSaturated=fabsf(av.x)>=3.99f||fabsf(av.y)>=3.99f||fabsf(av.z)>=3.99f||fabsf(wv.x)>=511||fabsf(wv.y)>=511||fabsf(wv.z)>=511;
+  if(!GInstrument::Estimator::validSample(av,wv,dt)){
+    gLastFault=8;++gErrors;gInvalidate();gState=gCalibration?3:gEstimator.mount.valid?1:0;
+    return;
+  }
   if(gCalibration) {
-    int result=gQuiet.sample(av,wv,now);
-    if(result) {
-      GInstrument::Mount candidate;
-      bool saved=false;
-      if(result>0&&GInstrument::makeMount(GInstrument::unit(gQuiet.pose.meanA),gQuiet.pose.meanW,gCalRef,gCalAngle,candidate)) {
-        Preferences p;if(p.begin("motonav",false)){saved=p.putBytes("gmount2",&candidate,sizeof(candidate))==sizeof(candidate);p.end();}
+    if(!gCalibrationMayContinue(motion)) {
+      gCancelCalibration();
+    } else {
+      int result=gQuiet.sample(av,wv,now);
+      if(result) {
+        const GInstrument::Motion current=gCurrentMotion();
+        const bool allowed=result>0&&GInstrument::CalibrationGate::maySave(gCalSource,current,gCalibrationSessionValid());
+        GInstrument::Mount candidate;
+        bool saved=false;
+        if(allowed&&GInstrument::makeMount(GInstrument::unit(gQuiet.pose.meanA),gQuiet.pose.meanW,gCalRef,gCalAngle,candidate)) {
+          Preferences p;if(p.begin("motonav",false)){saved=p.putBytes("gmount2",&candidate,sizeof(candidate))==sizeof(candidate);p.end();}
+        }
+        if(saved) {
+          gEstimator.mount=candidate;gEstimator.reset();gEstimator.up=GInstrument::unit(gQuiet.pose.meanA);
+          gEstimator.runtimeBias=gQuiet.pose.meanW;gEstimator.initialized=true;gOutput.clear();gState=2;
+          gManualSession.clear();
+        }else {gState=4;gEstimator.reset();}
+        gCalibration=false;gQuiet.active=false;gAutoMount.finish();pendingInstrumentStatus=gInstrumentStatus();
       }
-      if(saved) {
-        gEstimator.mount=candidate;gEstimator.reset();gEstimator.up=GInstrument::unit(gQuiet.pose.meanA);
-        gEstimator.runtimeBias=gQuiet.pose.meanW;gEstimator.initialized=true;gOutput.clear();gState=2;
-      }else {gState=4;gEstimator.reset();}
-      gCalibration=false;gCalibrationAuto=false;gAutoMount.finish();pendingInstrumentStatus=gInstrumentStatus();
     }
   }
   // A failed attempt retains the saved mount; fresh stationary data rebuilds runtime gravity.
   if(!gCalibration){gEstimator.sample(av,wv,dt,motion);if(gEstimator.available&&!gSaturated)++gValidSamples;if(gState!=4)gState=gEstimator.available?2:gEstimator.mount.valid?1:0;}
 }
+void gPublishOutput(uint32_t sampleAt,bool valid) {
+  if(!gOutput.update(sampleAt,valid,gEstimator.lateral,gEstimator.longitudinal))return;
+  if(!gStream.holdsPower(millis(),bleConnected&&bleAuthed))return;
+  const uint8_t flags=(valid?1:0)|(gCalibration?2:0)|(gSaturated?4:0)|
+    (!valid&&!gCalibration&&gSensorPresent&&!gEstimator.initialized?8:0)|(gState==5?16:0);
+  gStream.produce(flags,sampleAt,valid?GInstrument::Output::milli(gOutput.lateral):0,
+    valid?GInstrument::Output::milli(gOutput.longitudinal):0);
+}
 void gInstrumentTick(bool active){
   uint32_t cpuAt=micros();const uint32_t now=millis();
-  const bool recording=gStream.holdsPower(now,bleConnected&&bleAuthed);
-  const bool visible=page==3&&!deviceControls.asleep;
+  const bool authenticated=bleConnected&&bleAuthed;
+  const bool recording=gStream.holdsPower(now,authenticated);
+  const bool onGPage=page==3; // Waking on the same page does not authorize another calibration.
   const GInstrument::Motion motion=gCurrentMotion();
-  const bool calibrationAllowed=motion!=GInstrument::Motion::Moving;
-  const bool autoWaiting=gAutoMount.poll(visible,recording,motion);
-  if(gCalibration&&((gCalibrationAuto&&(!calibrationAllowed||(!visible&&!recording)))||(!gCalibrationAuto&&!calibrationAllowed))) {
-    gCalibration=false;gQuiet.active=false;gState=gCalibrationAuto?(gEstimator.mount.valid?1:0):4;
-    gCalibrationAuto=false;gEstimator.reset();pendingInstrumentStatus=gInstrumentStatus();
-  }
-  if(gCalibration&&!gCalibrationAuto&&uint32_t(now-gQuiet.began)>=15000){gCalibration=false;gQuiet.active=false;gState=4;gEstimator.reset();pendingInstrumentStatus=gInstrumentStatus();}
+  const bool phoneEntry=gPhoneEntry.current(authenticated,mediaConnectionEpoch,gStream.active,gStream.token);
+  if(motion!=GInstrument::Motion::Stopped&&gEstimator.stable)gEstimator.resetQuiet();
+  if(gCalibration&&!gCalibrationMayContinue(motion)) gCancelCalibration();
+  if(gCalibration&&gCalSource==GInstrument::CalibrationSource::Manual&&uint32_t(now-gQuiet.began)>=15000) gCancelCalibration();
+  const bool autoWaiting=gAutoMount.poll(onGPage,recording,motion,phoneEntry,gPhoneEntry.generation(),!gEstimator.mount.valid);
   if(autoWaiting&&!gCalibration&&gSensorPresent) {
-    gBeginCalibration(gEstimator.mount.ref,gEstimator.mount.angle,true);pendingInstrumentStatus=gInstrumentStatus();
+    const GInstrument::CalibrationSource source=gAutoMount.source;
+    if(gBeginCalibration(gEstimator.mount.ref,gEstimator.mount.angle,source))pendingInstrumentStatus=gInstrumentStatus();
+    else gAutoMount.cancel();
   }
   active=active||gCalibration||recording||(gDiagnosticUntil&&int32_t(gDiagnosticUntil-now)>0);
   if(!gSensorPresent){gState=5;}
@@ -225,45 +329,67 @@ void gInstrumentTick(bool active){
       // SensorLib configFifo ignores its watermark argument; explicitly set one sample.
       bool ok=gSensor.enableAccel()&&gSensor.enableGyro()&&gSensor.configFifo(SensorQMI8658::FifoMode::STREAM,SensorQMI8658::FifoSamples::SAMPLES_128,1)&&gWrite(0x13,1);
       if(!ok){gState=5;++gErrors;gSensor.disableAccel();gSensor.disableGyro();}
-      else {gSampling=true;gSensor.resetFifo();gDataAt=now;gPollAt=now;gBatchClock.reset();gEstimator.reset();if(!gCalibration)gState=gEstimator.mount.valid?1:0;}
-    }else{gSensor.configureFifo(false);gSensor.disableAccel();gSensor.disableGyro();gSampling=false;gEstimator.reset();}
+      else {gSampling=true;gSensor.resetFifo();gDataAt=now;gPollAt=now;gBatchClock.reset();gInvalidate();gSaturated=false;if(!gCalibration)gState=gEstimator.mount.valid?1:0;}
+    }else{gSensor.configureFifo(false);gSensor.disableAccel();gSensor.disableGyro();gSampling=false;gInvalidate();}
   }
   if(gSensorPresent&&gSampling&&uint32_t(now-gPollAt)>=15) {
-    gLastPollGap=uint32_t(now-gPollAt);bool gap=gLastPollGap>500;gPollAt=now;
+    gLastPollGap=uint32_t(now-gPollAt);bool gap=gLastPollGap>GInstrument::BatchClock::maxGapMs;gPollAt=now;
     uint8_t fifo[2]={};bool ok=gRead(0x15,fifo,2);
-    int count=ok?GInstrument::FifoStatus::count(fifo[0],fifo[1]):-1;
-    if(gap||count<0||count>32) {
-      gLastFault=gap?1:!ok?2:count==-1?3:4;
-      if(count==-2||count>32)++gOverflows;else ++gErrors;
-      gSensor.resetFifo();gBatchClock.reset();gInvalidate();gState=gCalibration?3:5;
-    }else if(count) {
+    gLastFifoLow=fifo[0];gLastFifoStatus=fifo[1];
+    gLastFifoBytes=ok?int(GInstrument::FifoStatus::bytes(fifo[0],fifo[1])):-1;
+    const GInstrument::FifoStatus::Kind kind=ok?GInstrument::FifoStatus::kind(fifo[0],fifo[1]):GInstrument::FifoStatus::Kind::Overflow;
+    if(gap) {
+      gLastFifoStage=1;gLastFault=1;++gErrors;gFifoWait.reset();gLoseFifo();
+    } else if(!ok) {
+      gLastFifoStage=2;gLastFault=2;++gErrors;gFifoWait.reset();gLoseFifo();
+    } else if(kind==GInstrument::FifoStatus::Kind::Overflow) {
+      gLastFifoStage=3;gLastFault=4;++gOverflows;gFifoWait.reset();gLoseFifo();
+    } else if(kind==GInstrument::FifoStatus::Kind::Half) {
+      // In-range count with no overflow/full flag: wait untouched for a complete pair.
+      gLastFifoStage=9;
+      if(gFifoWait.wait(now)) gLastFault=9;
+      else {gLastFault=10;gFifoWait.reset();++gErrors;gLoseFifo();}
+    } else if(kind==GInstrument::FifoStatus::Kind::Empty) {
+      if(gFifoWait.active&&!gFifoWait.wait(now)){gLastFault=10;++gErrors;gLoseFifo();}
+    } else {
+      const int count=GInstrument::FifoStatus::count(fifo[0],fifo[1]);
       AccelerometerData a[32];GyroscopeData w[32];
       uint16_t n=gSensor.readFromFifo(a,32,w,32);
-      if(!n) {
-        gLastFault=5;++gErrors;gInvalidate();gBatchClock.reset();
-        // Preserve real samples if this driver/chip FIFO combination stalls; diagnose it explicitly.
-        if(gSensor.isDataReady()&&gSensor.readAccel(a[0])&&gSensor.readGyro(w[0])){n=1;++gFallbacks;gSensor.resetFifo();}
-      }
-      const float dt=gBatchClock.interval(now,n);gLastBatchSamples=n;gLastBatchDt=dt;
-      if(n&&!dt){gLastFault=6;++gErrors;gInvalidate();gBatchClock.reset();gState=gCalibration?3:5;}
-      if(n&&dt){if(uint32_t(now-gDataAt)>250)gInvalidate();gDataAt=now;}
-      for(uint16_t i=0;i<n&&dt;i++) {
-        GInstrument::Vec av{a[i].mps2.x/GInstrument::gravity,a[i].mps2.y/GInstrument::gravity,a[i].mps2.z/GInstrument::gravity};
-        GInstrument::Vec wv{w[i].dps.x,w[i].dps.y,w[i].dps.z};
-        gInstrumentSample(av,wv,now,dt,motion);
+      // The driver rechecks the FIFO. A new half-pair must wait with the same policy.
+      if(n==SensorQMI8658::FifoPairPending) {
+        gLastFifoStage=9;
+        if(gFifoWait.wait(now)) gLastFault=9;
+        else {gLastFault=10;gFifoWait.reset();++gErrors;gLoseFifo();}
+      } else {
+        const bool complete=n>=count;
+        const float dt=complete?gBatchClock.interval(now,n):0;
+        gLastBatchSamples=n;gLastBatchDt=dt;
+        if(!dt){
+          gLastFifoStage=complete?6:5;gLastFault=complete?6:5;++gErrors;gFifoWait.reset();gLoseFifo();
+        }else{
+          gFifoWait.reset();
+          gDataAt=now;
+          for(uint16_t i=0;i<n;i++) {
+            GInstrument::Vec av{a[i].mps2.x/GInstrument::gravity,a[i].mps2.y/GInstrument::gravity,a[i].mps2.z/GInstrument::gravity};
+            GInstrument::Vec wv{w[i].dps.x,w[i].dps.y,w[i].dps.z};
+            gInstrumentSample(av,wv,now,dt,motion);
+            // Each result represents a real FIFO sample on the existing integration timebase.
+            const uint32_t sampleAt=GInstrument::BatchClock::sampleTime(now,i,n,dt);
+            gPublishOutput(sampleAt,!gCalibration&&gEstimator.available&&!gSaturated);
+          }
+        }
       }
     }
-    if(uint32_t(now-gDataAt)>250){
-      if(gEstimator.initialized||gEstimator.stable||gQuiet.pose.stable)gInvalidate();
-      if(uint32_t(now-gDataAt)>1000)gState=5;
+    if(uint32_t(now-gDataAt)>GInstrument::BatchClock::maxGapMs&&gBatchClock.primed){
+      gLastFault=7;gLastFifoStage=7;++gErrors;gFifoWait.reset();gLoseFifo();
     }
+    if(uint32_t(now-gDataAt)>1000&&!gCalibration)gState=5;
   }
-  bool valid=gSensorPresent&&gSampling&&!gCalibration&&gEstimator.available&&uint32_t(now-gDataAt)<=250&&!gSaturated;
-  if(active&&gOutput.update(now,valid,gEstimator.lateral,gEstimator.longitudinal)&&recording) {
-    uint8_t flags=(valid?1:0)|(gCalibration?2:0)|(gSaturated?4:0)|(!valid&&!gCalibration&&gSensorPresent&&!gEstimator.initialized?8:0)|(gState==5?16:0);
-    gStream.frame(gStream.bytes,flags,now,valid?GInstrument::Output::milli(gOutput.lateral):0,valid?GInstrument::Output::milli(gOutput.longitudinal):0);gStream.pending=true;
-  }
+  bool valid=gSensorPresent&&gSampling&&!gCalibration&&gEstimator.available&&
+    uint32_t(now-gDataAt)<=GInstrument::BatchClock::freshnessMs&&!gSaturated;
+  if(active&&!valid)gPublishOutput(now,false);
   gCpuUs+=micros()-cpuAt;
+  gFlowTick(now);
   if(active)gDiagnostic();
 }
 

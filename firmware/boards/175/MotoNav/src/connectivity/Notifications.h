@@ -15,7 +15,9 @@ void sendPendingAck() {
     txChar->setValue((uint8_t *)"CAP,IMU,1",9);txChar->notify();
     txChar->setValue((uint8_t *)"CAP,GLOG,1",10);txChar->notify();
     txChar->setValue((uint8_t *)"CAP,GMOT,1",10);txChar->notify();
+    txChar->setValue((uint8_t *)"CAP,GENT,1",10);txChar->notify();
     txChar->setValue((uint8_t *)"CAP,MPAL,1",10);txChar->notify();
+    txChar->setValue((uint8_t *)"CAP,MPAL,2",10);txChar->notify();
     deviceControls.dirty=true;controlPowerStatus();
     txChar->setValue((uint8_t *)"U,1", 3);
     txChar->notify();
@@ -45,7 +47,9 @@ void sendPendingAck() {
     txChar->setValue((uint8_t *)"CAP,IMU,1",9);txChar->notify();
     txChar->setValue((uint8_t *)"CAP,GLOG,1",10);txChar->notify();
     txChar->setValue((uint8_t *)"CAP,GMOT,1",10);txChar->notify();
+    txChar->setValue((uint8_t *)"CAP,GENT,1",10);txChar->notify();
     txChar->setValue((uint8_t *)"CAP,MPAL,1",10);txChar->notify();
+    txChar->setValue((uint8_t *)"CAP,MPAL,2",10);txChar->notify();
     deviceControls.dirty=true;controlPowerStatus();
     pendingBuildingCapability=false;
   }

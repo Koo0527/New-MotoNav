@@ -951,7 +951,15 @@ uint16_t SensorQMI8658::readFromFifo(AccelerometerData *accel_data, uint16_t acc
     // FIFO_Bytes = 2 * ((FIFO_SMPL_CNT_H[1:0] << 8) | FIFO_SMPL_CNT_L)
     uint16_t fifo_bytes = static_cast<uint16_t>(2 * (((count_buf[1] & 0x03) << 8) | count_buf[0]));
 
-    if (fifo_bytes == 0 || fifo_bytes > 1536 || (fifo_bytes % 6) != 0) {
+    if (fifo_bytes == 0 || fifo_bytes > 1536) {
+        return 0;
+    }
+    if (_accel_enabled && _gyro_enabled) {
+        if (count_buf[1] & 0xa0) return 0;  // Full or overflowed: continuity is lost.
+        if (fifo_bytes % 12) return FifoPairPending;
+        const uint16_t pairs = fifo_bytes / 12;
+        if ((accel_data && pairs > accel_count) || (gyro_data && pairs > gyro_count)) return 0;
+    } else if (fifo_bytes % 6) {
         return 0;
     }
 
@@ -986,7 +994,7 @@ uint16_t SensorQMI8658::readFromFifo(AccelerometerData *accel_data, uint16_t acc
         remaining -= chunk;
     }
 
-    writeReg(REG_FIFO_CTRL, _fifo_mode);
+    if (writeReg(REG_FIFO_CTRL, _fifo_mode) != 0) return 0;
 
     uint16_t accel_idx = 0;
     uint16_t gyro_idx = 0;

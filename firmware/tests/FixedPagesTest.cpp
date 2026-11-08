@@ -90,6 +90,8 @@ bool hidMediaReady(){return false;}
 struct {bool enqueue(int){return true;}} hidPulses;
 #include "../boards/175/MotoNav/GInstrumentRuntime.h"
 GInstrument::Estimator gEstimator;GInstrument::Output gOutput;int gState=0;
+GInstrument::Motion gMotion=GInstrument::Motion::Unknown;
+GInstrument::Motion gCurrentMotion(){return gMotion;}
 #include "../boards/175/MotoNav/FixedPageLayout.h"
 #include "../boards/175/MotoNav/TouchLockBadge.h"
 // v7.12.10-pages.175c.9 起分页点由 FixedPageLayout 共享实现（真画到内存画布上）。
@@ -112,6 +114,9 @@ int main(){
   unsigned before=gScaleIndex;gInstrumentTap(316,86);assert(gScaleIndex==(before+1)%3);
   gInstrumentTap(146,86);assert(gOutput.count==0&&gOutput.accel==0);
   gOutput.update(100,false,0,0);gState=5;text.clear();drawGInstrument();assert(has("G DATA UNAVAILABLE"));
+  gState=1;text.clear();drawGInstrument();assert(has("PARK / RETRY IN APP"));
+  gMotion=GInstrument::Motion::Moving;text.clear();drawGInstrument();assert(has("STOP TO RECOVER"));
+  gMotion=GInstrument::Motion::Stopped;text.clear();drawGInstrument();assert(has("WAITING FOR STATIONARY"));
 
   // v7.12.10-pages.175c.9：G 仪表页提示点——右侧两个纵向点（下点高亮，G 在首页下方），
   // 不画底部横向点；首次显示、100ms 连续刷新、无数据重绘、换页返回后都在。

@@ -3,8 +3,31 @@
 #include <cstdio>
 #include <cstring>
 #include <initializer_list>
-#include "../boards/175/MotoNav/GInstrumentMath.h"
+#include "../boards/175/MotoNav/GInstrumentRuntime.h"
 using namespace GInstrument;
+
+void recoverAfterSampleLoss() {
+  Estimator e;
+  assert(makeMount({0,0,1},{4,0,0},1,0,e.mount));
+  for(int i=0;i<168;i++)e.sample({0,0,1},{},1.f/56,Motion::Stopped);
+  assert(e.available);
+  BatchClock clock;
+  clock.interval(100,1);
+  float dt=clock.interval(420,18); // Short delay with all complete FIFO samples.
+  for(int i=0;i<18;i++)e.sample({0.2f,0,1},{},dt,Motion::Moving);
+  assert(e.available&&fabsf(e.longitudinal-0.2f)<0.005f);
+  e.sample({4,0,1},{},1.f/56,Motion::Unknown);
+  for(Motion motion:{Motion::Moving,Motion::Unknown}) {
+    for(int i=0;i<200;i++)e.sample({0.2f,0,1},{},1.f/56,motion);
+    assert(!e.initialized&&!e.available);
+  }
+  for(int i=0;i<167;i++)e.sample({0,0,1},{1,0,0},1.f/56,Motion::Stopped);
+  e.sample({0,0,1},{},1.f/56,Motion::Unknown); // Expiry interrupts the window.
+  for(int i=0;i<167;i++)e.sample({0,0,1},{1,0,0},1.f/56,Motion::Stopped);
+  assert(!e.available);
+  e.sample({0,0,1},{1,0,0},1.f/56,Motion::Stopped);
+  assert(e.available&&fabsf(e.longitudinal)<0.005f&&e.runtimeBias.x==1&&e.mount.bias.x==4);
+}
 
 void recoverTilt() {
   Estimator e;e.mount={{1,0,0},{},1,0,true};
@@ -76,6 +99,25 @@ void slowTilt() {
   assert(e.available&&fabsf(e.longitudinal)<0.01f&&fabsf(e.lateral)<0.01f);
 }
 
+void fifoHalfPairRecovery() {
+  FifoWait wait;
+  assert(wait.wait(0));
+  assert(wait.wait(50));
+  assert(!wait.wait(100));                 // Two polls/100 ms without a complete pair: give up.
+  wait.reset();
+  assert(wait.wait(0));
+  assert(wait.wait(20));
+  wait.reset();                             // A complete batch clears the wait state.
+
+  Estimator e;
+  assert(makeMount({0,0,1},{},1,0,e.mount));
+  for(int i=0;i<168;i++)e.sample({0,0,1},{},1.f/56,Motion::Stopped);
+  assert(e.available);
+  e.reset();                                // Timeout/I2C/overflow invalidation.
+  for(int i=0;i<168;i++)e.sample({0,0,1},{},1.f/56,Motion::Stopped);
+  assert(e.available);                      // Trusted stop restores only the runtime pose.
+}
+
 void verticalRecovery() {
   Estimator e;assert(makeMount({0,0,1},{},1,0,e.mount));
   for(int i=0;i<168;i++)e.sample({0,0,1},{},1.f/56,Motion::Stopped);
@@ -88,9 +130,11 @@ void verticalRecovery() {
 }
 
 int main(int argc,char **argv) {
+  if(argc==1)recoverAfterSampleLoss();
   if(argc==1||!strcmp(argv[1],"recovery"))recoverTilt();
   if(argc==1||!strcmp(argv[1],"axes"))physicalAxes();
   if(argc==1)movingTilt();
+  if(argc==1||!strcmp(argv[1],"fifo"))fifoHalfPairRecovery();
   if(argc==1||!strcmp(argv[1],"slow"))slowTilt();
   if(argc==1||!strcmp(argv[1],"vertical"))verticalRecovery();
   puts("PASS: static tilt recovery, gyro bias, sustained acceleration and USB-rear physical axes");

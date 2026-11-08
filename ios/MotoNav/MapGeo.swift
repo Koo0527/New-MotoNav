@@ -368,15 +368,18 @@ enum MapGeo {
     }
 
     /// AMap highway pavement may be gray; use the measured land colour.
-    static func classifyAmapBase(_ raw:[UInt32],w:Int,h:Int,style:Int=1)->[UInt8] {
+    static func classifyAmapBase(_ raw:[UInt32],w:Int,h:Int,style:Int=1,protectedRoadPixels:[UInt8]?=nil)->[UInt8] {
         let bg=backgroundLum(raw)
         var colors:[UInt32:UInt8]=[:]
         var classified=raw.map{c -> UInt8 in
             if let known=colors[c]{return known}
             let value=classifyPixel(c,bg);colors[c]=value;return value
         }
+        if let protected=protectedRoadPixels,protected.count==classified.count {
+            for p in classified.indices where protected[p] != 0 {classified[p]=PX_BLOCK}
+        }
         recoverGrayRoads(raw, background: bg, into: &classified, w: w, h: h)
-        if (1...3).contains(style) { return smoothGameRaster(classified,w:w,h:h) }
+        if (1...3).contains(style) { return smoothGameRaster(classified,w:w,h:h,protectedRoadPixels:protectedRoadPixels) }
         return dilateRoads(cleanRaster(classified,w:w,h:h),w:w,h:h)
     }
 
@@ -403,7 +406,7 @@ enum MapGeo {
         return components(true) == 1 && components(false) == 1
     }
 
-    static func smoothGameRaster(_ source: [UInt8], w: Int, h: Int) -> [UInt8] {
+    static func smoothGameRaster(_ source: [UInt8], w: Int, h: Int, protectedRoadPixels: [UInt8]? = nil) -> [UInt8] {
         guard w >= 3, h >= 3, source.count == w*h else { return source }
         var out = source
         let offsets = [-w-1,-w,-w+1,-1,1,w-1,w,w+1]
@@ -412,7 +415,8 @@ enum MapGeo {
         for cleanup in [true, false] {
         for y in 1..<(h-1) { for x in 1..<(w-1) {
             let p = y*w+x
-            guard source[p] == PX_BLOCK, out[p] == PX_BLOCK else { continue }
+            guard source[p] == PX_BLOCK, out[p] == PX_BLOCK,
+                  protectedRoadPixels?.count != source.count || protectedRoadPixels?[p] == 0 else { continue }
             if cleanup {
                 var votes = 0
                 for d in offsets where source[p+d] == PX_ROAD { votes += 1 }
@@ -472,13 +476,34 @@ enum MapGeo {
             for p in component {result[p]=PX_ROAD}
         }
     }
+    /// 局部近景补路只需要白色/浅色细路：直接按与 classifyPixel 相同的
+    /// 白色道路阈值生成掩码，再做同一条平滑。暖色主路、灰色楼边、场地线
+    /// 和水边不会进入补路候选。
+    static func classifyFineRoads(_ raw:[UInt32],w:Int,h:Int)->[UInt8] {
+        guard w>0,h>0,raw.count==w*h else {return []}
+        var out=[UInt8](repeating:0,count:raw.count)
+        raw.withUnsafeBufferPointer { p in
+            out.withUnsafeMutableBufferPointer { o in
+                for i in p.indices {
+                    let c=p[i]
+                    let r=Int(c>>16&255),g=Int(c>>8&255),b=Int(c&255)
+                    if (r*30+g*59+b*11)/100 >= 254 { o[i]=PX_ROAD }
+                }
+            }
+        }
+        return smoothGameRaster(out,w:w,h:h)
+    }
+
     static func minMaterialPixels(w:Int,h:Int)->Int {max(4,(w*h)/1250)}
-    static func materialPixelCount(_ pixels:[UInt8])->Int {pixels.reduce(0){$0+($1==0 ? 0:1)}}
+    static func materialPixelCount(_ pixels:[UInt8])->Int {pixels.reduce(0){$0+($1==0 || $1==10 ? 0:1)}}
 
     /// 清理杂点，让画面干净：
     /// 1. 去掉孤立的小块（小于 minSize 像素的道路 / 绿地 / 水面碎块，多半是图标、楼块、文字残留）；
     /// 2. 3×3 多数投票平滑一遍，去掉锯齿边上的零星像素。
-    static func cleanRaster(_ idx: [UInt8], w: Int, h: Int, minRoad: Int = 60, minArea: Int = 40) -> [UInt8] {
+    /// fineRoads 只给极简黑白使用：道路按 8 连通计组件，并保留 3×3 中至少两票的
+    /// 一格宽细路（水平、斜向、短支路），不改变其他调用方的清理结果。
+    static func cleanRaster(_ idx: [UInt8], w: Int, h: Int, minRoad: Int = 60, minArea: Int = 40,
+                            fineRoads: Bool = false) -> [UInt8] {
         var out = idx
         var seen = [Bool](repeating: false, count: w * h)
         var stack = [Int](repeating: 0, count: w * h)
@@ -502,6 +527,13 @@ enum MapGeo {
                     if x < w - 1 && !sn[k + 1] && o[k + 1] == c { sn[k + 1] = true; st[sp] = k + 1; sp += 1 }
                     if y > 0 && !sn[k - w] && o[k - w] == c { sn[k - w] = true; st[sp] = k - w; sp += 1 }
                     if y < h - 1 && !sn[k + w] && o[k + w] == c { sn[k + w] = true; st[sp] = k + w; sp += 1 }
+                    if fineRoads && c == PX_ROAD {
+                        // 一格宽斜线在 4 连通下会断成单点，按 8 连通计组件才能保留。
+                        if x > 0 && y > 0 && !sn[k - w - 1] && o[k - w - 1] == c { sn[k - w - 1] = true; st[sp] = k - w - 1; sp += 1 }
+                        if x < w - 1 && y > 0 && !sn[k - w + 1] && o[k - w + 1] == c { sn[k - w + 1] = true; st[sp] = k - w + 1; sp += 1 }
+                        if x > 0 && y < h - 1 && !sn[k + w - 1] && o[k + w - 1] == c { sn[k + w - 1] = true; st[sp] = k + w - 1; sp += 1 }
+                        if x < w - 1 && y < h - 1 && !sn[k + w + 1] && o[k + w + 1] == c { sn[k + w + 1] = true; st[sp] = k + w + 1; sp += 1 }
+                    }
                 }
                 let limit = c == PX_ROAD ? minRoad : minArea
                 if cn < limit { for i in 0..<cn { o[cp[i]] = PX_BLOCK } }
@@ -516,8 +548,11 @@ enum MapGeo {
                 for x in 1..<max(1, w - 1) {
                     cnt[0] = 0; cnt[1] = 0; cnt[2] = 0; cnt[3] = 0
                     for dy in -1...1 { let r = (y + dy) * w + x; for dx in -1...1 { cnt[Int(o[r + dx] & 3)] += 1 } }
-                    var best = Int(o[y * w + x] & 3)
+                    let original = Int(o[y * w + x] & 3)
+                    var best = original
                     for c in 0..<4 where cnt[c] > cnt[best] { best = c }
+                    // 一格宽道路在 3×3 里通常只有 2–3 票，不能被背景多数票抹掉。
+                    if fineRoads && original == PX_ROAD && cnt[Int(PX_ROAD)] >= 2 { best = Int(PX_ROAD) }
                     if cnt[best] >= 5 { s[y * w + x] = UInt8(best) }
                 }
             }

@@ -21,7 +21,7 @@ swiftc ios/MotoNav/ArrivalPolicy.swift ios/tests/arrival/main.swift -o /tmp/moto
 /tmp/motonav-arrival
 swiftc ios/MotoNav/ArrivalPolicy.swift ios/MotoNav/NaviSessionCallbacks.swift ios/tests/arrival-relay/SDKStubs.swift ios/tests/arrival-relay/main.swift -o /tmp/motonav-relay
 /tmp/motonav-relay
-swiftc -O ios/MotoNav/MapGeo.swift ios/MotoNav/RasterProcessing.swift ios/MotoNav/RouteMapPlan.swift ios/tests/maps/main.swift -o /tmp/motonav-maps
+swiftc -O ios/MotoNav/MapGeo.swift ios/MotoNav/RasterProcessing.swift ios/MotoNav/RoadPalette.swift ios/MotoNav/RouteMapPlan.swift ios/tests/maps/main.swift -o /tmp/motonav-maps
 /tmp/motonav-maps
 swiftc ios/MotoNav/BleBulkWriteQueue.swift ios/MotoNav/BleWritePacer.swift ios/tests/ble-bulk/main.swift -o /tmp/motonav-bulk
 /tmp/motonav-bulk

@@ -58,15 +58,27 @@ struct MotoNavApp: App {
             ContentView()
                 .background(AmapCaptureSurface().frame(width: 1, height: 1))
                 .preferredColorScheme(AppearanceMode(rawValue:appearance)?.scheme)
-                .onReceive(NotificationCenter.default.publisher(for:UIApplication.didEnterBackgroundNotification)) { _ in GRecorder.shared.background() }
+                .onReceive(NotificationCenter.default.publisher(for:UIApplication.didEnterBackgroundNotification)) { _ in
+                    MapPipelineTrace.event("app-lifecycle", ["phase": "didEnterBackground"])
+                    GRecorder.shared.background()
+                }
                 .onReceive(NotificationCenter.default.publisher(for:UIApplication.willResignActiveNotification)){_ in
+                    MapPipelineTrace.event("app-lifecycle", ["phase": "willResignActive"])
                     MapFeeder.shared.setRenderingAvailable(false)
                 }
                 .onReceive(NotificationCenter.default.publisher(for:UIApplication.didBecomeActiveNotification)){_ in
+                    MapPipelineTrace.event("app-lifecycle", ["phase": "didBecomeActive"])
                     MapFeeder.shared.setRenderingAvailable(true)
                     GRecorder.shared.foreground()
                     BleLink.shared.syncPhoneClock(force:true)
                     MusicBridge.shared.pollMetadata(force:true)
+                }
+                // 锁屏前后受保护数据状态变化：后台入口之前最近一次锁屏通知据此对齐
+                .onReceive(NotificationCenter.default.publisher(for:UIApplication.protectedDataWillBecomeUnavailableNotification)){_ in
+                    MapPipelineTrace.event("app-lifecycle", ["phase": "protectedDataWillBecomeUnavailable"])
+                }
+                .onReceive(NotificationCenter.default.publisher(for:UIApplication.protectedDataDidBecomeAvailableNotification)){_ in
+                    MapPipelineTrace.event("app-lifecycle", ["phase": "protectedDataDidBecomeAvailable"])
                 }
         }
     }

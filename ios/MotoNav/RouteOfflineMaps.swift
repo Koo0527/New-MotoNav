@@ -43,9 +43,11 @@ final class RouteOfflineMaps {
         guard buildings else { return nil }
         return RouteMapCache.shared.buildingUpdate(frame: frame, source: source, node: node, style: style)
     }
-    func read(_ node: RouteMapPlan.Node) -> Data? {
-        readUpdate(node)?.bytes ?? RouteMapCache.shared.read(frame: frame, source: source, buildings: false, node: node, style: style)
+    func readPacket(_ node: RouteMapPlan.Node) -> RouteMapCache.CachedPacket? {
+        if let update = readUpdate(node) { return .init(bytes: update.bytes, isFine: false) }
+        return RouteMapCache.shared.readPacket(frame: frame, source: source, buildings: false, node: node, style: style)
     }
+    func read(_ node: RouteMapPlan.Node) -> Data? { readPacket(node)?.bytes }
     func update(_ index: Int, display:Int) { target = max(0, min(plan.nodes.count - 1, index));self.display=max(0,min(plan.nodes.count-1,display)) }
     func suspendCapture() {renderingAvailable=false;jobToken?.cancel()}
     func resumeCapture() {renderingAvailable=true;retryAt=retryAt.map {_ in .distantPast}}
@@ -55,10 +57,12 @@ final class RouteOfflineMaps {
             var done = [Bool](repeating: false, count: self.plan.nodes.count), base = done, partial = done
             for (i, node) in self.plan.nodes.enumerated() {
                 if self.token.isCancelled { return }
-                let update=self.readUpdate(node)
-                done[i] = self.buildings ? (update?.coverage.isComplete ?? false) : (self.read(node) != nil)
+                let update=self.buildings ? RouteMapCache.shared.buildingUpdate(frame:self.frame,source:self.source,node:node,style:self.style,currentOnly:true) : nil
+                let current=update.map {RouteMapCache.isCurrent($0,source:self.source,style:self.style)} ?? false
+                let currentBase=RouteMapCache.shared.read(frame:self.frame,source:self.source,buildings:false,node:node,style:self.style,allowLegacy:false) != nil
+                done[i] = self.buildings ? (current && update?.coverage.isComplete == true) : currentBase
                 partial[i] = update.map { RasterPacket.isBuilding($0.bytes) || $0.coverage.isComplete } ?? false
-                base[i] = update != nil || done[i] || RouteMapCache.shared.read(frame: self.frame, source: self.source, buildings: false, node: node, style: self.style) != nil
+                base[i] = current || currentBase
             }
             DispatchQueue.main.async {
                 guard !self.token.isCancelled else { return }
@@ -79,7 +83,8 @@ final class RouteOfflineMaps {
             onStatus("沿线底图已全部离线：\(count)/\(ready.count) 块（2 米/像素）")
             timer?.invalidate(); timer = nil; return
         }
-        guard renderingAvailable,UIApplication.shared.applicationState == .active else {
+        // 矢量图源不依赖 SDK 图形栈，后台也能继续沿线预下载。
+        guard source == MapFeeder.SRC_VECTOR || (renderingAvailable && UIApplication.shared.applicationState == .active) else {
             onStatus("沿线离线地图：\(baseCount)/\(ready.count) 块可用；回到 App 前台继续下载"); return
         }
         guard !foregroundBusy() else { return }
@@ -101,7 +106,20 @@ final class RouteOfflineMaps {
             let result = Result { () throws -> Data in
                 if self.token.isCancelled { throw MapProcessingError.cancelled }
                 let packet: Data
-                if self.source == MapFeeder.SRC_AMAP {
+                if self.source == MapFeeder.SRC_VECTOR {
+                    // 矢量沿线包：底图经 onRoadsReady 落缓存并上屏，建筑包（若有）随返回值落缓存。
+                    let r = try MapFeeder.vectorBuilder(MapFeeder.vectorTiles, self.frame,
+                        self.frame.lat(node.y), self.frame.lng(node.x), self.style, includeBuildings,
+                        { self.token.isCancelled || job.isCancelled }) { base in
+                            guard !self.token.isCancelled, !job.isCancelled else { return }
+                            try? RouteMapCache.shared.store(base, frame: self.frame, source: self.source, node: node, style: self.style)
+                            DispatchQueue.main.async { if !self.token.isCancelled, !job.isCancelled { self.baseReady[i] = true; self.onReady(node) } }
+                        }
+                    if let bld = r.buildings {
+                        try RouteMapCache.shared.store(bld, frame: self.frame, source: self.source, node: node, style: self.style)
+                    }
+                    return r.base
+                } else if self.source == MapFeeder.SRC_AMAP {
                     packet = try AmapSdkRaster.build(self.frame, cx: node.x, cy: node.y, includeBuildings: includeBuildings,
                         shouldCancel: { self.token.isCancelled || job.isCancelled }, onBaseReady: { base in
                             guard !self.token.isCancelled, !job.isCancelled else { return }
@@ -111,7 +129,7 @@ final class RouteOfflineMaps {
                             } catch { /* The final store reports storage errors in onStatus. */ }
                         }, onBuildingStatus: { message in
                             DispatchQueue.main.async { if !self.token.isCancelled, !job.isCancelled { self.onStatus(message) } }
-                        }, style: self.style, preparedBase: includeBuildings ? RouteMapCache.shared.read(frame:self.frame,source:self.source,buildings:false,node:node,style:self.style,allowLegacy:false) : nil, buildingView: view, onBuildingReady: { update in
+                        }, style: self.style, preparedBase: includeBuildings ? RouteMapCache.shared.readWide(frame:self.frame,source:self.source,node:node,style:self.style) : nil, buildingView: view, onBuildingReady: { update in
                             guard !self.token.isCancelled, !job.isCancelled else { return }
                             try? RouteMapCache.shared.storeBuildingUpdate(update, frame:self.frame, source:self.source, node:node)
                             DispatchQueue.main.async {
@@ -129,7 +147,7 @@ final class RouteOfflineMaps {
                             }
                         }).bytes
                 } else {
-                    throw MapProcessingError.invalid("沿线预下载仅支持高德底图")
+                    throw MapProcessingError.invalid("沿线预下载不支持该图源")
                 }
                 if self.token.isCancelled { throw MapProcessingError.cancelled }
                 // Building captures persist bytes together with coverage in the shared cache.
@@ -145,7 +163,10 @@ final class RouteOfflineMaps {
                 switch result {
                 case .success:
                     self.baseReady[i] = true
-                    self.ready[i] = !self.buildings || (self.readUpdate(node)?.coverage.isComplete ?? false)
+                    // 矢量建筑包无 coverage 语义：以缓存里是否存到建筑包为完成判据。
+                    self.ready[i] = self.source == MapFeeder.SRC_VECTOR
+                        ? (!self.buildings || RouteMapCache.shared.read(frame:self.frame,source:self.source,buildings:true,node:node,style:self.style,allowLegacy:false) != nil)
+                        : (!self.buildings || (self.readUpdate(node)?.coverage.isComplete ?? false))
                     self.retryAt[i] = self.ready[i] || !includeBuildings ? .distantPast : Date().addingTimeInterval(15)
                     self.onReady(node)
                     if !self.ready[i] && includeBuildings { self.onStatus("沿线普通底图已保存；建筑未完成，稍后重试") }

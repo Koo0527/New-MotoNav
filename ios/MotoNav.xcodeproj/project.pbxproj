@@ -7,6 +7,13 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		6E11F2A1B2C3D4E5F6A7B8C2 /* VectorTiles.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E11F2A1B2C3D4E5F6A7B8C1 /* VectorTiles.swift */; };
+		6E11F2A1B2C3D4E5F6A7B8F2 /* CruiseMapCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E11F2A1B2C3D4E5F6A7B8F1 /* CruiseMapCache.swift */; };
+		6E11F2A1B2C3D4E5F6A7B8D2 /* VectorMapRaster.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E11F2A1B2C3D4E5F6A7B8D1 /* VectorMapRaster.swift */; };
+		6E11F2A1B2C3D4E5F6A7B8E2 /* FineRoads.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E11F2A1B2C3D4E5F6A7B8E1 /* FineRoads.swift */; };
+		6E11F2A1B2C3D4E5F6A7B8E4 /* MapSourceMode.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E11F2A1B2C3D4E5F6A7B8E3 /* MapSourceMode.swift */; };
+		AABBCCDD1122334455667788 /* RoadPalette.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCCDD1122334455667789 /* RoadPalette.swift */; };
+		3563EA4679A5CB45E0A1BFE9 /* MapEdgeCapture.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0D58144C49FC7235B41AF3B0 /* MapEdgeCapture.swift */; };
 		D110A72DC8774B38B3A61D10 /* GMotionReporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = D110A72DC8774B38B3A61D11 /* GMotionReporter.swift */; };
 		094AC14B9BE91BA0103EED39 /* IndependentRouteView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3F15BA9922292159C9E3A453 /* IndependentRouteView.swift */; };
 		0A1AD8E8441189C00F2C93DC /* MapStyles.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5CD06CCAE5FBBFC390CE8A18 /* MapStyles.swift */; };
@@ -107,6 +114,13 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		6E11F2A1B2C3D4E5F6A7B8C1 /* VectorTiles.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VectorTiles.swift; sourceTree = "<group>"; };
+		6E11F2A1B2C3D4E5F6A7B8F1 /* CruiseMapCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CruiseMapCache.swift; sourceTree = "<group>"; };
+		6E11F2A1B2C3D4E5F6A7B8D1 /* VectorMapRaster.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VectorMapRaster.swift; sourceTree = "<group>"; };
+		6E11F2A1B2C3D4E5F6A7B8E1 /* FineRoads.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FineRoads.swift; sourceTree = "<group>"; };
+		6E11F2A1B2C3D4E5F6A7B8E3 /* MapSourceMode.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MapSourceMode.swift; sourceTree = "<group>"; };
+		AABBCCDD1122334455667789 /* RoadPalette.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoadPalette.swift; sourceTree = "<group>"; };
+		0D58144C49FC7235B41AF3B0 /* MapEdgeCapture.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MapEdgeCapture.swift; sourceTree = "<group>"; };
 		D110A72DC8774B38B3A61D11 /* GMotionReporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GMotionReporter.swift; sourceTree = "<group>"; };
 		04C63477564D9DE7E1066725 /* AmapShare.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AmapShare.swift; sourceTree = "<group>"; };
 		090501FEBA7A432B93BD00AB /* MapSampleReport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MapSampleReport.swift; sourceTree = "<group>"; };
@@ -308,7 +322,14 @@
 				C671E80BBEA3EB1E9311EB12 /* MusicBridge.swift */,
 				88F6F7FEE25CC563EEC49A1F /* CruiseIdleTimer.swift */,
 				CE47CC0D351EABDC9EEE6D04 /* RasterProcessing.swift */,
+				AABBCCDD1122334455667789 /* RoadPalette.swift */,
+				6E11F2A1B2C3D4E5F6A7B8C1 /* VectorTiles.swift */,
+				6E11F2A1B2C3D4E5F6A7B8F1 /* CruiseMapCache.swift */,
+				6E11F2A1B2C3D4E5F6A7B8D1 /* VectorMapRaster.swift */,
+				6E11F2A1B2C3D4E5F6A7B8E1 /* FineRoads.swift */,
+				6E11F2A1B2C3D4E5F6A7B8E3 /* MapSourceMode.swift */,
 				FB643DCAF97E834DC966F034 /* AmapCaptureHost.swift */,
+				0D58144C49FC7235B41AF3B0 /* MapEdgeCapture.swift */,
 				35D965AF0075EA3FF4DB0C0E /* AmapSdkRaster.swift */,
 				99CFF68B635D8A95A2698DD4 /* RouteMapPlan.swift */,
 				B1D98E37A20EBA144DF72115 /* RouteOfflineMaps.swift */,
@@ -546,7 +567,14 @@
 				D5BE622C01F486F6A26CC504 /* MusicBridge.swift in Sources */,
 				F336897359EC15D9BD17B152 /* CruiseIdleTimer.swift in Sources */,
 				FB6E59E7B7F70EACF4129EE5 /* RasterProcessing.swift in Sources */,
+				AABBCCDD1122334455667788 /* RoadPalette.swift in Sources */,
+				6E11F2A1B2C3D4E5F6A7B8C2 /* VectorTiles.swift in Sources */,
+				6E11F2A1B2C3D4E5F6A7B8F2 /* CruiseMapCache.swift in Sources */,
+				6E11F2A1B2C3D4E5F6A7B8D2 /* VectorMapRaster.swift in Sources */,
+				6E11F2A1B2C3D4E5F6A7B8E2 /* FineRoads.swift in Sources */,
+				6E11F2A1B2C3D4E5F6A7B8E4 /* MapSourceMode.swift in Sources */,
 				20C19A3E34FEE42B5331ACD1 /* AmapCaptureHost.swift in Sources */,
+				3563EA4679A5CB45E0A1BFE9 /* MapEdgeCapture.swift in Sources */,
 				49E30BDF56C0C1D9012D2243 /* AmapSdkRaster.swift in Sources */,
 				C71CA48A91926BFC9B43FDCF /* RouteMapPlan.swift in Sources */,
 				93F93CE5B2CC43A69DF729E9 /* RouteOfflineMaps.swift in Sources */,
@@ -578,7 +606,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 25;
+				CURRENT_PROJECT_VERSION = 28;
 				DEVELOPMENT_TEAM = "";
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				"EXCLUDED_ARCHS[sdk=iphonesimulator*]" = arm64;
@@ -714,7 +742,7 @@
 			buildSettings = {
 				APPLICATION_EXTENSION_API_ONLY = YES;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 25;
+				CURRENT_PROJECT_VERSION = 28;
 				DEVELOPMENT_TEAM = "";
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = MotoNavShare/Info.plist;
@@ -739,7 +767,7 @@
 			buildSettings = {
 				APPLICATION_EXTENSION_API_ONLY = YES;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 25;
+				CURRENT_PROJECT_VERSION = 28;
 				DEVELOPMENT_TEAM = "";
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = MotoNavShare/Info.plist;
@@ -766,7 +794,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 25;
+				CURRENT_PROJECT_VERSION = 28;
 				DEVELOPMENT_TEAM = "";
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				"EXCLUDED_ARCHS[sdk=iphonesimulator*]" = arm64;

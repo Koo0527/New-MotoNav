@@ -23,6 +23,9 @@ constexpr int TINFL_FLAG_PARSE_ZLIB_HEADER=1,TINFL_FLAG_USING_NON_WRAPPING_OUTPU
 void tinfl_init(tinfl_decompressor*){}
 int tinfl_decompress(tinfl_decompressor*,const uint8_t*,size_t*,uint8_t*,uint8_t*,size_t*,int){return -1;}
 bool failAllocation=false;
+struct {void printf(const char*,...){}} Serial;
+constexpr int MALLOC_CAP_SPIRAM=1;
+size_t heap_caps_get_largest_free_block(int){return 720000;}
 void *ps_malloc(size_t n){return failAllocation?nullptr:malloc(n);}
 unsigned long millis(){return 1;}
 int32_t rd32(const uint8_t*p){return rasterI32(p);}uint16_t rdu16(const uint8_t*p){return rasterU16(p);}
@@ -52,12 +55,13 @@ size_t roofCount(){size_t n=0;for(int y=0;y<rasH;y++)for(int x=0;x<rasW;x++)n+=a
 
 struct Bulk {int id=1,got=0;bool done=false;uint8_t *buf=nullptr;uint8_t mask[8]={};};
 Bulk bulks[5];
-std::string pendingAck;
+#include "../../boards/175/MotoNav/src/protocol/AckFifo.h"
+AckFifo pendingAck;
 static std::string String(int n){return std::to_string(n);}
 bool bleConnected=true,bleAuthed=true;
 uint32_t ticks=0;
 static uint32_t micros(){return ticks+=1000;}
-struct {void printf(const char*,...){}} Serial;
+
 #include "../../boards/175/MotoNav/src/map/RasterWorkQueue.h"
 static void finish(){for(int i=0;pendingRasterWork.active && i<10000;i++)pollRasterWork();assert(!pendingRasterWork.active);}
 static uint16_t sample(int32_t u,int32_t v,const uint16_t *pal,const uint8_t *back=nullptr,const RasterHeader &bh={}) {

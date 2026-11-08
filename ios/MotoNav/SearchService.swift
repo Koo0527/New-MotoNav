@@ -168,6 +168,8 @@ final class History: ObservableObject {
 final class LocationService: NSObject, ObservableObject, CLLocationManagerDelegate {
     static let shared = LocationService()
     private let lm = CLLocationManager()
+    private var precise = false
+    private var motionEvidence = false
     @Published var location: CLLocation?
 
     var gMotionFix: GMotionFix? {
@@ -193,13 +195,30 @@ final class LocationService: NSObject, ObservableObject, CLLocationManagerDelega
     /// 巡航/真实导航时打开：高精度、后台也继续。
     /// 骑行（官方骑行真实导航或网页自行车导航）活动类型用 .fitness，其余按驾车导航。
     func setPrecise(_ on: Bool) {
-        lm.desiredAccuracy = on ? kCLLocationAccuracyBestForNavigation : kCLLocationAccuracyHundredMeters
-        lm.distanceFilter = kCLDistanceFilterNone
+        precise = on
+        applyLocationPolicy()
+    }
+
+    /// G 页需要新鲜的停车依据。非导航时 iOS 默认会在静止后暂停定位，
+    /// 导致 G 页拿到超过 2 秒的旧定位；页面前台期间显式保持更新，离页恢复。
+    func setMotionEvidence(_ on: Bool) {
+        #if G_PROFILING
+        if on && ProcessInfo.processInfo.arguments.contains("--g-profile-no-extra-location") { return }
+        #endif
+        guard motionEvidence != on else { return }
+        motionEvidence = on
+        applyLocationPolicy()
+    }
+
+    private func applyLocationPolicy() {
+        lm.desiredAccuracy = precise ? kCLLocationAccuracyBestForNavigation
+            : (motionEvidence ? kCLLocationAccuracyNearestTenMeters : kCLLocationAccuracyHundredMeters)
+        lm.distanceFilter = (precise || motionEvidence) ? kCLDistanceFilterNone : lm.distanceFilter
         let bicycleTrip = (WebMotorSession.shared.running && WebMotorSession.shared.route?.request.bicycle == true)
             || (RideBridge.shared.navigating && !RideBridge.shared.emulating)
-        lm.activityType = on ? (bicycleTrip ? .fitness : .automotiveNavigation) : .other
-        lm.pausesLocationUpdatesAutomatically = !on
-        lm.allowsBackgroundLocationUpdates = on
+        lm.activityType = precise ? (bicycleTrip ? .fitness : .automotiveNavigation) : .other
+        lm.pausesLocationUpdatesAutomatically = !(precise || motionEvidence)
+        lm.allowsBackgroundLocationUpdates = precise
         lm.startUpdatingLocation()
     }
 

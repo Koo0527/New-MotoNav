@@ -44,9 +44,13 @@ struct Estimator {
     if(stable>=12&&gyroM2/(stable-1)>0.35f*0.35f){resetQuiet();return false;}
     return stable>=168;
   }
+  static bool validSample(Vec a,Vec w,float dt){
+    return dt>0&&dt<=0.1f&&fabsf(a.x)<3.99f&&fabsf(a.y)<3.99f&&fabsf(a.z)<3.99f&&
+      fabsf(w.x)<511&&fabsf(w.y)<511&&fabsf(w.z)<511;
+  }
   void sample(Vec a,Vec w,float dt=1.0f/56,Motion motion=Motion::Unknown){
     available=false;
-    if(!std::isfinite(norm(a))||!std::isfinite(norm(w))||!std::isfinite(dt)||dt<=0||dt>0.1f||fabsf(a.x)>=3.99f||fabsf(a.y)>=3.99f||fabsf(a.z)>=3.99f||fabsf(w.x)>=511||fabsf(w.y)>=511||fabsf(w.z)>=511){reset();return;}
+    if(!validSample(a,w,dt)){reset();return;}
     if(!initialized){
       if(motion!=Motion::Stopped){resetQuiet();return;}
       bool quiet=stationary(a,w);if(stable>0)quietSeconds+=dt;

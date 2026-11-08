@@ -28,6 +28,7 @@ final class LocationService {static let shared=LocationService();func setPrecise
 final class MapFeeder {
     static let shared=MapFeeder();var keys:[String]=[]
     func onNaviStart(){};func onNaviEnd(){}
+    func beginCruise(){onNaviStart()};func beginNavigation(){onNaviStart()};func endSession(){onNaviEnd()}
     func prepareRoute(key:String,coords:[(lat:Double,lng:Double)]){keys.append(key)}
     func onLocation(lat:Double,lng:Double,bearing:Double,kmh:Int){}
     func onRoute(key:String,coords:[(lat:Double,lng:Double)],lights:[Int])->Bool{true}

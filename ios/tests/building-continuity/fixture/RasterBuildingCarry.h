@@ -41,7 +41,7 @@ struct RasterCarryCursor {
 static inline RasterCarryCursor rasterCarryBegin(const uint8_t *oldPixels,const RasterHeader &old,
                                                   uint8_t *pixels,const RasterHeader &next) {
   RasterCarryCursor s;
-  if(!oldPixels || !pixels || oldPixels==pixels || old.palette || next.palette || !old.buildings ||
+  if(!oldPixels || !pixels || oldPixels==pixels || !rasterSemanticMaterials(old) || !rasterSemanticMaterials(next) || !old.buildings ||
      old.frame!=next.frame || !old.mm || old.mm!=next.mm) return s;
   const int64_t dx=((int64_t)next.x0-old.x0)*1000,dy=((int64_t)old.y0-next.y0)*1000;
   if(dx%old.mm || dy%old.mm) return s; // Never round a half-pixel shift into a ghost outline.
@@ -145,7 +145,7 @@ static inline uint32_t rasterCarryRoofs(const uint8_t *oldPixels,const RasterHea
   return cursor.retained;
 }
 static inline void rasterClearRoofs(uint8_t *pixels,RasterHeader &h) {
-  if(!pixels || h.palette) return;
+  if(!pixels || !rasterSemanticMaterials(h)) return;
   for(size_t i=0;i<h.bytes;i++) {
     uint8_t lo=pixels[i]&15,hi=pixels[i]>>4;
     if(lo>=4 && lo<=7) lo&=2;

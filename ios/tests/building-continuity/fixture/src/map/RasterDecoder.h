@@ -15,6 +15,8 @@ uint32_t rasterBuildingCarryEpoch=0;
 // v2.5 解析图片地图：u16 坐标系, i32 左上角 x, i32 左上角 y, u16 宽, u16 高, u16 每像素毫米, 然后是压缩的颜色编号
 static inline uint16_t blendF(uint16_t a, uint16_t b, uint32_t t);   // v6.1 后面定义
 bool rasHasPal = false;                    // v6.1 卫星图自带调色板
+bool rasSemantic = false;
+uint8_t rasSemanticVersion = 0;
 uint16_t rasPal[16];
 
 // 罪恶都市局部边界几何；其它风格仍读取原来的 4 位材质图。
@@ -93,6 +95,10 @@ void parseViceGeometry(const uint8_t *p, uint32_t len, uint32_t pos, int bw, int
         free(rasterBuf);
         rasterBuf = (uint8_t *)ps_malloc(needed);
         rasterAllocatedBytes = rasterBuf ? needed : 0;
+        if (!rasterBuf)              // v7.x 静默回退加线索：VCE 大缓冲在 PSRAM 放不下时打印现场
+          Serial.printf("VCE rasterBuf alloc failed: need %u largest_ps=%u -> legacy decode\n",
+                        (unsigned)needed,
+                        (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_SPIRAM));
       }
       rasterVice = (uint16_t *)rasterBuf;
       if (!viceInflater) viceInflater = (tinfl_decompressor *)malloc(sizeof(tinfl_decompressor));
@@ -203,7 +209,7 @@ void parseRasterLegacy(const uint8_t *p, uint32_t len) {
   }
   rasBW = bw;
   rasX0 = x0; rasY0 = y0; rasW = w; rasH = h; rasMpp = mm / 1000.0f; rasterFrame = frame;
-  rasHasPal = hasPal;
+  rasHasPal = hasPal; rasSemantic=false; rasSemanticVersion=0; rasterCarriesBuildings=false;
   if (hasPal) memcpy(rasPal, palNew, sizeof(rasPal));
   rasterValid = true;
   rasterAt = millis();
@@ -213,15 +219,18 @@ static inline RasterHeader currentRasterHeader() {
   RasterHeader old = {};
   old.frame=rasterFrame; old.x0=rasX0; old.y0=rasY0; old.width=rasW; old.height=rasH;
   old.mm=(uint16_t)lroundf(rasMpp*1000); old.blocksWide=rasBW;
-  old.palette=rasHasPal;old.buildings=rasterCarriesBuildings;
+  old.palette=rasHasPal;old.buildings=rasterCarriesBuildings;old.semantic=rasSemantic;old.semanticVersion=rasSemanticVersion;
   old.bytes=(size_t)old.blocksWide*((old.height+15)/16)*128;
   return old;
 }
 static inline bool canKeepRaster(const RasterHeader &old,const RasterHeader &next) {
-  return rasterValid && !rasterViceValid && !rasHasPal && !next.palette &&
+  return rasterValid && !rasterViceValid && (!rasHasPal || rasSemantic) && rasterSemanticMaterials(next) &&
       rasterFrame==next.frame && old.mm==next.mm && rasterAllocatedBytes==RASTER_BUF_BYTES;
 }
-static inline void installDecodedRaster(const uint8_t *p,const RasterHeader &next,const RasterHeader &old,bool keep,bool tilesReady=false) {
+static inline void installDecodedRaster(const uint8_t *p,RasterHeader next,const RasterHeader &old,bool keep,bool tilesReady=false) {
+  // Explicit off also rejects roofs in packets that arrived after the toggle.
+  if(!rasterBuildingCarryOn && (next.semantic || rasterBuildingCarryEpoch==mediaConnectionEpoch))
+    {rasterClearRoofs(rasterBackBuf,next);tilesReady=false;}
 #if MOTONAV_RASTER_SMOOTHING
   uint8_t *oldTiles=rasterTiles;rasterTiles=rasterBackTiles;rasterBackTiles=oldTiles;
   rasterTilesValid=tilesReady && !next.palette;
@@ -236,7 +245,7 @@ static inline void installDecodedRaster(const uint8_t *p,const RasterHeader &nex
   rasterBackHeader=old; rasterBackValid=keep;
   rasterVice=nullptr; rasterViceValid=false; vicePatchData=nullptr; vicePatchCount=0;
   rasBW=next.blocksWide; rasX0=next.x0; rasY0=next.y0; rasW=next.width; rasH=next.height;
-  rasMpp=next.mm/1000.0f; rasterFrame=next.frame; rasHasPal=next.palette;
+  rasMpp=next.mm/1000.0f; rasterFrame=next.frame; rasHasPal=next.palette; rasSemantic=next.semantic; rasSemanticVersion=next.semanticVersion;
   if (next.palette) for (int i=0;i<16;i++) rasPal[i]=rasterU16(p+16+2*i);
   rasterValid=true; rasterAt=millis();
   rasterCarriesBuildings=next.buildings;
@@ -247,7 +256,7 @@ bool parseRaster(const uint8_t *p, uint32_t len) {
   if (!rasterCheck(p,len,next,RASTER_MAX_PX,RASTER_BUF_BYTES)) return false;
   if (next.dataEnd != len) {
     // 保留既有轮廓扩展的兼容路径；新 App 只发送无扩展的普通底图。
-    if (len-next.dataEnd<8 || p[next.dataEnd]!='V' || p[next.dataEnd+1]!='C' || p[next.dataEnd+2]!='E') return false;
+    if (next.semantic || len-next.dataEnd<8 || p[next.dataEnd]!='V' || p[next.dataEnd+1]!='C' || p[next.dataEnd+2]!='E') return false;
     rasterBackValid=false;
     parseRasterLegacy(p,len);
     return rasterValid;
@@ -277,8 +286,8 @@ void setRasterBuildingCarry(bool on) {
   rasterBuildingCarryEpoch=mediaConnectionEpoch;
   rasterBuildingCarryOn=on;
   if(on) return;
-  if(rasterValid && !rasHasPal && !rasterViceValid) {
-    RasterHeader h={};h.bytes=(size_t)rasBW*((rasH+15)/16)*128;
+  if(rasterValid && (!rasHasPal || rasSemantic) && !rasterViceValid) {
+    RasterHeader h=currentRasterHeader();
     if(h.bytes<=RASTER_BUF_BYTES) rasterClearRoofs(rasterBuf,h);
     rasterCarriesBuildings=false;
   }

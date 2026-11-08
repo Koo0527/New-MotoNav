@@ -263,6 +263,22 @@ void loop() {
     }
     portEXIT_CRITICAL(&mux);
     if (!got) break;
+    if(local.len>=4&&!memcmp(local.data,"#GC,",4)) {
+      if(local.len<20) {
+        char command[20];memcpy(command,local.data,local.len);command[local.len]=0;
+        pendingInstrumentStatus=gInstrumentManualCommand(command,local.authenticated,local.epoch,
+          bleConnected&&bleAuthed,mediaConnectionEpoch);
+      }
+      continue;
+    }
+    if(local.len>=4&&!memcmp(local.data,"#GE,",4)) {
+      if(local.len<20) {
+        char command[20];memcpy(command,local.data,local.len);command[local.len]=0;
+        gPhoneEntry.receiveQueued(command,local.receivedAt,local.authenticated,local.epoch,
+          millis(),bleConnected&&bleAuthed,mediaConnectionEpoch,gStream.active,gStream.token);
+      }
+      continue;
+    }
     if(local.len>=4&&!memcmp(local.data,"#GM,",4)) {
       if(local.len==5) {
         char command[6];memcpy(command,local.data,5);command[5]=0;
@@ -370,9 +386,24 @@ void loop() {
 
   musicTick();
   weatherTick();                                       // v5.3 天气页
+  static bool continuousMapDraw = false;
+  static uint32_t mapIdleWindowAt = 0;
   if (inNav && navDirty && !fxOn && !callOn && !pairOn && page == 0 && !sliding) {
+    if (!mapNow || !continuousMapDraw || controlWakeFrame) {
+      mapIdleWindowAt = millis();
+    } else if (uint32_t(millis() - mapIdleWindowAt) >= 250) {
+      // The previous render has joined its row worker. Drain the flush worker
+      // and hold the token while both workers are waiting so CPU0 can idle.
+      if (flushDone) flushWait();
+      vTaskDelay(2);
+      if (flushDone) xSemaphoreGive(flushDone);
+      mapIdleWindowAt = millis();
+    }
     drawNavFrame();
+    continuousMapDraw = mapNow;
     navDirty = false;
+  } else {
+    continuousMapDraw = false;
   }
 
   // 5. 导航中长时间收不到任何消息 → 数据中断提示

@@ -19,6 +19,9 @@ struct tinfl_decompressor{};using tinfl_status=int;
 constexpr int TINFL_FLAG_PARSE_ZLIB_HEADER=1,TINFL_FLAG_USING_NON_WRAPPING_OUTPUT_BUF=2,TINFL_STATUS_DONE=0;
 void tinfl_init(tinfl_decompressor*){}
 int tinfl_decompress(tinfl_decompressor*,const uint8_t*,size_t*,uint8_t*,uint8_t*,size_t*,int){return -1;}
+struct {void printf(const char*,...){}} Serial;
+constexpr int MALLOC_CAP_SPIRAM=1;
+size_t heap_caps_get_largest_free_block(int){return 720000;}
 void *ps_malloc(size_t n){return malloc(n);}
 unsigned long millis(){return 1;}
 int32_t rd32(const uint8_t*p){return rasterI32(p);}uint16_t rdu16(const uint8_t*p){return rasterU16(p);}

@@ -29,29 +29,47 @@ with tempfile.TemporaryDirectory() as temp:
     main = pathlib.Path(temp)/'main.swift'
     main.write_text(swift)
     exe = pathlib.Path(temp)/'check'
-    subprocess.run(['swiftc', '-module-cache-path',str(pathlib.Path(temp)/'modules'), *[str(root/'ios/MotoNav'/p) for p in ['MapGeo.swift','RasterProcessing.swift','RouteMapPlan.swift']], str(main), '-o',str(exe)],check=True)
+    subprocess.run(['swiftc', '-module-cache-path',str(pathlib.Path(temp)/'modules'), *[str(root/'ios/MotoNav'/p) for p in ['MapGeo.swift','RasterProcessing.swift','RoadPalette.swift','RouteMapPlan.swift']], str(main), '-o',str(exe)],check=True)
     subprocess.run([str(exe)],check=True)
 # Execute the production acceptChunk body with deterministic transport/UI boundaries.
 source = (root/'ios/MotoNav/MapFeeder.swift').read_text()
 method = source[source.index('    private func acceptChunk('):source.index('    private func fetchChunk(')].replace('private func acceptChunk','func acceptChunk')
-method = method.replace('MapStyleTransfer', 'FakeStyleTransfer').replace('MapDeliveryPolicy','FakeDeliveryPolicy').replace('AmapCapturePolicy','FakeCapturePolicy').replace('RasterPacket','FakeRasterPacket')
+method = method.replace('MapStyleTransfer', 'FakeStyleTransfer').replace('MapDeliveryPolicy','FakeDeliveryPolicy').replace('AmapCapturePolicy','FakeCapturePolicy').replace('RasterPacket','FakeRasterPacket').replace('FineRoads','FakeFineRoads')
 stubs = '''
 enum FakeRasterPacket {static func isBuilding(_ b:Data)->Bool {b.first == 4};static func hasMapContent(_ b:Data)->Bool {true}}
 struct Pose {var x:Double=0;var y:Double=0;var kmh:Int=0}
-final class Settings {static let shared=Settings();var theme=1}
+final class Settings {static let shared=Settings();var theme=1;var mapSource=3}
 final class BleLink {static let shared=BleLink();var pending=true;func bulkPending(type:Int,id:Int)->Bool {pending}}
 enum MapPipelineTrace {static func event(_ name:String,_ fields:[String:Any]) {}}
 enum FakeStyleTransfer {static func matches(_ b:Data,style:Int)->Bool {true}}
 enum FakeDeliveryPolicy {static func compactBase(_ b:Data)->Data {Data([0])}}
 enum FakeCapturePolicy {static func supportsBuildings(_ style:Int)->Bool {false}}
+enum FakeFineRoads {static func baseDigest(_ d:Data)->String {d.map {String($0)}.joined()}}
 final class Feeder {
 static let SRC_AMAP=3
+static let SRC_VECTOR=4
 var enabled=true,buildingMode=true,haveChunk=true,chunkAcked=false,chunkBuildingsComplete=false,chunkSat=false
 var allow=false
+var chunkCurrent:Bool {chunkBytes.map {RouteMapCache.isCurrent($0,source:3,style:1)} ?? false}
 var pose:Pose?=Pose(),chunkCoverage:BuildingCoverage?,chunkBytes:Data?=Data([0]),chunkStyle:Int?=1
 var deferredRoofs:MapHandoffBuffer.Packet?,upgradeBase:(MapHandoffBuffer.Packet,Int)?
 var handoff=MapHandoffBuffer(),chunkType=1,chunkId=1,nextChunkId=1,chunkRoadBytes=0
 var chunkCx=0.0,chunkCy=0.0,buildingInfo="",status="",chunkInfo=""
+// 细路/重试/能力升级等共享链路状态（acceptChunk 读写；本回归只测建筑交付路径，中性桩）
+struct DeferredFine {var packet:MapHandoffBuffer.Packet;var chunkId:Int?;var requestSerial:Int;var epoch:Int;var revision:Int}
+var requestSerial=0,fineEpoch=0
+struct AckWait {var id:Int}
+var awaitingMapAck:AckWait? = nil
+var fineSubmitted=Set<String>(),fineCacheChecked=false
+var deferredFine:DeferredFine?
+var chunkIsFine=false,chunkBuildingPacket=false
+var chunkBaseDigest=""
+var mapRetryPending=false,mapRetryUsed=false,mapFinalFailure=false,capabilityUpgradePending=false
+var lastMapPaletteVersion = -1
+func fineSubmitKey(_ cx:Double,_ cy:Double,source:Int,style:Int,revision:Int)->String {"\\(cx),\\(cy),\\(source),\\(style),\\(revision)"}
+func flushFakeFineRoads(){}
+func refreshCruisePins(){}
+func queueCurrentMapForSend(){awaitingMapAck=nil;chunkAcked=false;if chunkBytes != nil {nextChunkId=(nextChunkId+1)&0xFF}}
 func roofDeliveryAllowed(_ b:Data,cx:Double,cy:Double)->Bool {allow}
 var sent:[Data]=[]
 func sendChunk() {sent.append(chunkBytes!)}
@@ -92,5 +110,5 @@ with tempfile.TemporaryDirectory() as temp:
     main=pathlib.Path(temp)/'main.swift'
     main.write_text('import Foundation\n'+stubs+method+'\n}\n'+cases)
     exe=pathlib.Path(temp)/'feeder'
-    subprocess.run(['swiftc','-module-cache-path',str(pathlib.Path(temp)/'modules'),*[str(root/'ios/MotoNav'/p) for p in ['MapGeo.swift','RasterProcessing.swift','RouteMapPlan.swift']],str(main),'-o',str(exe)],check=True)
+    subprocess.run(['swiftc','-module-cache-path',str(pathlib.Path(temp)/'modules'),*[str(root/'ios/MotoNav'/p) for p in ['MapGeo.swift','RasterProcessing.swift','RoadPalette.swift','RouteMapPlan.swift']],str(main),'-o',str(exe)],check=True)
     subprocess.run([str(exe)],check=True)

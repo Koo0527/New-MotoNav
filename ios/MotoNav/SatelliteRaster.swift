@@ -3,8 +3,14 @@ import Foundation
 struct RasterResult {
     let bytes: Data; let tiles: Int; let fromCache: Int
     let coverage: BuildingCoverage?
-    init(bytes: Data, tiles: Int, fromCache: Int, coverage: BuildingCoverage? = nil) {
+    /// 返回的 bytes 是否含局部近景细路（写入独立缓存，不覆盖原宽图）。
+    let fineRoads: Bool
+    /// 本次象限的覆盖/候选掩码状态；空象限也会返回。
+    let fineUpdate: FineRoads.Update?
+    init(bytes: Data, tiles: Int, fromCache: Int, coverage: BuildingCoverage? = nil,
+         fineRoads: Bool = false, fineUpdate: FineRoads.Update? = nil) {
         self.bytes = bytes; self.tiles = tiles; self.fromCache = fromCache; self.coverage = coverage
+        self.fineRoads = fineRoads; self.fineUpdate = fineUpdate
     }
 }
 enum SatelliteRaster {

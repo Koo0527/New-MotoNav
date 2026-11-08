@@ -130,11 +130,11 @@ void controlSendStatus() {
 void controlDrawLock() {
   const bool feedback=controlFeedbackUntil && int32_t(controlFeedbackUntil-millis())>0;
   if(!needFlush && !feedback)return;
-  // v7.12.10-pages.175c.9：锁定徽标移到左上 CX-44，与蓝牙点、电池和百分比让出间距；
-  // 先擦后画——锁定时画徽标，解锁时仅擦除，整屏重绘即使被跳过也不留残影。
-  // 状态栏局部刷新的擦除矩形（CX-9 起）在徽标右侧，不会再误擦锁图标。
-  TouchLockBadge::erase(CX);
-  if(deviceControls.locked) TouchLockBadge::draw(CX);
+  // 解锁由 controlWakeFrame 重绘整页恢复背景，不能擦黑已画好的地图和外圈。
+  if(deviceControls.locked) {
+    TouchLockBadge::erase(CX);
+    TouchLockBadge::draw(CX);
+  }
   needFlush=true;
   if(feedback) {
     gfx->fillRoundRect(CX-100,46,200,28,6,C_BLACK);

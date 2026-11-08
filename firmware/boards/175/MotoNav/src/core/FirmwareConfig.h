@@ -1,6 +1,6 @@
 #pragma once
 // 版本、诊断选项及路口灯状态，保持原先位于 Arduino.h 之前的顺序。
-#define FW_VERSION "v7.12.10-pages.175c.15"   // 175c.15：Wire 启动失败路径全检查（begin/end/扩容短路恢复链，行为测试锁定；见 missions/2026-11-04-175c11-reboot-investigation.md）
+#define FW_VERSION "v7.12.10-pages.175c.16"   // 175c.15：Wire 启动失败路径全检查（begin/end/扩容短路恢复链，行为测试锁定；见 missions/2026-11-04-175c11-reboot-investigation.md）
 #include "../../TrafficLightLab.h"
 TrafficLightLab trafficLightLab;
 TrafficLightFrame trafficLightFrame;

@@ -110,27 +110,30 @@ rejects("Reject anomalous building coverage") { _ = try AmapBuildings.apply([UIn
 let root = FileManager.default.temporaryDirectory.appendingPathComponent("motonav-map-tests-\(UUID().uuidString)")
 defer { try? FileManager.default.removeItem(at: root) }
 let cache = RouteMapCache(root: root), node = plan.nodes[0]
-try cache.store(packet, frame: frame, source: 3, node: node)
-check(cache.read(frame: frame, source: 3, buildings: false, node: node) == packet, "Persistent packet roundtrip")
+let palettePacket = RoadPalette.encode(RasterPacket.decode(packet)!, like: packet)
+let paletteBuilding = RoadPalette.encode(RasterPacket.decode(building)!, like: building)
+rejects("Old material packets are read-only for AMap game styles") {try cache.store(packet, frame: frame, source: 3, node: node)}
+try cache.store(palettePacket, frame: frame, source: 3, node: node)
+check(cache.read(frame: frame, source: 3, buildings: false, node: node) == palettePacket, "Persistent packet roundtrip")
 check(cache.read(frame: frame, source: 1, buildings: false, node: node) == nil, "Provider-specific caches")
-try cache.store(building, frame: frame, source: 3, node: node)
-check(cache.read(frame: frame, source: 3, buildings: true, node: node) == building, "Separate building and base packets")
-check(FileManager.default.fileExists(atPath: root.appendingPathComponent("materials-v2-1/v2-3-buildings/31.0_121.0/0_0.bin").path), "Use new cache generation for corrected building capture")
-let oldBuildings = root.appendingPathComponent("styles-v2-1/v1-3-buildings/31.0_121.0/0_0.bin")
+try cache.store(paletteBuilding, frame: frame, source: 3, node: node)
+check(cache.read(frame: frame, source: 3, buildings: true, node: node) == paletteBuilding, "Separate building and base packets")
+check(FileManager.default.fileExists(atPath: root.appendingPathComponent("materials-v4-game/v2-3-buildings/31.0_121.0/0_0.bin").path), "Use new cache generation for corrected building capture")
+let oldBuildings = root.appendingPathComponent("styles-v3-1/v1-3-buildings/31.0_121.0/0_0.bin")
 try FileManager.default.createDirectory(at: oldBuildings.deletingLastPathComponent(), withIntermediateDirectories: true)
 try building.write(to: oldBuildings)
-try FileManager.default.removeItem(at: root.appendingPathComponent("materials-v2-1/v2-3-buildings/31.0_121.0/0_0.bin"))
+try FileManager.default.removeItem(at: root.appendingPathComponent("materials-v4-game/v2-3-buildings/31.0_121.0/0_0.bin"))
 check(cache.read(frame: frame, source: 3, buildings: true, node: node) == nil, "Old unreliable completed building cache ignored")
-rejects("Reject invalid cache origin") { try cache.store(packet, frame: frame, source: 3, node: plan.nodes[1]) }
-let url = root.appendingPathComponent("materials-v2-1/v1-3-base/31.0_121.0/0_0.bin")
-try Data(packet.dropLast()).write(to: url)
+rejects("Reject invalid cache origin") { try cache.store(palettePacket, frame: frame, source: 3, node: plan.nodes[1]) }
+let url = root.appendingPathComponent("materials-v4-game/v1-3-base/31.0_121.0/0_0.bin")
+try Data(palettePacket.dropLast()).write(to: url)
 check(cache.read(frame: frame, source: 3, buildings: false, node: node) == nil, "Ignore corrupted files")
 check(cache.read(frame: frame, source: 3, buildings: false, node: node, style: 0) == nil, "Original style never reads Vice City cache")
 
 for style in 0...11 { check(AmapCapturePolicy.supportsBuildings(style) == (1...3).contains(style), "Shared building style policy") }
 for style in 1...3 {
-    try cache.store(packet, frame: frame, source: 3, node: node, style: style)
-    check(cache.read(frame: frame, source: 3, buildings: false, node: node, style: style) == packet, "Game styles retain valid existing packets")
+    try cache.store(palettePacket, frame: frame, source: 3, node: node, style: style)
+    check(cache.read(frame: frame, source: 3, buildings: false, node: node, style: style) == palettePacket, "Game styles retain valid existing packets")
     let blank = MapGeo.encodeRaster(frameId: frame.id, x0: -1200, y0: 1200, w: n, h: n, mmPerPx: 2000, idx: [UInt8](repeating: 0, count: n*n))
     rejects("All game styles reject blank cache writes") { try cache.store(blank, frame: frame, source: 3, node: node, style: style) }
 }

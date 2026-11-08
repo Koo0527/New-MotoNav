@@ -13,6 +13,26 @@ check(road[600*n+600] == 1,"white road must remain")
 check(road[100*n+100] == 0,"water must disappear")
 check(road[300*n+100] == 0,"green area must disappear")
 check(road.allSatisfy { $0 <= 1 },"minimal uses only roads/background")
+
+// 极简黑白一格宽细路：清理/平滑不能把整条路删掉。
+func fineMask(_ draw: (inout [UInt32]) -> Void) -> [UInt8] {
+    var pixels = [UInt32](repeating: 0xffeeeeee, count: n*n)
+    draw(&pixels)
+    return MapStyles.minimal(pixels, size: n)
+}
+func roadCount(_ mask: [UInt8]) -> Int { mask.reduce(0) { $0 + ($1 == 1 ? 1 : 0) } }
+let horizontal = fineMask { p in for x in 540..<660 { p[600*n+x] = 0xffffffff } }
+check(roadCount(horizontal) == 120, "one-cell horizontal road must stay, got \(roadCount(horizontal))")
+let vertical = fineMask { p in for y in 540..<660 { p[y*n+600] = 0xffffffff } }
+check(roadCount(vertical) == 120, "one-cell vertical road must stay, got \(roadCount(vertical))")
+let diagonal = fineMask { p in for i in 0..<120 { p[(540+i)*n+540+i] = 0xffffffff } }
+check(roadCount(diagonal) == 120, "one-cell diagonal road must stay, got \(roadCount(diagonal))")
+let shortBranch = fineMask { p in for x in 500..<700 { p[600*n+x] = 0xffffffff }; for y in 600..<640 { p[y*n+600] = 0xffffffff } }
+check(roadCount(shortBranch) >= 239, "short one-cell branch must stay, got \(roadCount(shortBranch))")
+let speck = fineMask { p in for y in 600..<603 { for x in 600..<603 { p[y*n+x] = 0xffffffff } } }
+check(roadCount(speck) == 0, "3x3 speck must be removed, got \(roadCount(speck))")
+let dots = fineMask { p in for x in stride(from: 540, to: 660, by: 3) { p[600*n+x] = 0xffffffff } }
+check(roadCount(dots) == 0, "isolated dots must be removed, got \(roadCount(dots))")
 let q = MapStyles.original(raw)
 check(q.palette.count == 16 && q.indices.count == raw.count,"palette bounds")
 check(q.palette[Int(q.indices[600*n+600])] == 0xffff,"original keeps white roads")

@@ -177,9 +177,23 @@ let traceJSON=try! JSONSerialization.data(withJSONObject:trace.document)
 let traceText=String(data:traceJSON,encoding:.utf8)!
 check(!traceText.contains("PRIVATE") && !traceText.contains("lat") && !traceText.contains("lng"),"trace allowlist excludes locations and secrets")
 check(traceText.contains("80000"),"trace preserves the transport measurement")
+trace.append(name:"map-send",fields:["packetVersion":2,"paletteVersion":1],seconds:1)
+check((trace.events.last?["packetVersion"] as? NSNumber)?.intValue == 2 && (trace.events.last?["paletteVersion"] as? NSNumber)?.intValue == 1,"trace retains both palette versions")
 var buildingTrace=MapTraceBuffer()
 buildingTrace.append(name:"first-ack",fields:["job":123,"mask":1,"checked":1,"index":0,"id":7,"type":3,"bytes":42000],seconds:2)
 check(buildingTrace.events[0]["event"] as? String == "first-ack" && (buildingTrace.events[0]["mask"] as? NSNumber)?.intValue == 1 && (buildingTrace.events[0]["job"] as? NSNumber)?.intValue == 123,"building timing keeps anonymous job and wire receipt metadata")
 for i in 0..<MapTraceBuffer.capacity+10 {trace.append(name:"bulk-write",fields:["seq":i],seconds:Double(i))}
-check(trace.events.count==MapTraceBuffer.capacity && trace.dropped==11,"timing diagnostics have bounded memory")
+check(trace.events.count==MapTraceBuffer.capacity && trace.dropped==12,"timing diagnostics have bounded memory")
 print("PASS timing record numeric allowlist, coordinate/secret exclusion and bounded event storage")
+var staleQueue=BleBulkWriteQueue()
+staleQueue.replace(type:3,id:1,packets:[Data([1]),Data([2])])
+_ = staleQueue.next()
+let oldToken=staleQueue.inFlightToken
+staleQueue.cancel(type:3,id:1)
+staleQueue.replace(type:3,id:2,packets:[Data([3])])
+check(staleQueue.complete(token:oldToken,success:false) == .obsolete,"late callback after cancel cannot requeue old fragments")
+let newPart=staleQueue.next()!
+let newToken=staleQueue.inFlightToken
+check(staleQueue.complete(token:oldToken,success:true) == .obsolete && staleQueue.inFlight?.id==newPart.id,"late old callback cannot release the new ATT slot")
+check(staleQueue.complete(token:newToken,success:true) == .sent && !staleQueue.hasData,"new ATT callback releases only its own part")
+print("PASS stale ATT token and per-package cancel")

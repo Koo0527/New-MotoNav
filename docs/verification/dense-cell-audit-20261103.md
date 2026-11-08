@@ -1,0 +1,130 @@
+# Dense C isolated prototype audit
+
+Experimental only. No production enable, commit, frozen C change or device operation
+was performed by this audit. The root separately owns physical timing and restore.
+
+## Existing device image
+
+`output/map-edge-bridge/device-bench-dense/artifacts/MotoNav.ino.bin`:
+1097392 bytes; SHA256
+`8c6db2536486991c08bdcf296060edf5063e6f90e6fef4dc0d6b1317eb7db3b0`.
+The ELF, map, bootloader, partitions and merged image also exist. Build options
+record esp32 3.3.10, original app3M partition, existing libraries and original
+toolchain. This audit did not rebuild or overwrite that image during timing.
+
+Generated baseline function body equals both current production rasterRows and
+git d2f49a7 byte for byte: SHA256
+`f2d16dd7b263bd3e75718d33770ef13b821961c22521e05006e93bed7328dba0`.
+Only name/noinline signature differ. Production drawRasterMap prepares palette;
+both paths use the same map origin, center, angle, scale and screen coordinates.
+Dense uses half-resolution Q16 coordinates with its own integer increment rounding.
+
+cached03 retains the original complete 1200², 2m base.bin: 230011 bytes.
+Dense tail is 169572 bytes; complete illustrative wire budget is 399615 bytes
+including a 32-byte allowance. That allowance is not an implemented wire header.
+All seven frozen C hashes and independent RLE expansion were verified unchanged.
+Complete base+tail+32 totals, in scene order cached01..05/fresh02/fresh03:
+191102, 362186, 399615, 406879, 338105, 405036, 469428 bytes.
+
+## Memory and measurement scope
+
+ESP32 ELF DWARF/map confirms DenseCellLUT=19948, DenseRunDecoder=24,
+tinfl_decompressor=10992 bytes. Streaming inflater ring=32768 bytes.
+Thus the device's conservative reported metadata is 63764 bytes including the
+32-byte wire allowance; actual dense decode components sum to 63732 bytes.
+No sparse index or resident pixel cache exists.
+
+The experiment retains both original 720000-byte raster and decoded 720000-byte
+dense raster to measure against the unchanged original. They are not a proof of
+production buffer reuse. The old back allocation is used only as dense storage
+and rasterBackValid remains false. Base transport inflation temporarily holds
+the original base packet and inflater; they are released before dense inflate.
+Paired timing separately allocates a 480×480×2=460800-byte framebuffer copy;
+its 248-byte sample array plus LUT total 480996 bytes, excluding small stack
+locals/allocator overhead. These phases do not coexist with the dense inflater.
+Future production/BLE peak memory remains unverified.
+
+DeviceBenchmark.h actually runs eight warmups per mode then 31 paired samples
+per mode with alternating order, actual parallelRows barrier and median; no host
+timing substitute is used. It compares actual rendered screen pixels afterward.
+The runtime enumerates 3 themes × 2 day/night × 3 angles × 2 scales = 36 cases.
+Root's completed serial log `output/map-edge-bridge/cached03-device-benchmark-dense.log`
+contains all36 cases:30PASS,6FAIL,unchanged=0, final FAIL. All six failures are
+90°/scale.38, spanning all themes/day/night; overhead13.04..13.14%. The other five
+geometries pass each theme/day/night. The original app0 was restored and verified
+by root. This is a near pass, not accepted performance.
+ELF confirms color/material/distance/coverage inline in rasterRowsDense: no
+per-pixel helper call. Calls occur before the pixel loop.
+
+## Verification
+
+```
+c++ -std=c++11 -Wall -Wextra -Werror -fsanitize=address,undefined firmware/tests/raster-edge/DenseTest.cpp -lz -o /tmp/motonav-dense-sanitized
+python3 - <<'PY'
+import json,subprocess
+subprocess.run(['/tmp/motonav-dense-sanitized']+json.load(open('output/map-edge-bridge/dense-host-args.json')),check=True)
+PY
+python3 firmware/tests/raster-edge/dense_builder_test.py
+python3 scripts/benchmark-map-edges.py --self-test
+c++ -std=c++11 -Wall -Wextra -Werror -fsanitize=address,undefined firmware/tests/raster-edge/benchmark_driver_test.cpp -o /tmp/motonav-dense-driver
+/tmp/motonav-dense-driver
+```
+
+Actual output: seven `DENSE HOST exact-centers=1440000 rle=exact metadata=52756`
+lines; builder `7 frozen scenes + 56 corruption/budget rejections PASS`; existing
+builder `Ran 4 tests ... OK`; driver exits 0. Host metadata printed by DenseTest
+uses host ABI and omits tinfl; use the ESP32 accounting above for device claims.
+DenseTest executes all 4096 fallback words × four subcells, invalid/overflow/zero
+runs, incomplete record, all seven scene material centers, real zlib streams fed
+to DenseRunDecoder in 17-byte chunks and independent square integration of
+ordinary and two-boundary RGB565 colors. This does not emulate ROM tinfl on host.
+
+Builder now rejects altered frozen SHA, truncated/trailing/malformed RLE streams,
+expanded data mismatch, total wire >480000 and a changed baseline body before
+emitting a future device image. Existing image was not regenerated by this change.
+
+## Source preview
+
+DensePreview.cpp uses actual DenseCellLUT.color and GameMapStyle::palette(1,false).
+It asserts exact file sizes, valid material/word ranges, LUT readiness and writes
+source pixels directly. ASan/UBSan run passed. Fresh03 current.raw, candidate.raw
+and frozen C-fresh-03-diagonal.u16 share one center and world transform, scale .6,
+424×424 source square, angles 0/45/90. No HUD or circle crop; no inferred geometry,
+AI generation, sharpening or resampling. PNG conversion and three-panel assembly
+preserve the rendered 424×424 pixels. Outputs:
+`output/map-edge-bridge/isolated-dense-preview/comparison-{0,45,90}.png`.
+These are host source views, not device screenshots. User reviewed the three
+panels and reported no obvious improvement. VISUAL GATE FAIL; do not proceed to
+T4 production integration even if a later layout passes timing.
+
+## Independent tiled resident experiment
+
+Authorized after the complete row-major run failed. Frozen transport stays
+row-major and unchanged. `--dense-cell --dense-tiled` writes exclusively to
+`output/map-edge-bridge/device-bench-dense-tiled`. Logical `(x,y)` maps to
+`(((y>>4)*38+(x>>4))<<8)|((y&15)<<4)|(x&15)`; stream decoding writes directly
+there without a full conversion raster. Padding is zeroed. Resident allocation
+is739328 bytes,19328 bytes(+2.684%) above the original720000. Complete conservative
+extra-memory ledger is63764+19328=83092 bytes, still below524288; the printed
+metadata field63764 describes decoder/LUT components, and dense=739328 includes
+the padding. They must not be summed with padding twice. Complete wire remains
+399615 bytes. FNV is recomputed in logical order, preserving frozen raw identity.
+
+Allocation failure keeps the valid baseline front raster and paints it; it cannot
+produce a timing PASS. No further parse/swap occurs after startup. Host tests now
+run both stream destinations from identical17-byte input chunks for all7 scenes,
+verify every logical word, all padding and both allocation sentinels, six LUT
+angle/scale color comparisons, null-output/invalid-capacity rejection and malformed
+records. ASan/UBSan passed. As only the word address differs in the timed shader,
+equal fetched words and identical U/V feed the identical color implementation.
+The tiled image requires its own full physical36-case run; cache locality is a
+hypothesis, and0°/45° performance is not presumed unchanged.
+
+Build completed successfully with existing esp32 3.3.10 toolchain. The independent
+artifact is `output/map-edge-bridge/device-bench-dense-tiled/artifacts/MotoNav.ino.bin`,
+1097600 bytes, SHA256
+`a387e480c16ecc0f48ca4f02c6a4fd3e0cb318a1692d35d47f4ef565e3e0b528`.
+Compiler output: Sketch1097352/3145728 bytes; globals133752/327680 bytes;
+`EDGE BENCH build scene=3 appBytes=1097600 uploaded=false`. Original row-major
+artifact SHA was rechecked unchanged after the tiled build. Tiled ELF still has
+the19948-byte LUT and no out-of-line DenseCellLUT shader helper symbols.

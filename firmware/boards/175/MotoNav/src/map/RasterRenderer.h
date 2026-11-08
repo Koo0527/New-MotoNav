@@ -1,7 +1,7 @@
 #pragma once
 // 位图地图采样和绘制。由 MotoNav.ino 按依赖顺序包含，仅编译一次。
 // v5.7 改成按行分给两个核心画（参数放在全局变量里）
-struct { float cx, cy, sc, cs, sn; uint16_t pal[16]; uint16_t *fb; bool pix2; int32_t viceGain; int viceRotation; } RM;
+struct { float cx, cy, sc, cs, sn; uint16_t pal[16], backPal[16]; uint16_t *fb; bool pix2; int32_t viceGain; int viceRotation; } RM;
 #define PIXB 3                                      // v6.1 掌机像素：3×3 个屏幕像素当一个大像素
 
 void __attribute__((optimize("O3"))) rasterRows(int y0, int y1, int step) {
@@ -10,7 +10,7 @@ void __attribute__((optimize("O3"))) rasterRows(int y0, int y1, int step) {
   float cx = RM.cx, cy = RM.cy, sc = RM.sc, cs = RM.cs, sn = RM.sn;
   float inv = 1.0f / sc, kpx = inv / rasMpp;
   int32_t DU = (int32_t)(cs * kpx * 65536.0f), DV = (int32_t)(sn * kpx * 65536.0f);
-  const bool useBack=rasterBackValid && rasterBackHeader.frame==rasterFrame && rasterBackHeader.mm==(uint16_t)lroundf(rasMpp*1000) && !rasterBackHeader.palette && !rasHasPal && !rasterViceValid;
+  const bool useBack=rasterBackValid && rasterBackHeader.frame==rasterFrame && rasterBackHeader.mm==(uint16_t)lroundf(rasMpp*1000) && rasterSemanticMaterials(rasterBackHeader) && (!rasHasPal || rasSemantic) && !rasterViceValid;
   const int backU=useBack ? (int)lroundf((rasX0-rasterBackHeader.x0)/rasMpp) : 0;
   const int backV=useBack ? (int)lroundf((rasterBackHeader.y0-rasY0)/rasMpp) : 0;
 #if MOTONAV_RASTER_SMOOTHING
@@ -39,6 +39,7 @@ void __attribute__((optimize("O3"))) rasterRows(int y0, int y1, int step) {
     for (int x = xa; x <= xb; x += xstep) {
       int32_t ui = U >> 16, vi = V >> 16;
       uint8_t idx = 0;
+      uint16_t color=pal[0];
       if ((uint32_t)ui < (uint32_t)rasW && (uint32_t)vi < (uint32_t)rasH) {
         uint32_t k = ((uint32_t)((vi >> 4) * rasBW + (ui >> 4)) << 8) | ((vi & 15) << 4) | (ui & 15);
         if (rasterViceValid) {
@@ -47,10 +48,11 @@ void __attribute__((optimize("O3"))) rasterRows(int y0, int y1, int step) {
           uint8_t b = rasterBuf[k >> 1];
           idx = (k & 1) ? (b >> 4) : (b & 15);
         }
+        color=pal[idx];
       } else if (useBack) {
         rasterRead(rasterBackBuf,rasterBackHeader,ui+backU,vi+backV,idx);
+        color=RM.backPal[idx];
       }
-      uint16_t color=pal[idx];
 #if MOTONAV_RASTER_SMOOTHING
       if(smooth)color=rasterSmoothColor(rasterBuf,header,rasterTilesValid?rasterTiles:nullptr,
           smoothBack,rasterBackHeader,pal,U,V,color);
@@ -189,7 +191,7 @@ uint32_t rasMsAcc = 0;                     // v5.7 统计：底图用时
 void drawRasterMap(float cx, float cy, float sc, float cs, float sn) {
   unsigned long t0 = millis();
   RM.fb = gfx->getFramebuffer();
-  if (rasHasPal) {                                     // v6.1 卫星图：用照片自带的颜色（夜间压暗）
+  if (rasHasPal && !rasSemantic) {                                     // v6.1 卫星图：用照片自带的颜色（夜间压暗）
     for (int i = 0; i < 16; i++) RM.pal[i] = (themeIdx != 0 && nightOn) ? blendF(rasPal[i], C_BLACK, 110) : rasPal[i];
   } else {
     for (int i = 0; i < 16; i++) RM.pal[i] = C_BLOCK;
@@ -197,12 +199,16 @@ void drawRasterMap(float cx, float cy, float sc, float cs, float sn) {
     RM.pal[4] = blendF(C_BLOCK,C_ROADM,64);   // 俯视屋顶
     RM.pal[5] = blendF(C_BLOCK,C_ROADM,112);  // 屋顶轮廓
     if (themeIdx >= 1 && themeIdx <= 3) { const auto p=GameMapStyle::palette(themeIdx,nightOn); RM.pal[4]=p.roof; RM.pal[5]=p.outline; }
+    GameMapStyle::roadPalette(themeIdx,nightOn,RM.pal,rasSemanticVersion);
     RM.pal[6] = RM.pal[4]; RM.pal[7] = RM.pal[5]; // 保留原绿地类别的屋顶
   }
   if (styleIdx() == ST_MINIMAL) {
     for (int i=0;i<16;i++) RM.pal[i]=0x0000;
-    RM.pal[1]=0x8410; // independent monochrome road mask; no building/park/water layer
+    RM.pal[1]=0x8410;
+    RM.pal[8]=RM.pal[9]=RM.pal[11]=RM.pal[1]; // independent monochrome road mask; no building/park/water layer
   }
+  memcpy(RM.backPal,RM.pal,sizeof(RM.pal));
+  if (styleIdx()!=ST_MINIMAL) GameMapStyle::roadPalette(themeIdx,nightOn,RM.backPal,rasterBackHeader.semanticVersion);
   RM.pix2 = styleIdx() == ST_PIXEL;
   RM.cx = cx; RM.cy = cy; RM.sc = sc; RM.cs = cs; RM.sn = sn;
   if (styleIdx() == 1 && !rasHasPal && rasterViceValid) {

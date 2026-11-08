@@ -138,7 +138,7 @@ struct ScreenDisplaySettings: View {
         CardView {
             Toggle("小地图", isOn: $settings.mapOn).foregroundColor(AppTheme.text).tint(AppTheme.accent)
             if settings.mapOn {
-                if settings.mapSource == MapFeeder.SRC_AMAP && AmapCapturePolicy.supportsBuildings(settings.theme) {
+                if [MapFeeder.SRC_AMAP, MapFeeder.SRC_VECTOR].contains(settings.mapSource) && AmapCapturePolicy.supportsBuildings(settings.theme) {
                     Toggle("俯视建筑轮廓", isOn: $settings.buildings).foregroundColor(AppTheme.text).tint(AppTheme.accent)
                     if ble.isReady && !ble.buildingsSupported {
                         Text("当前圆屏暂不支持建筑轮廓，将显示普通地图。")
@@ -146,7 +146,9 @@ struct ScreenDisplaySettings: View {
                     }
                 }
                 Text(Self.userMessage(map.offlineStatus)).font(.caption).foregroundColor(AppTheme.sub)
-                Text("选定路线后，前台自动下载沿途地图；锁屏使用已保存地图包。请等下载完成再出发。")
+                Text(settings.mapSource == MapFeeder.SRC_VECTOR
+                     ? "普通风格 1-9 由 OpenFreeMap 矢量图源生成，锁屏巡航继续补图；高德原版与卫星图仍需前台。"
+                     : "选定路线后，前台自动下载沿途地图；锁屏使用已保存地图包。请等下载完成再出发。")
                     .font(.caption2).foregroundColor(AppTheme.sub)
                 Button("地图显示问题"){showMapReport=true}.foregroundColor(AppTheme.cyan)
             }

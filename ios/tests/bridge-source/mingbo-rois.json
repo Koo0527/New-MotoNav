@@ -1,0 +1,42 @@
+[
+  {
+    "name": "main-highway-crossing",
+    "rect": [
+      510,
+      560,
+      690,
+      690
+    ],
+    "observation": "User-specified Mingbo interchange: orange highway crosses north-south ramps. Review road-edge casing, not median."
+  },
+  {
+    "name": "ramp-highway-crossing",
+    "rect": [
+      575,
+      580,
+      660,
+      675
+    ],
+    "observation": "Ramps crossing orange highway and each other; source casing candidates require native inspection."
+  },
+  {
+    "name": "ordinary-junction-negative",
+    "rect": [
+      875,
+      505,
+      925,
+      555
+    ],
+    "observation": "Ordinary white local street crossing; do not turn all white road pixels into barriers."
+  },
+  {
+    "name": "narrow-ramp-negative",
+    "rect": [
+      640,
+      640,
+      710,
+      700
+    ],
+    "observation": "Narrow yellow ramp with curved outer edge: preserve road interior; no general warm-pixel-to-barrier rule."
+  }
+]

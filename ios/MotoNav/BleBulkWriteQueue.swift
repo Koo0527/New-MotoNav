@@ -8,6 +8,8 @@ struct BleBulkWriteQueue {
     private var latest: [Int: Int] = [:]
     private var acknowledged: [Int: Int] = [:]
     private(set) var inFlight: Part?
+    private(set) var inFlightToken: UInt64 = 0
+    private var tokenCounter: UInt64 = 0
     var hasData: Bool { inFlight != nil || !parts.isEmpty }
     func contains(type:Int,id:Int)->Bool {
         (inFlight?.type == type && inFlight?.id == id) || parts.contains{$0.type==type && $0.id==id}
@@ -28,10 +30,16 @@ struct BleBulkWriteQueue {
     mutating func next() -> Part? {
         guard canStart else { return nil }
         var part = parts.removeFirst(); part.attempts += 1; inFlight = part
+        tokenCounter &+= 1; inFlightToken = tokenCounter
         return part
     }
     mutating func complete(success: Bool) -> Result {
-        guard let part = inFlight else { return .obsolete }
+        complete(token: inFlightToken, success: success)
+    }
+    /// A callback for an old ATT write must release only its own slot. If the slot
+    /// already belongs to a newer write, it is obsolete and may not touch the queue.
+    mutating func complete(token: UInt64, success: Bool) -> Result {
+        guard let part = inFlight, token == inFlightToken else { return .obsolete }
         inFlight = nil
         if success || acknowledged[part.type] == part.id { return .sent }
         guard latest[part.type] == part.id else { return .obsolete }
@@ -49,6 +57,13 @@ struct BleBulkWriteQueue {
     mutating func cancel(types:Set<Int>) {
         parts.removeAll{types.contains($0.type)}
         for type in types {latest.removeValue(forKey:type);acknowledged.removeValue(forKey:type)}
+    }
+    /// Retire one failed package: queued fragments and retry eligibility disappear,
+    /// while an ATT write already past the queue keeps its callback slot.
+    mutating func cancel(type:Int,id:Int) {
+        parts.removeAll{$0.type==type && $0.id==id}
+        if latest[type]==id { latest.removeValue(forKey:type) }
+        if acknowledged[type]==id { acknowledged.removeValue(forKey:type) }
     }
 }
 
@@ -84,7 +99,7 @@ struct MapTraceBuffer {
     static let capacity=2048
     private(set) var events:[[String:Any]]=[]
     private(set) var dropped=0
-    private static let allowed:Set<String>=["kmh","ready","sentCovered","confirmedCovered","serial","baseReady","needsCoverage","nextBlock","buildings","source","type","id","bytes","seq","parts","attempt","response","commandsQueued","bulkQueued","transferPending","outsideView","size","seconds","components","pixels","maxWrite","payload","elapsed","awaitAck","viewportOffsetM","preparedOffsetM","decodeValid","rate","probe","canWithout","needsResponse","style","beforeBytes","job","mask","checked","index"]
+    private static let allowed:Set<String>=["kmh","ready","sentCovered","confirmedCovered","serial","baseReady","needsCoverage","nextBlock","buildings","source","type","id","bytes","seq","parts","attempt","response","commandsQueued","bulkQueued","transferPending","outsideView","size","seconds","components","pixels","maxWrite","payload","elapsed","awaitAck","viewportOffsetM","preparedOffsetM","decodeValid","rate","probe","canWithout","needsResponse","style","beforeBytes","job","mask","checked","index","packetVersion","paletteVersion"]
     mutating func append(name:String,fields:[String:Any],seconds:Double) {
         let safeName=name.range(of:"^[a-z][a-z0-9-]{0,39}$",options:.regularExpression) != nil ? name:"event"
         var e:[String:Any]=["event":safeName,"time":max(0,seconds)]

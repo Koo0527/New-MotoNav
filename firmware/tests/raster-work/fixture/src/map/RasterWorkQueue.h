@@ -17,7 +17,7 @@ static void rasterCommitTiming(uint32_t started) {
 
 void cancelPendingRaster() {
   Bulk &b=bulks[3];
-  if(pendingAck=="K,3,"+String(b.id))pendingAck="";
+  pendingAck.removeAck(3,b.id);
   b.done=false;b.got=0;memset(b.mask,0,sizeof(b.mask));
   rasterWorkCancel(pendingRasterWork);
 }
@@ -67,7 +67,7 @@ void pollRasterWork() {
           ,pendingRasterWork.tiles!=nullptr
 #endif
           );
-      b.done=true;pendingAck="K,3,"+String(pendingRasterId);navDirty=true;
+      b.done=true;pendingAck.pushf("K,3,%d",pendingRasterId);navDirty=true;
       rasterCommitTiming(started);
       rasterWorkCancel(pendingRasterWork);
       return;

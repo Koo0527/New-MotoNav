@@ -399,13 +399,15 @@ public:
      */
     bool configureFifo(bool enable, uint8_t watermark_samples = 16) override;
 
+    static constexpr uint16_t FifoPairPending = UINT16_MAX;
+
     /**
      * @brief Read data from FIFO buffer.
      * @param[out] accel_data Array to store accelerometer samples.
      * @param accel_count Maximum number of accelerometer samples.
      * @param[out] gyro_data Array to store gyroscope samples.
      * @param gyro_count Maximum number of gyroscope samples.
-     * @return Number of samples read, or 0 on error.
+     * @return Number of samples read, 0 on error, or FifoPairPending while a 6DOF pair is being written.
      */
     uint16_t readFromFifo(AccelerometerData *accel_data, uint16_t accel_count,
                           GyroscopeData *gyro_data, uint16_t gyro_count) override;

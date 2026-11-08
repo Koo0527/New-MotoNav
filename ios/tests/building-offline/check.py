@@ -6,7 +6,12 @@ source=(root/'ios/MotoNav/RouteOfflineMaps.swift').read_text().replace('import U
 code='''import Foundation
 final class Settings {static let shared=Settings();var theme=1}
 final class UIApplication {enum State {case active,background};static let shared=UIApplication();var applicationState=State.active}
-enum MapFeeder {static let SRC_AMAP=3}
+enum VectorMapRaster {struct Result {let base:Data;let buildings:Data?}}
+final class VectorTileClient {}
+enum MapFeeder {static let SRC_AMAP=3;static let SRC_VECTOR=4
+ static let vectorTiles=VectorTileClient()
+ static var vectorBuilder:(VectorTileClient,MapGeo.Frame,Double,Double,Int,Bool,()->Bool,(Data)->Void) throws -> VectorMapRaster.Result = {_,_,_,_,_,_,_,_ in
+  throw MapProcessingError.invalid("vector offline not under test")}}
 let cacheRoot=URL(fileURLWithPath:NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
 let testCache=RouteMapCache(root:cacheRoot)
 let release=DispatchSemaphore(value:0)
@@ -23,7 +28,7 @@ static func build(_ frame:MapGeo.Frame,cx:Double,cy:Double,includeBuildings:Bool
   DispatchQueue.main.sync {yieldResult=yielded}
   throw MapProcessingError.cancelled
  }
- let base=MapGeo.encodeRaster(frameId:frame.id,x0:Int(cx-1200),y0:Int(cy+1200),w:1200,h:1200,mmPerPx:2000,idx:[UInt8](repeating:1,count:1440000))
+ let base=RoadPalette.encode(frameId:frame.id,x0:Int(cx-1200),y0:Int(cy+1200),w:1200,h:1200,indices:[UInt8](repeating:1,count:1440000))
  if !includeBuildings {onBaseReady(base);return Output(bytes:base)}
  onBuildingReady(BuildingUpdate(bytes:base,coverage:BuildingCoverage(checkedMask:1)))
  _=release.wait(timeout:.now()+5)
@@ -74,7 +79,7 @@ let yieldFrame=MapGeo.Frame(refLat:30,refLng:120,id:3)
 let yieldPlan=try RouteMapPlan([(x:0.0,y:0.0),(x:4000.0,y:0.0)])
 precondition(yieldPlan.nodes.count >= 3)
 for node in yieldPlan.nodes {
- let base=MapGeo.encodeRaster(frameId:yieldFrame.id,x0:Int(node.x-1200),y0:Int(node.y+1200),w:1200,h:1200,mmPerPx:2000,idx:[UInt8](repeating:1,count:1440000))
+ let base=RoadPalette.encode(frameId:yieldFrame.id,x0:Int(node.x-1200),y0:Int(node.y+1200),w:1200,h:1200,indices:[UInt8](repeating:1,count:1440000))
  try testCache.store(base,frame:yieldFrame,source:3,node:node,style:1)
  if node == yieldPlan.nodes[0] {
   let roof=FastBuildings.packet(base:base,patches:[0:Data(repeating:1,count:90000)])
@@ -96,5 +101,5 @@ print("production offline progressive/background/reuse lifecycle passed")
 with tempfile.TemporaryDirectory() as temp:
  main=pathlib.Path(temp)/'main.swift';main.write_text(code+source+cases)
  exe=pathlib.Path(temp)/'check'
- subprocess.run(['swiftc','-module-cache-path',str(pathlib.Path(temp)/'modules'),*[str(root/'ios/MotoNav'/p) for p in ['MapGeo.swift','RasterProcessing.swift','RouteMapPlan.swift']],str(main),'-o',str(exe)],check=True)
+ subprocess.run(['swiftc','-module-cache-path',str(pathlib.Path(temp)/'modules'),*[str(root/'ios/MotoNav'/p) for p in ['MapGeo.swift','RasterProcessing.swift','RoadPalette.swift','RouteMapPlan.swift']],str(main),'-o',str(exe)],check=True)
  subprocess.run([str(exe)],check=True)
