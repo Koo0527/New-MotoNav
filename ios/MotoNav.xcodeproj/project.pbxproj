@@ -70,6 +70,8 @@
 		C71CA48A91926BFC9B43FDCF /* RouteMapPlan.swift in Sources */ = {isa = PBXBuildFile; fileRef = 99CFF68B635D8A95A2698DD4 /* RouteMapPlan.swift */; };
 		CE38FAAF34CBBFAD84451088 /* Config.swift in Sources */ = {isa = PBXBuildFile; fileRef = 78E8A2064569BFBA9955CD8C /* Config.swift */; };
 		D5BE622C01F486F6A26CC504 /* MusicBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = C671E80BBEA3EB1E9311EB12 /* MusicBridge.swift */; };
+		7C1E5A9B2D4F6A8C /* CoverEncoder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C1E5A9B2D4F6A8D /* CoverEncoder.swift */; };
+		7C1E5A9B2D4F6A9E /* CoverLookup.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C1E5A9B2D4F6A9F /* CoverLookup.swift */; };
 		D9F321092230F1FC8B8B23D7 /* RideMapViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = EEE46421D846391ABEC6699A /* RideMapViews.swift */; };
 		DB621FCC696122DC6BCCCDCA /* ShareViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6560E51B1DBC15500A124007 /* ShareViewController.swift */; };
 		DF1DA6D4D4292EF2D1700130 /* RouteGeometry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F2E96A5A6C7C3BD314CB887 /* RouteGeometry.swift */; };
@@ -170,6 +172,8 @@
 		C36EAB2701614C6B8182A8F4 /* BleBulkWriteQueue.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BleBulkWriteQueue.swift; sourceTree = "<group>"; };
 		C509D74F9ABCA7DCA7EE9293 /* BleCapabilityProbe.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BleCapabilityProbe.swift; sourceTree = "<group>"; };
 		C671E80BBEA3EB1E9311EB12 /* MusicBridge.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MusicBridge.swift; sourceTree = "<group>"; };
+		7C1E5A9B2D4F6A8D /* CoverEncoder.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CoverEncoder.swift; sourceTree = "<group>"; };
+		7C1E5A9B2D4F6A9F /* CoverLookup.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CoverLookup.swift; sourceTree = "<group>"; };
 		CE47CC0D351EABDC9EEE6D04 /* RasterProcessing.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RasterProcessing.swift; sourceTree = "<group>"; };
 		DCE8FFA5884B79BE4E0AB803 /* RideTools.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RideTools.swift; sourceTree = "<group>"; };
 		DDA756375F325C135F891386 /* LyricsDisplaySync.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = LyricsDisplaySync.swift; sourceTree = "<group>"; };
@@ -306,6 +310,8 @@
 				AE986FABCE46D794A926A66C /* Info.plist */,
 				5D6EE3F5D91C4F03F5B44814 /* MotoNav-Bridging-Header.h */,
 				C671E80BBEA3EB1E9311EB12 /* MusicBridge.swift */,
+    7C1E5A9B2D4F6A8D /* CoverEncoder.swift */,
+    7C1E5A9B2D4F6A9F /* CoverLookup.swift */,
 				88F6F7FEE25CC563EEC49A1F /* CruiseIdleTimer.swift */,
 				CE47CC0D351EABDC9EEE6D04 /* RasterProcessing.swift */,
 				FB643DCAF97E834DC966F034 /* AmapCaptureHost.swift */,
@@ -544,6 +550,8 @@
 				2C0E2324BEFFCA8D7C459401 /* KeySetupView.swift in Sources */,
 				368AB74EB99CA2BEB7ACF4A1 /* RotationDial.swift in Sources */,
 				D5BE622C01F486F6A26CC504 /* MusicBridge.swift in Sources */,
+    7C1E5A9B2D4F6A8C /* CoverEncoder.swift in Sources */,
+    7C1E5A9B2D4F6A9E /* CoverLookup.swift in Sources */,
 				F336897359EC15D9BD17B152 /* CruiseIdleTimer.swift in Sources */,
 				FB6E59E7B7F70EACF4129EE5 /* RasterProcessing.swift in Sources */,
 				20C19A3E34FEE42B5331ACD1 /* AmapCaptureHost.swift in Sources */,

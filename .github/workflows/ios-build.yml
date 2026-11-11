@@ -1,0 +1,71 @@
+name: Build iOS app (unsigned)
+
+# 只编译、产出未签名 IPA，不发布 Release；用于在 GitHub 上验证 iOS 端改动。
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 要编译的分支或提交（留空则用当前分支）
+        required: false
+        default: ""
+  push:
+    branches: ["ci/**"]
+    paths:
+      - "ios/**"
+      - ".github/workflows/ios-build.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: macos-26
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.ref || github.ref }}
+
+      - name: Show toolchain
+        run: xcodebuild -version
+
+      - name: Install CocoaPods dependencies
+        run: pod install --project-directory=ios --repo-update
+
+      - name: Cover encoder self-test
+        run: sh ios/tests/run-cover.sh
+
+      - name: Build unsigned app
+        run: |
+          set -euo pipefail
+          xcodebuild \
+            -workspace ios/MotoNav.xcworkspace \
+            -scheme MotoNav \
+            -destination 'generic/platform=iOS' \
+            -configuration Release \
+            -derivedDataPath "$RUNNER_TEMP/DerivedData" \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO DEVELOPMENT_TEAM= \
+            build
+
+      - name: Package unsigned IPA
+        run: |
+          set -euo pipefail
+          APP="$RUNNER_TEMP/DerivedData/Build/Products/Release-iphoneos/MotoNav.app"
+          VERSION=$(/usr/libexec/PlistBuddy -c 'Print CFBundleShortVersionString' "$APP/Info.plist")
+          STAGE="$RUNNER_TEMP/Payload"
+          mkdir -p "$STAGE/Payload"
+          ditto "$APP" "$STAGE/Payload/MotoNav.app"
+          find "$STAGE" -name _CodeSignature -type d -prune -exec rm -rf {} +
+          find "$STAGE" -name embedded.mobileprovision -delete
+          xcrun strip -S "$STAGE/Payload/MotoNav.app/MotoNav"
+          mkdir -p "$GITHUB_WORKSPACE/output/ios"
+          (cd "$STAGE" && /usr/bin/zip -qry "$GITHUB_WORKSPACE/output/ios/MotoNav-$VERSION-unsigned.ipa" Payload)
+          (cd "$GITHUB_WORKSPACE/output/ios" && shasum -a 256 "MotoNav-$VERSION-unsigned.ipa" > SHA256SUMS.txt && cat SHA256SUMS.txt)
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MotoNav-unsigned-ipa
+          path: |
+            output/ios/*.ipa
+            output/ios/SHA256SUMS.txt
+          if-no-files-found: error

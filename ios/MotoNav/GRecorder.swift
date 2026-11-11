@@ -49,6 +49,7 @@ struct GStreamClock {
     private var sequence: UInt16?
     private var board: UInt32?
     private var ticks: UInt64 = 0
+    init(token: UInt32) { self.token = token }
     mutating func accept(_ frame: GFrame) -> (seconds: Double, gap: Bool)? {
         guard frame.token == token else { return nil }
         if let sequence, let board {
