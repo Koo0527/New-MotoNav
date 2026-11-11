@@ -10,29 +10,40 @@ final class MusicBridge {
     private var lastText = ""
     private var lastState = ""
     private var lyricsSync = LyricsDisplaySync()
-    private var replay=MediaMetadataReplay()
+    private var replay = MediaMetadataReplay()
     private(set) var metadata = AMSMetadata()
+    /// App 控制模式（Apple Music）下，当前已推送封面的 persistentID；避免重复推送
+    private var coverKey: MPMediaEntityPersistentID?
+    /// 是否已向固件发送过 #ZCOV,0 清除封面（避免重复发）
+    private var coverCleared = true
+
     func receiveAMS(_ data: Data) {
-        let generation=metadata.generation
+        let generation = metadata.generation
         guard metadata.receive(data) else { return }
-        if generation != metadata.generation {replay.reset()}
+        if generation != metadata.generation { replay.reset() }
         BleLink.shared.mediaSongInfo = metadata.summary
         refresh()
     }
+
     func resetAMS() {
         metadata.reset(); replay.reset(); lyricsSync.reset(); LyricsBridge.shared.stop(); lastText = ""; lastState = ""
         BleLink.shared.mediaSongInfo = ""
+        CoverLookup.shared.stop()
+        coverKey = nil; coverCleared = false
     }
+
     func syncMode() {
         guard BleLink.shared.mediaHIDSupported else { return }
         BleLink.shared.sendOnce(Settings.shared.musicHID ? "#HM,1" : "#HM,0")
         syncLyrics()
-        pollMetadata(force:true)
+        pollMetadata(force: true)
     }
-    func pollMetadata(force:Bool=false) {
-        guard Settings.shared.musicHID,BleLink.shared.isReady,BleLink.shared.verified,BleLink.shared.mediaHIDSupported else {return}
-        if replay.request(now:ProcessInfo.processInfo.systemUptime,needed:metadata.needsReplay,force:force) {BleLink.shared.sendOnce("#AMS?")}
+
+    func pollMetadata(force: Bool = false) {
+        guard Settings.shared.musicHID, BleLink.shared.isReady, BleLink.shared.verified, BleLink.shared.mediaHIDSupported else { return }
+        if replay.request(now: ProcessInfo.processInfo.systemUptime, needed: metadata.needsReplay, force: force) { BleLink.shared.sendOnce("#AMS?") }
     }
+
     func syncLyrics(force: Bool = false) {
         let desired = Settings.shared.musicLyrics && Settings.shared.musicHID
         let changed = lyricsSync.desired != desired
@@ -41,15 +52,24 @@ final class MusicBridge {
         guard let command = lyricsSync.command(now: ProcessInfo.processInfo.systemUptime, ready: BleLink.shared.isReady || force || changed) else { return }
         BleLink.shared.sendLyricsMode(command)
     }
+
     func lyricsReply(_ enabled: Bool) { lyricsSync.acknowledge(enabled); syncLyrics() }
+
     func authorize() {
         MPMediaLibrary.requestAuthorization { _ in
             DispatchQueue.main.async { self.refresh(force: true) }
         }
     }
+
     func refresh(force: Bool = false) {
         if Settings.shared.musicHID {
             LyricsBridge.shared.update(metadata, force: force)
+            clearCover()                        // 从 App 控制切过来时先清掉旧封面
+            if Settings.shared.musicCover {
+                CoverLookup.shared.update(metadata, force: force)
+            } else {
+                CoverLookup.shared.stop()
+            }
             let ready = BleLink.shared.mediaHIDSupported && BleLink.shared.mediaHIDReady && BleLink.shared.mediaHIDMode
             if metadata.ready {
                 let title = metadata.title.isEmpty ? "等待播放器歌曲信息" : metadata.title + (metadata.values[0].partial ? "…" : "")
@@ -60,8 +80,11 @@ final class MusicBridge {
             }
             return
         }
+        // --- App 控制模式（Apple Music） ---
         LyricsBridge.shared.stop()
+        CoverLookup.shared.stop()                 // 不需要公网搜索，用 artwork 直取
         guard MPMediaLibrary.authorizationStatus() == .authorized else {
+            clearCover()
             publish(title: "请在手机授权 Apple Music", artist: "仅支持系统音乐 App", available: false, playing: false, force: force)
             return
         }
@@ -73,22 +96,53 @@ final class MusicBridge {
         }
         let item = player.nowPlayingItem
         publish(title: item?.title ?? "请先在音乐 App 播放歌曲", artist: item?.artist ?? "Apple Music", available: item != nil, playing: player.playbackState == .playing, force: force)
+        if Settings.shared.musicCover { pushCover(item) } else { clearCover() }
     }
+
     @objc private func changed() { DispatchQueue.main.async { self.refresh() } }
+
+    // MARK: - 封面推送
+
+    /// 仅 App 控制模式（Apple Music / 本地音乐）能直接拿到 artwork：AMS 不带 artwork，
+    /// HID 模式走 CoverLookup 按歌名到公开曲库匹配封面。
+    private func pushCover(_ item: MPMediaItem?) {
+        guard let item, let artwork = item.artwork else { clearCover(); return }
+        guard item.persistentID != coverKey else { return }
+        let side = CGFloat(CoverEncoder.targetSize)
+        let size = CGSize(width: side, height: side)
+        guard let raw = artwork.image(at: size),
+              let encoded = CoverEncoder.encode(image: raw) else {
+            clearCover(); return
+        }
+        coverKey = item.persistentID
+        coverCleared = false
+        BleLink.shared.sendBulk(type: CoverEncoder.typeCover, id: 0, data: encoded.data)
+    }
+
+    private func clearCover() {
+        coverKey = nil
+        guard !coverCleared, BleLink.shared.isReady else { return }
+        coverCleared = true
+        BleLink.shared.sendOnce("#ZCOV,0")
+    }
+
+    // MARK: - publish
+
     private func publish(title: String, artist: String, available: Bool, playing: Bool, force: Bool) {
         let text = title + "\n" + artist, state = "#Z,\(available ? 1 : 0),\(playing ? 1 : 0),\(available ? 7 : 0)"
         if force || text != lastText {
             lastText = text
             for (slot, value) in [(5, title), (6, artist)] {
                 let im = TextImage.render(String(value.prefix(200)), maxW: 360, size: slot == 5 ? 32 : 24, minSize: 18,
-                    byteLimit:TextBitmapBudget.bytes(maxWrite:BleLink.shared.maxWrite))
+                    byteLimit: TextBitmapBudget.bytes(maxWrite: BleLink.shared.maxWrite))
                 BleLink.shared.sendImage(slot: slot, w: im?.w ?? 0, h: im?.h ?? 0, data: im?.data ?? Data())
             }
         }
         if force || state != lastState { lastState = state; BleLink.shared.send(state) }
     }
+
     func handle(_ action: String) {
-        if action == "Q", Settings.shared.musicHID { pollMetadata(force:true) }
+        if action == "Q", Settings.shared.musicHID { pollMetadata(force: true) }
         refresh(force: action == "Q")
         guard ["P", "N", "T"].contains(action) else { return }
         // A delayed legacy App event must not also control Music while HID is selected.

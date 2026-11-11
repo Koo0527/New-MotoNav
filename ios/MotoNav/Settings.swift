@@ -175,6 +175,13 @@ final class Settings: ObservableObject {
             MusicBridge.shared.refresh(force: true)
         }
     }
+    /// 显示专辑封面：App 控制模式直接取 Apple Music artwork，HID 模式按歌名到公开曲库搜索
+    @Published var musicCover: Bool = UserDefaults.standard.object(forKey: "music_cover") as? Bool ?? true {
+        didSet {
+            ud.set(musicCover, forKey: "music_cover")
+            MusicBridge.shared.refresh(force: true)
+        }
+    }
     /// 后台省电：锁屏且链路空闲（无导航/巡航/录制/音乐显示/传图）满 3 分钟断开圆屏，回前台自动重连；
     /// 期间后台心跳也已放慢。默认开；关闭则只放慢心跳不断开。
     @Published var idleLinkSave: Bool = UserDefaults.standard.object(forKey: "ble_idle_save") as? Bool ?? true {

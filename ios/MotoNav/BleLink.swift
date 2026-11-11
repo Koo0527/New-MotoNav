@@ -32,6 +32,7 @@ final class BleLink: NSObject, ObservableObject {
     @Published private(set) var mediaAMSControls = 0
     @Published var mediaLyricsStatus = ""
     @Published var mediaSongInfo = ""
+    @Published var mediaCoverStatus = ""
     @Published private(set) var mediaHIDSupported = false
     @Published private(set) var mediaHIDReady = false
     @Published private(set) var mediaHIDMode = false
