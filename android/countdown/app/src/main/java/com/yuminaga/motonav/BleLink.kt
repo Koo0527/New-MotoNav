@@ -94,7 +94,7 @@ object BleLink {
         val old = gatt
         gatt = null
         old?.let { session.clear(it) }
-        ready = false; verified = false; buildingsSupported = false
+        ready = false; verified = false; buildingsSupported = false; mediaBitmaps.reset()
         capabilityQuerySent = false; rxChar = null; mtu = 23
         phyText = "?"; burstStart = 0L
         synchronized(lock) { writing = false; queue.clear(); bulkQ.clear() }
@@ -133,6 +133,10 @@ object BleLink {
     private var burstStart = 0L
     private var burstBytes = 0L
     @Volatile var buildingsSupported = false
+    private val mediaBitmaps = MediaBitmapCapabilities()
+    val coverSupported: Boolean get() = verified && mediaBitmaps.supportsCover()
+    val crossSupported: Boolean get() = verified && mediaBitmaps.supportsCross()
+
     @Volatile var screenStats = ""                    // v2.0.1 圆屏发来的帧率统计
     @Volatile var screenProf = ""                     // v5.8 每帧各步骤用时
     @Volatile var screenFps = ""                      // v2.6 给新界面用：帧率、屏幕速度、快速刷屏
@@ -390,6 +394,14 @@ object BleLink {
     private fun onNotify(bytes: ByteArray?) {
         val msg = bytes?.toString(Charsets.UTF_8)?.trim() ?: return
         if (BleSession.confirms(msg, capabilityQuerySent)) markVerified()
+        if (MediaBitmapCapabilities.isMessage(msg)) {
+            val connection = gatt
+            handler.post {
+                if (connection != null && gatt === connection && session.owns(connection) &&
+                    mediaBitmaps.accept(msg, verified) && msg == "CAP,COVER,1") MusicBridge.refresh(true)
+            }
+            return
+        }
         if(msg=="CAP,HID,1") { handler.post { sendEvent("#HM,0") }; return }
         if(msg=="CAP,BLD,1") {
             handler.post { if(!buildingsSupported) { buildingsSupported=true;MapFeeder.onBuildingCapability() } }
