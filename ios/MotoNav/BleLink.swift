@@ -18,6 +18,8 @@ final class BleLink: NSObject, ObservableObject {
     private let MAX_WRITE = 500
     private let IMG_HEADER = 10
     private let BULK_HEADER = 15
+    private let COVER_HEADER = 11               // 'C' id part parts wLo wHi h off(4)
+    private var coverId = 0
 
     @Published var status = "未连接"
     struct ScreenChoice:Identifiable { let id:UUID;let name:String }
@@ -422,6 +424,35 @@ final class BleLink: NSObject, ObservableObject {
         guard imgId.indices.contains(slot) else { return }
         lastImg[slot] = (w, h, data)
         enqueueImage(slot: slot, w: w, h: h, data: data)
+        pump()
+    }
+
+    /// 发一张专辑封面（`C` 命令，RGB565 小端）。w = 0 表示清除封面。
+    func sendCover(w: Int, h: Int, rgb565: Data) {
+        guard isReady else { return }
+        queue.removeAll { $0.key?.hasPrefix("C:") == true }
+        coverId = (coverId + 1) & 0xFF
+        let id = coverId
+        if w <= 0 || h <= 0 || rgb565.isEmpty {
+            queue.append(Out(key: "C:\(id):0", data: Data([UInt8(ascii: "C"), UInt8(id),
+                                                          0, 1, 0, 0, 0, 0, 0, 0, 0])))
+            pump()
+            return
+        }
+        let payload = maxWrite - COVER_HEADER
+        guard payload >= 32 else { return }
+        let parts = (rgb565.count + payload - 1) / payload
+        guard parts > 0, parts <= 255 else { return }
+        for p in 0..<parts {
+            let off = p * payload
+            let len = min(payload, rgb565.count - off)
+            var pkt = Data([UInt8(ascii: "C"), UInt8(id), UInt8(p), UInt8(parts),
+                            UInt8(w & 0xFF), UInt8((w >> 8) & 0xFF), UInt8(h & 0xFF),
+                            UInt8(off & 0xFF), UInt8((off >> 8) & 0xFF),
+                            UInt8((off >> 16) & 0xFF), UInt8((off >> 24) & 0xFF)])
+            pkt.append(rgb565.subdata(in: off..<(off + len)))
+            queue.append(Out(key: "C:\(id):\(p)", data: pkt))
+        }
         pump()
     }
 

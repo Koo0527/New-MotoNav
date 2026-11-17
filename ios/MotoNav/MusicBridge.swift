@@ -14,7 +14,7 @@ final class MusicBridge {
     private(set) var metadata = AMSMetadata()
     /// App 控制模式（Apple Music）下，当前已推送封面的 persistentID；避免重复推送
     private var coverKey: MPMediaEntityPersistentID?
-    /// 是否已向固件发送过 #ZCOV,0 清除封面（避免重复发）
+    /// 是否已向固件发送过清除封面（避免重复发）
     private var coverCleared = true
 
     func receiveAMS(_ data: Data) {
@@ -108,22 +108,22 @@ final class MusicBridge {
     private func pushCover(_ item: MPMediaItem?) {
         guard let item, let artwork = item.artwork else { clearCover(); return }
         guard item.persistentID != coverKey else { return }
-        let side = CGFloat(CoverEncoder.targetSize)
+        let side = CoverEncoder.side(maxWrite: BleLink.shared.maxWrite)
         let size = CGSize(width: side, height: side)
         guard let raw = artwork.image(at: size),
-              let encoded = CoverEncoder.encode(image: raw) else {
+              let encoded = CoverEncoder.encode(image: raw, side: side) else {
             clearCover(); return
         }
         coverKey = item.persistentID
         coverCleared = false
-        BleLink.shared.sendBulk(type: CoverEncoder.typeCover, id: 0, data: encoded.data)
+        BleLink.shared.sendCover(w: encoded.width, h: encoded.height, rgb565: encoded.data)
     }
 
     private func clearCover() {
         coverKey = nil
         guard !coverCleared, BleLink.shared.isReady else { return }
         coverCleared = true
-        BleLink.shared.sendOnce("#ZCOV,0")
+        BleLink.shared.sendCover(w: 0, h: 0, rgb565: Data())
     }
 
     // MARK: - publish
@@ -133,7 +133,7 @@ final class MusicBridge {
         if force || text != lastText {
             lastText = text
             for (slot, value) in [(5, title), (6, artist)] {
-                let im = TextImage.render(String(value.prefix(200)), maxW: 360, size: slot == 5 ? 32 : 24, minSize: 18,
+                let im = TextImage.render(String(value.prefix(200)), maxW: 264, size: slot == 5 ? 32 : 24, minSize: 18,
                     byteLimit: TextBitmapBudget.bytes(maxWrite: BleLink.shared.maxWrite))
                 BleLink.shared.sendImage(slot: slot, w: im?.w ?? 0, h: im?.h ?? 0, data: im?.data ?? Data())
             }

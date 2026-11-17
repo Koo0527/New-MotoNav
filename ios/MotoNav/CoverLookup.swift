@@ -115,13 +115,13 @@ final class CoverLookup {
         guard !pushedKey.isEmpty else { return }
         pushedKey = ""
         guard BleLink.shared.isReady else { return }
-        BleLink.shared.sendOnce("#ZCOV,0")
+        BleLink.shared.sendCover(w: 0, h: 0, rgb565: Data())
     }
 
     private func push(_ encoded: CoverEncoder.Encoded, key: String) {
         guard BleLink.shared.isReady, pushedKey != key else { return }
         pushedKey = key
-        BleLink.shared.sendBulk(type: CoverEncoder.typeCover, id: 0, data: encoded.data)
+        BleLink.shared.sendCover(w: encoded.width, h: encoded.height, rgb565: encoded.data)
     }
 
     // MARK: - 匹配
