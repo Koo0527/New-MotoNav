@@ -84,13 +84,19 @@ final class CoverLookup {
             key = incoming.key
             BleLink.shared.mediaCoverStatus = "正在匹配专辑封面…"
             let current = token
+            if let cached = cache[incoming.key] {
+                // 缓存命中直接推，不走 asyncAfter——这是切歌无延迟的主路径
+                push(cached.encoded, key: incoming.key)
+                BleLink.shared.mediaCoverStatus = "封面已缓存 · \(cached.source)"
+                return
+            }
             let item = DispatchWorkItem { [weak self] in
                 guard let self = self, self.token == current else { return }
                 self.fetch(incoming, token: current)
             }
             work = item
-            // AMS 的歌名、歌手是分片到达的，稍等一下再搜，避免用半截歌名去查
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.9, execute: item)
+            // 已有 partial 字段守卫，这里留 0.1s 兜底；命中 cache 已经提前返回不走这里
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1, execute: item)
         } else if force, pushedKey.isEmpty, let cached = cache[key] {
             push(cached.encoded, key: key)         // 重连后补发同一首的封面，不用再联网
             BleLink.shared.mediaCoverStatus = "封面已缓存 · \(cached.source)"
@@ -142,7 +148,7 @@ final class CoverLookup {
             BleLink.shared.mediaCoverStatus = miss.status
             return
         }
-        lookup(track, token: token, source: .qq)
+        lookupParallel(track, token: token)
     }
 
     private func lookup(_ track: Track, token: UUID, source: Source?) {
@@ -156,6 +162,37 @@ final class CoverLookup {
                 guard let self = self, self.token == token, self.key == track.key else { return }
                 if let hit = hit { self.download(hit, track: track, token: token) }
                 else { self.lookup(track, token: token, source: source.next) }
+            }
+        }
+    }
+
+    /// 并行搜全部源，谁先返回有效 hit 就立刻用，其它请求丢弃。
+    /// 之前串行搜 QQ→网易云→iTunes，如果首个源搜不到且网络慢，用户就得等 timeout（10s）才见封面。
+    private func lookupParallel(_ track: Track, token: UUID) {
+        let group = DispatchGroup()
+        var hit: Hit?
+        var remaining = 3
+        let lock = NSLock()
+
+        for source in Source.allCases {
+            group.enter()
+            search(source, track) { result in
+                lock.lock()
+                if hit == nil, let result = result { hit = result; remaining = 0 }
+                else { remaining -= 1 }
+                lock.unlock()
+                group.leave()
+            }
+        }
+
+        group.notify(queue: .main) { [weak self] in
+            guard let self = self, self.token == token, self.key == track.key else { return }
+            if let hit = hit {
+                self.download(hit, track: track, token: token)
+            } else {
+                self.misses[track.key] = Miss(status: "没有找到匹配的专辑封面",
+                    expires: Date().timeIntervalSince1970 + 900)
+                BleLink.shared.mediaCoverStatus = "没有找到匹配的专辑封面"
             }
         }
     }
@@ -188,7 +225,7 @@ final class CoverLookup {
         }
         guard let url = components.url else { return nil }
         var request = URLRequest(url: url)
-        request.timeoutInterval = 10
+        request.timeoutInterval = 4   // 并行搜时 4s 足够；某个源卡不阻塞其它
         request.setValue(source == .itunes ? appUA : browserUA, forHTTPHeaderField: "User-Agent")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         if !source.referer.isEmpty { request.setValue(source.referer, forHTTPHeaderField: "Referer") }
