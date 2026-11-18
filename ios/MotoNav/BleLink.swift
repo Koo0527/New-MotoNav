@@ -458,7 +458,7 @@ final class BleLink: NSObject, ObservableObject {
 
     /// 发一份小地图大块数据（地图块 / 路线）。同类型还没发完的旧数据直接作废。
     /// 每片：'M' 类型 编号 总片数(2) 片序号(2) 总字节(4) 偏移(4) + 数据
-    func sendBulk(type: Int, id: Int, data: Data) {
+    func sendBulk(type: Int, id: Int, data: Data, prioritize: Bool = false) {
         guard isReady else { return }
         if type==3,bulkPending(type:type,id:id) {return}
         let payload = maxWrite - BULK_HEADER
@@ -482,7 +482,7 @@ final class BleLink: NSObject, ObservableObject {
             mapReceipt.begin(id:id,tail:tail)
             mapMeter.begin(id:id,bytes:total,at:ProcessInfo.processInfo.systemUptime)
         }
-        bulkQ.replace(type:type,id:id,packets:packets,prioritize:type==MapFeeder.TYPE_ROUTE)
+        bulkQ.replace(type:type,id:id,packets:packets,prioritize:prioritize||type==MapFeeder.TYPE_ROUTE)
         bulkKB += total / 1024
         pump()
     }

@@ -56,7 +56,9 @@ final class CoverLookup {
     private var misses: [String: Miss] = [:]
     private var key = "", token = UUID(), pushedKey = ""
     private var task: URLSessionDataTask?, work: DispatchWorkItem?
-    private var coverBulkId = 0
+    /// 固件按 (id,total,parts) 判重；App 重启后编号若从固定值重来，同尺寸封面会被当成重发丢弃，
+    /// 所以每个进程用随机起点。
+    private var coverBulkId = Int.random(in: 0...255)
 
     private init() {}
 
@@ -115,7 +117,7 @@ final class CoverLookup {
 
     /// 停止 / App 退出 / 明确不再推送封面时，发 #ZCOV,0 让固件恢复黑胶唱片。
     /// 注意：reset（切歌时）**不**调这里——让固件覆盖替换。
-    private func clearScreen() {
+    func clearScreen() {
         guard !pushedKey.isEmpty, BleLink.shared.isReady else { return }
         pushedKey = ""
         BleLink.shared.sendOnce("#ZCOV,0")
@@ -125,7 +127,7 @@ final class CoverLookup {
         guard BleLink.shared.isReady, pushedKey != key else { return }
         pushedKey = key
         coverBulkId = (coverBulkId + 1) & 0xFF
-        BleLink.shared.sendBulk(type: CoverEncoder.typeCover, id: coverBulkId, data: encoded.data)
+        BleLink.shared.sendBulk(type: CoverEncoder.typeCover, id: coverBulkId, data: encoded.data, prioritize: true)
     }
 
     // MARK: - 匹配

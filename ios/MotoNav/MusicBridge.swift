@@ -14,8 +14,9 @@ final class MusicBridge {
     private(set) var metadata = AMSMetadata()
     /// App 控制模式（Apple Music）下，当前已推送封面的 persistentID；避免重复推送
     private var coverKey: MPMediaEntityPersistentID?
-    /// type 6 bulk 的自增编号，让 bulkQ.replace 把上一份整体清掉
-    private var coverBulkId = 0
+    /// type 6 bulk 的自增编号，让 bulkQ.replace 把上一份整体清掉。
+    /// 固件按 (id,total,parts) 判重，随机起点避免 App 重启后首张封面被当成重发丢弃。
+    private var coverBulkId = Int.random(in: 0...255)
     /// 是否已向固件发送过 #ZCOV,0 清除封面（避免重复发）
     private var coverCleared = true
 
@@ -72,6 +73,8 @@ final class MusicBridge {
             if Settings.shared.musicCover {
                 CoverLookup.shared.update(metadata, force: force)
             } else {
+                // 用户明确关掉封面才清屏；切歌不走这里（否则会清掉刚推上去的封面）。
+                CoverLookup.shared.clearScreen()
                 CoverLookup.shared.stop()
             }
             let ready = BleLink.shared.mediaHIDSupported && BleLink.shared.mediaHIDReady && BleLink.shared.mediaHIDMode
@@ -123,7 +126,7 @@ final class MusicBridge {
         coverKey = item.persistentID
         coverCleared = false
         coverBulkId = (coverBulkId + 1) & 0xFF
-        BleLink.shared.sendBulk(type: CoverEncoder.typeCover, id: coverBulkId, data: encoded.data)
+        BleLink.shared.sendBulk(type: CoverEncoder.typeCover, id: coverBulkId, data: encoded.data, prioritize: true)
     }
 
     private func clearCover() {
