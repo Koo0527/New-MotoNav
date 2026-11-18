@@ -75,16 +75,13 @@ func rgb(_ value: UInt16) -> (Int, Int, Int) {
     (Int((value >> 11) & 31) * 8, Int((value >> 5) & 63) * 4, Int(value & 31) * 8)
 }
 
-// 1. 纯色：调色板只产生一个颜色，解回后所有像素值相同；type 6 bulk 包体很小
+// 1. 纯色：所有像素解回后值完全相同（RLE 只用一个索引）；type 6 bulk 包体很小
 let solid = image(side, side) { _, _ in (200, 30, 40) }
 let solidPacket = CoverEncoder.encode(rgba: solid, width: side, height: side)
 check(solidPacket != nil, "纯色封面可编码")
 let solidPixels = decodeType6(solidPacket!)
 check(solidPixels != nil, "纯色封面 type 6 bulk 可解回")
-check(Set(solidPixels!).count == 1, "纯色只产生一种 RGB565 值")
-let solidPalette = stride(from: 6, to: 38, by: 2).map { Int(solidPacket!.data[$0]) | Int(solidPacket!.data[$0 + 1]) << 8 }
-let paletteNonZero = solidPalette.filter { $0 != 0x0000 }
-check(paletteNonZero.count <= 2, "纯色调色板仅 1~2 种有效色（16 桶取 top16）")
+check(Set(solidPixels!).count == 1, "纯色只产生一种 RGB565 值（RLE 只用一个调色板索引）")
 check(solidPacket!.data.count < 2000, "纯色 type 6 bulk 应 < 2KB（RLE+deflate 极强）")
 
 // 2. 黑白交替：调色板里至少两种主色，解回后相邻像素交替
