@@ -14,7 +14,9 @@ final class MusicBridge {
     private(set) var metadata = AMSMetadata()
     /// App 控制模式（Apple Music）下，当前已推送封面的 persistentID；避免重复推送
     private var coverKey: MPMediaEntityPersistentID?
-    /// 是否已向固件发送过清除封面（避免重复发）
+    /// type 6 bulk 的自增编号，让 bulkQ.replace 把上一份整体清掉
+    private var coverBulkId = 0
+    /// 是否已向固件发送过 #ZCOV,0 清除封面（避免重复发）
     private var coverCleared = true
 
     func receiveAMS(_ data: Data) {
@@ -64,7 +66,9 @@ final class MusicBridge {
     func refresh(force: Bool = false) {
         if Settings.shared.musicHID {
             LyricsBridge.shared.update(metadata, force: force)
-            clearCover()                        // 从 App 控制切过来时先清掉旧封面
+            // 注意：HID 模式下封面由 CoverLookup 全权管理，这里不要 clearCover()——
+            // AMS 分片每到一个字段都会触发 refresh()，调 clearCover() 会用
+            // #ZCOV,0 把 CoverLookup 刚推上去的封面清掉（网易云"推送后消失"的另一条路径）。
             if Settings.shared.musicCover {
                 CoverLookup.shared.update(metadata, force: force)
             } else {
@@ -108,22 +112,25 @@ final class MusicBridge {
     private func pushCover(_ item: MPMediaItem?) {
         guard let item, let artwork = item.artwork else { clearCover(); return }
         guard item.persistentID != coverKey else { return }
-        let side = CoverEncoder.side(maxWrite: BleLink.shared.maxWrite)
+        // type 6 bulk 固定 180×180：压缩后通常仅 1~3 KB，bulkQ.replace 按 type 整体替换，
+        // 切歌时上一份未发完的封面包会被立即废弃，几乎没有排队延迟。
+        let side = CoverEncoder.targetSize
         let size = CGSize(width: side, height: side)
         guard let raw = artwork.image(at: size),
-              let encoded = CoverEncoder.encode(image: raw, side: side) else {
+              let encoded = CoverEncoder.encode(image: raw) else {
             clearCover(); return
         }
         coverKey = item.persistentID
         coverCleared = false
-        BleLink.shared.sendCover(w: encoded.width, h: encoded.height, rgb565: encoded.data)
+        coverBulkId = (coverBulkId + 1) & 0xFF
+        BleLink.shared.sendBulk(type: CoverEncoder.typeCover, id: coverBulkId, data: encoded.data)
     }
 
     private func clearCover() {
         coverKey = nil
         guard !coverCleared, BleLink.shared.isReady else { return }
         coverCleared = true
-        BleLink.shared.sendCover(w: 0, h: 0, rgb565: Data())
+        BleLink.shared.sendOnce("#ZCOV,0")
     }
 
     // MARK: - publish

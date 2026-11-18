@@ -56,7 +56,7 @@ final class CoverLookup {
     private var misses: [String: Miss] = [:]
     private var key = "", token = UUID(), pushedKey = ""
     private var task: URLSessionDataTask?, work: DispatchWorkItem?
-    private var generation: UInt32?
+    private var coverBulkId = 0
 
     private init() {}
 
@@ -64,7 +64,6 @@ final class CoverLookup {
 
     func update(_ metadata: AMSMetadata, force: Bool = false) {
         guard Settings.shared.musicHID, Settings.shared.musicCover, BleLink.shared.isReady else { stop(); return }
-        if generation != metadata.generation { reset(); generation = metadata.generation }
         guard metadata.ready, !metadata.title.isEmpty, !metadata.artist.isEmpty,
               !metadata.values[0].partial, !metadata.values[1].partial else {
             cancel()                       // 还没收齐就先不发请求，圆屏保留上一首封面
@@ -76,6 +75,9 @@ final class CoverLookup {
         let incoming = Track(title: metadata.title, artist: metadata.artist, album: metadata.album,
                              seconds: seconds.flatMap { $0.isFinite && $0 > 0 ? $0 : nil })
         if incoming.key != key {
+            // 只有 key（歌名+歌手+专辑）变了才 reset：AMS metadata.generation 是分片字段补全时
+            // 就 ++ 的内部版本号，不代表歌曲切换，不能用它触发 reset，否则会在分片到达时反复
+            // clearScreen → 清固件上刚推上去的封面（网易云"推送后消失"的根因）。
             reset()
             key = incoming.key
             BleLink.shared.mediaCoverStatus = "正在匹配专辑封面…"
@@ -95,33 +97,35 @@ final class CoverLookup {
 
     func stop() {
         if !key.isEmpty || !pushedKey.isEmpty || task != nil || work != nil { reset() }
-        generation = nil
         if !BleLink.shared.mediaCoverStatus.isEmpty { BleLink.shared.mediaCoverStatus = "" }
     }
 
     // MARK: - 状态
 
+    /// 切歌 / 停止：取消未完成的联网请求，**不主动清固件上的封面**（固件收到新的
+    /// type 6 bulk 会自动覆盖；旧图可以留着直到新图到达，用户体验更好）。
     private func reset() {
         cancel()
-        clearScreen()
+        pushedKey = ""
     }
 
     private func cancel() {
         token = UUID(); task?.cancel(); task = nil; work?.cancel(); work = nil; key = ""
     }
 
-    /// 圆屏上已经推过封面才需要清，清掉后固件会画回黑胶唱片
+    /// 停止 / App 退出 / 明确不再推送封面时，发 #ZCOV,0 让固件恢复黑胶唱片。
+    /// 注意：reset（切歌时）**不**调这里——让固件覆盖替换。
     private func clearScreen() {
-        guard !pushedKey.isEmpty else { return }
+        guard !pushedKey.isEmpty, BleLink.shared.isReady else { return }
         pushedKey = ""
-        guard BleLink.shared.isReady else { return }
-        BleLink.shared.sendCover(w: 0, h: 0, rgb565: Data())
+        BleLink.shared.sendOnce("#ZCOV,0")
     }
 
     private func push(_ encoded: CoverEncoder.Encoded, key: String) {
         guard BleLink.shared.isReady, pushedKey != key else { return }
         pushedKey = key
-        BleLink.shared.sendCover(w: encoded.width, h: encoded.height, rgb565: encoded.data)
+        coverBulkId = (coverBulkId + 1) & 0xFF
+        BleLink.shared.sendBulk(type: CoverEncoder.typeCover, id: coverBulkId, data: encoded.data)
     }
 
     // MARK: - 匹配
